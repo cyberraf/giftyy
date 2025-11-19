@@ -7,20 +7,20 @@
     "development": {
       "developmentClient": true,
       "distribution": "internal",
-      "env": {
-        "EAS_BUILD_RUNNER": "eas-build"
+      "git": {
+        "commitMessage": "Build from Git"
       }
     },
     "preview": {
       "distribution": "internal",
-      "env": {
-        "EAS_BUILD_RUNNER": "eas-build"
+      "git": {
+        "commitMessage": "Build from Git"
       }
     },
     "production": {
       "autoIncrement": true,
-      "env": {
-        "EAS_BUILD_RUNNER": "eas-build"
+      "git": {
+        "commitMessage": "Build from Git"
       }
     }
   },
