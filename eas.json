@@ -6,22 +6,13 @@
   "build": {
     "development": {
       "developmentClient": true,
-      "distribution": "internal",
-      "git": {
-        "commitMessage": "Build from Git"
-      }
+      "distribution": "internal"
     },
     "preview": {
-      "distribution": "internal",
-      "git": {
-        "commitMessage": "Build from Git"
-      }
+      "distribution": "internal"
     },
     "production": {
-      "autoIncrement": true,
-      "git": {
-        "commitMessage": "Build from Git"
-      }
+      "autoIncrement": true
     }
   },
   "submit": {
