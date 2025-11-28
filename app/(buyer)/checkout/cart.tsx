@@ -13,7 +13,7 @@ export default function CheckoutCart() {
     const router = useRouter();
     return (
         <View style={{ flex: 1, backgroundColor: 'white' }}>
-            <StepBar current={1} total={6} label="Cart" />
+            <StepBar current={1} total={7} label="Cart" />
             <View style={{ padding: 16 }}>
                 <Text style={{ fontSize: 22, fontWeight: '900' }}>Subtotal ${subtotal.toFixed(2)}</Text>
                 <FlatList

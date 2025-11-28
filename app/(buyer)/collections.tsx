@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useMemo, useState, useCallback } from 'react';
+import { Pressable, ScrollView, StyleSheet, Text, View, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import { GiftCollectionCard } from '@/components/GiftCollectionCard';
@@ -25,8 +25,20 @@ const COLLECTION_CATEGORY_METADATA = [
 export default function CollectionsScreen() {
 	const router = useRouter();
 	const { top, bottom } = useSafeAreaInsets();
-	const { collections, loading } = useProducts();
+	const { collections, loading, refreshProducts, refreshCollections } = useProducts();
 	const [activeFilter, setActiveFilter] = useState<FilterKey>(ALL_KEY);
+	const [refreshing, setRefreshing] = useState(false);
+
+	const onRefresh = useCallback(async () => {
+		setRefreshing(true);
+		try {
+			await Promise.all([refreshProducts(), refreshCollections()]);
+		} catch (error) {
+			console.error('Error refreshing collections:', error);
+		} finally {
+			setRefreshing(false);
+		}
+	}, [refreshProducts, refreshCollections]);
 
 	// Convert collections to GiftCollection format
 	const giftCollections = useMemo<GiftCollection[]>(() => {
@@ -81,7 +93,16 @@ export default function CollectionsScreen() {
 			</View>
 			<ScrollView
 				showsVerticalScrollIndicator={false}
-				contentContainerStyle={[styles.content, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20 }]}
+				contentContainerStyle={[styles.content, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20, flexGrow: 1 }]}
+				refreshControl={
+					<RefreshControl
+						refreshing={refreshing}
+						onRefresh={onRefresh}
+						tintColor="#1a5f3f"
+						colors={["#1a5f3f"]}
+					/>
+				}
+				scrollEnabled={true}
 			>
 				<Text style={styles.subtitle}>Discover curated sets tailored to every celebration, relationship, and life moment.</Text>
 
@@ -152,7 +173,7 @@ export default function CollectionsScreen() {
 const styles = StyleSheet.create({
 	screen: {
 		flex: 1,
-		backgroundColor: '#F5F4F2',
+		backgroundColor: '#fff',
 	},
 	header: {
 		flexDirection: 'row',

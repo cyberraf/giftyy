@@ -47,6 +47,9 @@ export function getSupabaseErrorMessage(error: AuthError | Error | null | undefi
 
 		// Handle by status code
 		if (status === 400) {
+			if (code === 'invalid_credentials' || code === 'invalid_password' || message.toLowerCase().includes('invalid login credentials')) {
+				return 'Invalid email or password. Please try again.';
+			}
 			if (code === 'signup_disabled' || message.toLowerCase().includes('already registered')) {
 				return 'An account with this email already exists. Please sign in instead.';
 			}
@@ -187,6 +190,7 @@ export function isInvalidCredentialsError(error: AuthError | Error | null | unde
 	const message = (authError.message || '').toLowerCase();
 
 	return (
+		status === 400 ||
 		status === 401 ||
 		code === 'invalid_credentials' ||
 		code === 'invalid_password' ||

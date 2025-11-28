@@ -7,7 +7,7 @@ import { View } from 'react-native';
 export default function BuyerRootLayout() {
 	return (
 		<BottomBarVisibilityProvider>
-			<View style={{ flex: 1 }}>
+			<View style={{ flex: 1, backgroundColor: '#fff' }}>
 				<Stack screenOptions={{ headerShown: false }}>
 					<Stack.Screen name="(tabs)" />
 				</Stack>

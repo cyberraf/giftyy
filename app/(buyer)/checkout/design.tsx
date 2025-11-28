@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, StyleSheet, Alert, Image, FlatList, useWindowDimensions, Animated } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { View, Text, Pressable, StyleSheet, Alert, Image, FlatList, useWindowDimensions, Animated, RefreshControl, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import StepBar from '@/components/StepBar';
 import { useCheckout } from '@/lib/CheckoutContext';
@@ -7,7 +7,9 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { BRAND_COLOR } from '@/constants/theme';
 import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { useCart } from '@/contexts/CartContext';
+import { useProducts } from '@/contexts/ProductsContext';
 import { calculateVendorShippingSync } from '@/lib/shipping-utils';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type CardLabel = 'Standard' | 'Premium' | 'Luxury';
 
@@ -58,6 +60,7 @@ export default function DesignScreen() {
     const router = useRouter();
     const { cardType, setCardType, recipient, setCardPrice } = useCheckout();
     const { items } = useCart();
+    const { refreshProducts, refreshCollections } = useProducts();
     const [pressedCard, setPressedCard] = useState<CardLabel | null>(null);
     const params = useLocalSearchParams<{ cards?: string }>();
     const { width } = useWindowDimensions();
@@ -67,6 +70,19 @@ export default function DesignScreen() {
     const listRef = useRef<FlatList<CardConfig>>(null);
     const scrollX = useRef(new Animated.Value(0)).current;
     const [currentIndex, setCurrentIndex] = useState(0);
+    const { bottom } = useSafeAreaInsets();
+    const [refreshing, setRefreshing] = useState(false);
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            await Promise.all([refreshProducts(), refreshCollections()]);
+        } catch (error) {
+            console.error('Error refreshing design data:', error);
+        } finally {
+            setRefreshing(false);
+        }
+    }, [refreshProducts, refreshCollections]);
 
     // Allow admin-provided cards via route param ?cards=[{...}]
     let cards: CardConfig[] = DEFAULT_CARDS;
@@ -168,16 +184,28 @@ export default function DesignScreen() {
 
     return (
         <View style={{ flex: 1, backgroundColor: 'white' }}>
-            <StepBar current={2} total={6} label="Choose a card style" />
-            {/* Subheader with selection summary */}
-            <View style={{ paddingHorizontal: sidePadding, paddingTop: 6, paddingBottom: 2, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
-                <Text style={{ fontWeight: '900', fontSize: 18 }}>{String(cardType || 'Select a card')}</Text>
-                {!!orderedCards[currentIndex] && (
-                    <Text style={{ color: '#6b7280', fontWeight: '800' }}>{orderedCards[currentIndex].price}</Text>
-                )}
-            </View>
+            <StepBar current={2} total={7} label="Choose a card style" />
+            <ScrollView
+                style={{ flex: 1 }}
+                contentContainerStyle={{ flexGrow: 1 }}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={BRAND_COLOR}
+                        colors={[BRAND_COLOR]}
+                    />
+                }
+            >
+                {/* Subheader with selection summary */}
+                <View style={{ paddingHorizontal: sidePadding, paddingTop: 6, paddingBottom: 2, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+                    <Text style={{ fontWeight: '900', fontSize: 18 }}>{String(cardType || 'Select a card')}</Text>
+                    {!!orderedCards[currentIndex] && (
+                        <Text style={{ color: '#6b7280', fontWeight: '800' }}>{orderedCards[currentIndex].price}</Text>
+                    )}
+                </View>
 
-            <Animated.FlatList
+                <Animated.FlatList
                 ref={listRef}
                 data={orderedCards}
                 keyExtractor={(item) => String(item.label)}
@@ -301,37 +329,38 @@ export default function DesignScreen() {
                 }}
             />
 
-            {/* Pagination dots */}
-            <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 4 }}>
-                {orderedCards.map((_, i) => {
-                    const inputRange = [(i - 1) * (cardWidth + gap), i * (cardWidth + gap), (i + 1) * (cardWidth + gap)];
-                    const dotScale = scrollX.interpolate({
-                        inputRange,
-                        outputRange: [1, 1.5, 1],
-                        extrapolate: 'clamp',
-                    });
-                    const dotOpacity = scrollX.interpolate({
-                        inputRange,
-                        outputRange: [0.4, 1, 0.4],
-                        extrapolate: 'clamp',
-                    });
-                    return <Animated.View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#f75507', opacity: dotOpacity, transform: [{ scale: dotScale }] }} />;
-                })}
-            </View>
-            <View style={{ paddingHorizontal: sidePadding, marginTop: 12, marginBottom: 14 + BOTTOM_BAR_TOTAL_SPACE }}>
-                <Pressable
-                    onPress={() => {
-                        if (disabled) {
-                            Alert.alert('Choose a card', 'Please select a card style to continue');
-                            return;
-                        }
-                        router.push('/(buyer)/checkout/recipient');
-                    }}
-                    style={[styles.ctaBtn, { opacity: disabled ? 0.6 : 1 }]}
-                >
-                    <Text style={{ color: 'white', fontWeight: '800' }}>{`Continue with ${String(cardType || '').trim() || 'selection'}`}</Text>
-                </Pressable>
-            </View>
+                {/* Pagination dots */}
+                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 4 }}>
+                    {orderedCards.map((_, i) => {
+                        const inputRange = [(i - 1) * (cardWidth + gap), i * (cardWidth + gap), (i + 1) * (cardWidth + gap)];
+                        const dotScale = scrollX.interpolate({
+                            inputRange,
+                            outputRange: [1, 1.5, 1],
+                            extrapolate: 'clamp',
+                        });
+                        const dotOpacity = scrollX.interpolate({
+                            inputRange,
+                            outputRange: [0.4, 1, 0.4],
+                            extrapolate: 'clamp',
+                        });
+                        return <Animated.View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#f75507', opacity: dotOpacity, transform: [{ scale: dotScale }] }} />;
+                    })}
+                </View>
+                <View style={{ paddingHorizontal: sidePadding, marginTop: 12, marginBottom: 14 + bottom + BOTTOM_BAR_TOTAL_SPACE }}>
+                    <Pressable
+                        onPress={() => {
+                            if (disabled) {
+                                Alert.alert('Choose a card', 'Please select a card style to continue');
+                                return;
+                            }
+                            router.push('/(buyer)/checkout/recipient');
+                        }}
+                        style={[styles.ctaBtn, { opacity: disabled ? 0.6 : 1 }]}
+                    >
+                        <Text style={{ color: 'white', fontWeight: '800' }}>{`Continue with ${String(cardType || '').trim() || 'selection'}`}</Text>
+                    </Pressable>
+                </View>
+            </ScrollView>
         </View>
     );
 }

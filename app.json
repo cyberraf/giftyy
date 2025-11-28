@@ -60,8 +60,9 @@
     "extra": {
       "router": {},
       "eas": {
-        "projectId": "0f2eff60-0579-4dc6-a272-7d5eaf6401d3"
+        "projectId": "67ba6b4a-d0c0-4d22-89f3-8a2d2fc09a36"
       }
-    }
+    },
+    "owner": "rtarbaris-organization"
   }
 }

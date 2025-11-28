@@ -28,6 +28,8 @@ type CheckoutState = {
     setVideoUri: (u?: string) => void;
     videoTitle?: string;
     setVideoTitle: (t?: string) => void;
+    sharedMemoryId?: string;
+    setSharedMemoryId: (id?: string) => void;
     payment: Payment;
     setPayment: (p: Payment) => void;
     reset: () => void;
@@ -56,6 +58,7 @@ export function CheckoutProvider({ children }: { children: React.ReactNode }) {
     const [cardType, setCardType] = useState<CardType>('');
     const [videoUri, setVideoUri] = useState<string | undefined>(undefined);
     const [videoTitle, setVideoTitle] = useState<string | undefined>(undefined);
+    const [sharedMemoryId, setSharedMemoryId] = useState<string | undefined>(undefined);
     const [payment, setPayment] = useState<Payment>(initialPayment);
 
     const reset = () => {
@@ -65,12 +68,13 @@ export function CheckoutProvider({ children }: { children: React.ReactNode }) {
         setCardType('');
         setVideoUri(undefined);
         setVideoTitle(undefined);
+        setSharedMemoryId(undefined);
         setPayment(initialPayment);
     };
 
     const value = useMemo(
-        () => ({ recipient, setRecipient, cardPrice, setCardPrice, notifyRecipient, setNotifyRecipient, cardType, setCardType, videoUri, setVideoUri, videoTitle, setVideoTitle, payment, setPayment, reset }),
-        [recipient, cardPrice, notifyRecipient, cardType, videoUri, videoTitle, payment]
+        () => ({ recipient, setRecipient, cardPrice, setCardPrice, notifyRecipient, setNotifyRecipient, cardType, setCardType, videoUri, setVideoUri, videoTitle, setVideoTitle, sharedMemoryId, setSharedMemoryId, payment, setPayment, reset }),
+        [recipient, cardPrice, notifyRecipient, cardType, videoUri, videoTitle, sharedMemoryId, payment]
     );
     return <CheckoutContext.Provider value={value}>{children}</CheckoutContext.Provider>;
 }

@@ -60,7 +60,7 @@ export function GiftCollectionCard({ title, description, color, products, style,
 const styles = StyleSheet.create({
 	card: {
 		width: 320,
-		height: 360,
+		height: 400,
 		borderRadius: 16,
 		overflow: 'hidden',
 		position: 'relative',

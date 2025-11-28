@@ -4,9 +4,12 @@ import { useRouter } from 'expo-router';
 import { useProducts } from '@/contexts/ProductsContext';
 import { getGiftSuggestions, type GiftSuggestion, isOpenAIConfigured } from '@/lib/openai';
 import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function GiftFinderScreen() {
 	const router = useRouter();
+	const { top } = useSafeAreaInsets();
 	const { products, loading: productsLoading } = useProducts();
 	const [prompt, setPrompt] = useState('');
 	const [suggestions, setSuggestions] = useState<GiftSuggestion[]>([]);
@@ -56,11 +59,18 @@ export default function GiftFinderScreen() {
 	}, [router]);
 
 	return (
-		<ScrollView style={styles.container} contentContainerStyle={styles.contentContainer}>
-			<Text style={styles.title}>AI Gift Finder</Text>
-			<Text style={styles.subtitle}>
-				Describe who you're shopping for, and we'll suggest the perfect gifts
-			</Text>
+		<View style={styles.container}>
+			<View style={[styles.header, { paddingTop: top + 8 }]}>
+				<Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={12}>
+					<IconSymbol name="chevron.left" size={22} color="#1f1f1f" />
+				</Pressable>
+				<Text style={styles.headerTitle}>AI Gift Finder</Text>
+				<View style={{ width: 40 }} />
+			</View>
+			<ScrollView style={styles.scrollView} contentContainerStyle={styles.contentContainer}>
+				<Text style={styles.subtitle}>
+					Describe who you're shopping for, and we'll suggest the perfect gifts
+				</Text>
 
 			{!isOpenAIConfigured && (
 				<View style={styles.warningBox}>
@@ -125,24 +135,49 @@ export default function GiftFinderScreen() {
 					))}
 				</View>
 			)}
-		</ScrollView>
+			</ScrollView>
+		</View>
 	);
 }
 
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: '#F5F4F2',
+		backgroundColor: '#fff',
+	},
+	header: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
+		paddingHorizontal: 16,
+		marginBottom: 12,
+	},
+	backButton: {
+		width: 40,
+		height: 40,
+		borderRadius: 20,
+		alignItems: 'center',
+		justifyContent: 'center',
+		backgroundColor: '#FFFFFF',
+		borderWidth: 1,
+		borderColor: '#E4E1DC',
+		shadowColor: '#000',
+		shadowOpacity: 0.05,
+		shadowRadius: 6,
+		shadowOffset: { width: 0, height: 2 },
+		elevation: 2,
+	},
+	headerTitle: {
+		fontFamily: BRAND_FONT,
+		fontSize: 24,
+		fontWeight: '800',
+		color: '#1f1f1f',
+	},
+	scrollView: {
+		flex: 1,
 	},
 	contentContainer: {
 		padding: 20,
-	},
-	title: {
-		fontFamily: BRAND_FONT,
-		fontSize: 28,
-		fontWeight: '700',
-		color: '#2F2318',
-		marginBottom: 8,
 	},
 	subtitle: {
 		fontSize: 16,

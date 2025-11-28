@@ -39,6 +39,17 @@ export default function VideoScreen() {
     const previewRef = useRef<Video>(null);
     const [isPlaying, setIsPlaying] = useState(true);
     const [isMuted, setIsMuted] = useState(false);
+    
+    // Ensure video is unmuted when preview loads
+    useEffect(() => {
+        if (uri && previewRef.current) {
+            setIsMuted(false);
+            // Set unmuted state after a brief delay to ensure video is loaded
+            setTimeout(() => {
+                previewRef.current?.setStatusAsync({ isMuted: false, volume: 1.0 });
+            }, 100);
+        }
+    }, [uri]);
     const [positionMs, setPositionMs] = useState(0);
     const [durationMs, setDurationMs] = useState(0);
     const [clipStartMs, setClipStartMs] = useState(0);
@@ -145,7 +156,7 @@ export default function VideoScreen() {
 			setVideoUri(videoMessage.videoUrl);
 			setVideoTitle(videoTitle.trim());
 			setUploading(false);
-			router.push('/(buyer)/checkout/payment');
+			router.push('/(buyer)/checkout/shared-memory');
 		} catch (err) {
 			console.error('Unexpected error uploading video:', err);
 			setNotice('Failed to upload video. Please try again.');
@@ -355,6 +366,7 @@ export default function VideoScreen() {
         }, 100);
         try {
             cameraRef.current?.startRecording({
+                flash: 'off',
                 onRecordingFinished: (video) => {
                     // @ts-ignore different platforms
                     const u = (video as any)?.path || (video as any)?.file?.path || (video as any)?.uri;
@@ -393,7 +405,7 @@ export default function VideoScreen() {
     // Scrub helper (preview)
     const seekTo = (ms: number) => {
         const bounded = Math.max(0, Math.min(durationMs || ms, ms));
-        previewRef.current?.setStatusAsync({ positionMillis: bounded, shouldPlay: isPlaying });
+        previewRef.current?.setStatusAsync({ positionMillis: bounded, shouldPlay: isPlaying, isMuted: isMuted, volume: isMuted ? 0 : 1.0 });
     };
 
     if (!permissionsChecked || !cameraAllowed || !microphoneAllowed) {
@@ -422,6 +434,7 @@ export default function VideoScreen() {
                     isLooping={false}
                     shouldPlay={isPlaying}
                     isMuted={isMuted}
+                    volume={isMuted ? 0 : 1.0}
                     onPlaybackStatusUpdate={(status: any) => {
                         if (!status?.isLoaded) return;
                         const pos = status.positionMillis || 0;
@@ -435,29 +448,103 @@ export default function VideoScreen() {
                         const end = clipEndMs ?? dur;
                         const start = clipStartMs;
                         if (end && pos >= end - 40 && end > start) {
-                            previewRef.current?.setStatusAsync({ positionMillis: start, shouldPlay: isPlaying });
+                            previewRef.current?.setStatusAsync({ positionMillis: start, shouldPlay: isPlaying, isMuted: isMuted, volume: isMuted ? 0 : 1.0 });
                         }
                     }}
                 />
 
-                {/* Center play/pause */}
+                {/* Modern center play/pause button */}
                 <Pressable
                     onPress={() => setIsPlaying((p) => !p)}
-                    style={{ position: 'absolute', alignSelf: 'center', top: '45%', width: 72, height: 72, borderRadius: 36, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.35)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' }}
+                    style={{ 
+                        position: 'absolute', 
+                        alignSelf: 'center', 
+                        top: '45%', 
+                        width: 100, 
+                        height: 100, 
+                        borderRadius: 50, 
+                        alignItems: 'center', 
+                        justifyContent: 'center', 
+                        backgroundColor: isPlaying ? 'rgba(0,0,0,0.3)' : 'rgba(0,0,0,0.65)', 
+                        borderWidth: 3, 
+                        borderColor: isPlaying ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.5)',
+                        shadowColor: '#000',
+                        shadowOpacity: isPlaying ? 0.3 : 0.6,
+                        shadowRadius: isPlaying ? 12 : 20,
+                        shadowOffset: { width: 0, height: isPlaying ? 4 : 8 },
+                        opacity: isPlaying ? 0 : 1,
+                    }}
                 >
-                    <Text style={{ color: 'white', fontSize: 28 }}>{isPlaying ? '⏸' : '▶'}</Text>
+                    {!isPlaying ? (
+                        <View style={{
+                            width: 0,
+                            height: 0,
+                            backgroundColor: 'transparent',
+                            borderStyle: 'solid',
+                            borderLeftWidth: 32,
+                            borderTopWidth: 20,
+                            borderBottomWidth: 20,
+                            borderLeftColor: 'white',
+                            borderTopColor: 'transparent',
+                            borderBottomColor: 'transparent',
+                            marginLeft: 6,
+                        }} />
+                    ) : (
+                        <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <View style={{ width: 8, height: 28, backgroundColor: 'white', borderRadius: 2 }} />
+                            <View style={{ width: 8, height: 28, backgroundColor: 'white', borderRadius: 2 }} />
+                        </View>
+                    )}
                 </Pressable>
+                
+                {/* Tap anywhere to pause when playing */}
+                {isPlaying && (
+                    <Pressable
+                        onPress={() => setIsPlaying(false)}
+                        style={{ 
+                            position: 'absolute', 
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            bottom: 0,
+                        }}
+                    />
+                )}
 
 				{/* Glass top bar for preview */}
-				<View style={{ position: 'absolute', top: 16, left: 12, right: 12 }}>
-					<Glass style={{ borderRadius: 18, padding: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' }}>
+				<View style={{ position: 'absolute', top: 0, left: 0, right: 0, paddingTop: 50, paddingHorizontal: 16 }}>
+					<Glass style={{ borderRadius: 20, paddingVertical: 12, paddingHorizontal: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' }}>
 						<View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-							<Pressable onPress={() => setUri(undefined)} style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' }}>
-								<Text style={{ color: 'white', fontSize: 18, fontWeight: '800' }}>×</Text>
+							<Pressable 
+								onPress={() => setUri(undefined)} 
+								style={{ 
+									width: 44, 
+									height: 44, 
+									borderRadius: 22, 
+									alignItems: 'center', 
+									justifyContent: 'center', 
+									backgroundColor: 'rgba(0,0,0,0.3)', 
+									borderWidth: 1.5, 
+									borderColor: 'rgba(255,255,255,0.25)' 
+								}}
+							>
+								<Text style={{ color: 'white', fontSize: 20, fontWeight: '700' }}>×</Text>
 							</Pressable>
-							<Text style={{ color: 'white', fontWeight: '800' }}>Preview</Text>
-                            <Pressable onPress={() => setIsMuted((m) => !m)} style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' }}>
-                                <Text style={{ color: isMuted ? '#f75507' : 'white', fontWeight: '800' }}>{isMuted ? '🔇' : '🔊'}</Text>
+							<Text style={{ color: 'white', fontWeight: '800', fontSize: 17, letterSpacing: 0.5 }}>Preview</Text>
+                            <Pressable 
+								onPress={() => setIsMuted((m) => !m)} 
+								style={{ 
+									width: 44, 
+									height: 44, 
+									borderRadius: 22, 
+									alignItems: 'center', 
+									justifyContent: 'center', 
+									backgroundColor: isMuted ? 'rgba(247,85,7,0.2)' : 'rgba(0,0,0,0.3)', 
+									borderWidth: 1.5, 
+									borderColor: isMuted ? '#f75507' : 'rgba(255,255,255,0.25)' 
+								}}
+							>
+                                <Text style={{ color: isMuted ? '#f75507' : 'white', fontSize: 20, fontWeight: '700' }}>{isMuted ? '🔇' : '🔊'}</Text>
                             </Pressable>
 						</View>
 					</Glass>
@@ -526,8 +613,8 @@ export default function VideoScreen() {
                 })()}
 
                 {/* Glass bottom bar for preview tools */}
-				<View style={{ position: 'absolute', left: 12, right: 12, bottom: 24 }}>
-                    <Glass style={{ borderRadius: 18, padding: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' }}>
+				<View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: 40, paddingHorizontal: 16 }}>
+                    <Glass style={{ borderRadius: 24, padding: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' }}>
 						{exporting && (
 							<View style={{ position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, backgroundColor: 'rgba(0,0,0,0.35)', borderRadius: 18, alignItems: 'center', justifyContent: 'center', zIndex: 2 }}>
 								<Text style={{ color: 'white', fontWeight: '800' }}>Exporting…</Text>
@@ -737,15 +824,25 @@ export default function VideoScreen() {
                         </View>
 
                         {/* Actions row */}
-                        <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
+                        <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
                             <Pressable
                                 onPress={() => {
                                     setUri(undefined);
                                     setVideoTitleLocal('');
                                 }}
-                                style={{ flex: 1, borderWidth: 2, borderColor: 'white', paddingHorizontal: 20, paddingVertical: 12, borderRadius: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.2)' }}
+                                style={{ 
+									flex: 1, 
+									borderWidth: 2, 
+									borderColor: 'rgba(255,255,255,0.4)', 
+									paddingHorizontal: 20, 
+									paddingVertical: 14, 
+									borderRadius: 16, 
+									alignItems: 'center', 
+									justifyContent: 'center', 
+									backgroundColor: 'rgba(0,0,0,0.25)' 
+								}}
                             >
-                                <Text style={{ color: 'white', fontWeight: '800' }}>Retake</Text>
+                                <Text style={{ color: 'white', fontWeight: '800', fontSize: 15, letterSpacing: 0.3 }}>Retake</Text>
                             </Pressable>
 							<Pressable
 								onPress={exportEditedVideo}
@@ -754,17 +851,21 @@ export default function VideoScreen() {
                                     flex: 1, 
                                     backgroundColor: videoTitle.trim() ? '#f75507' : 'rgba(247,85,7,0.4)', 
                                     paddingHorizontal: 20, 
-                                    paddingVertical: 12, 
-                                    borderRadius: 14, 
+                                    paddingVertical: 14, 
+                                    borderRadius: 16, 
                                     alignItems: 'center', 
                                     justifyContent: 'center',
                                     opacity: (videoTitle.trim() && !uploading && !exporting) ? 1 : 0.6,
+									shadowColor: videoTitle.trim() ? '#f75507' : 'transparent',
+									shadowOpacity: 0.4,
+									shadowRadius: 8,
+									shadowOffset: { width: 0, height: 4 },
                                 }}
                             >
                                 {uploading || exporting ? (
                                     <ActivityIndicator color="white" size="small" />
                                 ) : (
-                                    <Text style={{ color: 'white', fontWeight: '800' }}>Use Video</Text>
+                                    <Text style={{ color: 'white', fontWeight: '800', fontSize: 15, letterSpacing: 0.3 }}>Use Video</Text>
                                 )}
                             </Pressable>
                         </View>
@@ -785,7 +886,7 @@ export default function VideoScreen() {
                     isActive={true}
                     video={true}
                     photo={false}
-                    audio={recording}
+                    audio={true}
                     enableZoomGesture={false}
                     pixelFormat="yuv"
                     onInitialized={() => {
@@ -800,18 +901,49 @@ export default function VideoScreen() {
             )}
 
 			{/* Modern glass top bar */}
-			<View style={{ position: 'absolute', top: 16, left: 12, right: 12 }}>
-				<Glass style={{ borderRadius: 18, padding: 10, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' }}>
+			<View style={{ position: 'absolute', top: 0, left: 0, right: 0, paddingTop: 50, paddingHorizontal: 16 }}>
+				<Glass style={{ borderRadius: 20, paddingVertical: 12, paddingHorizontal: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' }}>
 					<View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-						<Pressable onPress={() => router.back()} style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' }}>
-							<Text style={{ color: 'white', fontSize: 18, fontWeight: '800' }}>×</Text>
+						<Pressable 
+							onPress={() => router.back()} 
+							style={{ 
+								width: 44, 
+								height: 44, 
+								borderRadius: 22, 
+								alignItems: 'center', 
+								justifyContent: 'center', 
+								backgroundColor: 'rgba(0,0,0,0.3)', 
+								borderWidth: 1.5, 
+								borderColor: 'rgba(255,255,255,0.25)' 
+							}}
+						>
+							<Text style={{ color: 'white', fontSize: 20, fontWeight: '700' }}>×</Text>
 						</Pressable>
-						<Text style={{ color: 'white', fontWeight: '800' }}>Video</Text>
+						<View style={{ alignItems: 'center', flex: 1 }}>
+							<Text style={{ color: 'white', fontWeight: '800', fontSize: 17, letterSpacing: 0.5 }}>Record Video</Text>
+							{recording && (
+								<View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 4 }}>
+									<View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#ef4444', marginRight: 6 }} />
+									<Text style={{ color: '#ef4444', fontWeight: '700', fontSize: 13, fontVariant: ['tabular-nums'] }}>
+										{msToTime(elapsedMs)}
+									</Text>
+								</View>
+							)}
+						</View>
 						<Pressable
 							onPress={() => setFacing(facing === 'front' ? 'back' : 'front')}
-							style={{ width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0,0,0,0.25)', borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' }}
+							style={{ 
+								width: 44, 
+								height: 44, 
+								borderRadius: 22, 
+								alignItems: 'center', 
+								justifyContent: 'center', 
+								backgroundColor: 'rgba(0,0,0,0.3)', 
+								borderWidth: 1.5, 
+								borderColor: 'rgba(255,255,255,0.25)' 
+							}}
 						>
-							<Text style={{ color: '#f75507', fontWeight: '800' }}>↻</Text>
+							<Text style={{ color: '#f75507', fontSize: 20, fontWeight: '700' }}>↻</Text>
 						</Pressable>
 					</View>
 				</Glass>
@@ -819,8 +951,8 @@ export default function VideoScreen() {
 
             {/* Small toast/notice */}
             {notice && (
-                <View style={{ position: 'absolute', top: 80, alignSelf: 'center', backgroundColor: 'rgba(0,0,0,0.6)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 }}>
-                    <Text style={{ color: 'white', fontWeight: '800' }}>{notice}</Text>
+                <View style={{ position: 'absolute', top: 120, alignSelf: 'center', backgroundColor: 'rgba(0,0,0,0.75)', paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.15)' }}>
+                    <Text style={{ color: 'white', fontWeight: '700', fontSize: 14 }}>{notice}</Text>
                 </View>
             )}
 
@@ -840,8 +972,8 @@ export default function VideoScreen() {
             )}
 
             {/* Bottom toolbar with glass effect */}
-			<View style={{ position: 'absolute', left: 12, right: 12, bottom: 24 }}>
-				<Glass style={{ borderRadius: 22, paddingVertical: 12, paddingHorizontal: 12, borderWidth: 1, borderColor: 'rgba(255,255,255,0.18)' }}>
+			<View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, paddingBottom: 40, paddingHorizontal: 16 }}>
+				<Glass style={{ borderRadius: 28, paddingVertical: 20, paddingHorizontal: 16, borderWidth: 1, borderColor: 'rgba(255,255,255,0.2)' }}>
 					<View style={{ alignItems: 'center' }}>
                     {/* Filter carousel */}
                     <Animated.FlatList
@@ -850,7 +982,7 @@ export default function VideoScreen() {
                         data={colorOptions as unknown as any[]}
                         keyExtractor={(item: any) => item.key}
                         showsHorizontalScrollIndicator={false}
-						contentContainerStyle={{ paddingHorizontal: sidePad, marginBottom: 16 }}
+						contentContainerStyle={{ paddingHorizontal: sidePad, marginBottom: 20 }}
                         snapToInterval={ITEM_SIZE}
                         decelerationRate="fast"
                         getItemLayout={(_data, index) => ({ length: ITEM_SIZE, offset: ITEM_SIZE * index, index })}
@@ -862,7 +994,7 @@ export default function VideoScreen() {
                         }}
 						renderItem={({ item, index }: any) => {
 							const selected = index === activeIdx;
-							const scale = selected ? 1.08 : 0.96;
+							const scale = selected ? 1.1 : 0.95;
 							return (
 								<View style={{ width: ITEM_SIZE, alignItems: 'center' }}>
 									<Pressable
@@ -876,65 +1008,81 @@ export default function VideoScreen() {
 											height: CHIP_SIZE,
 											marginRight: GAP,
 											borderRadius: CHIP_SIZE / 2,
-											backgroundColor: 'rgba(255,255,255,0.08)',
-											borderWidth: 2,
-											borderColor: selected ? '#f75507' : 'rgba(255,255,255,0.18)',
+											backgroundColor: selected ? 'rgba(247,85,7,0.15)' : 'rgba(255,255,255,0.1)',
+											borderWidth: selected ? 3 : 2,
+											borderColor: selected ? '#f75507' : 'rgba(255,255,255,0.25)',
 											alignItems: 'center',
 											justifyContent: 'center',
 											transform: [{ scale }],
 											shadowColor: '#000',
-											shadowOpacity: selected ? 0.35 : 0.18,
-											shadowRadius: selected ? 6 : 3,
-											shadowOffset: { width: 0, height: 2 },
+											shadowOpacity: selected ? 0.4 : 0.2,
+											shadowRadius: selected ? 8 : 4,
+											shadowOffset: { width: 0, height: 3 },
 										}}
 									>
-										<View style={{ width: CHIP_SIZE - 16, height: CHIP_SIZE - 16, borderRadius: (CHIP_SIZE - 16) / 2, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
+										<View style={{ width: CHIP_SIZE - 18, height: CHIP_SIZE - 18, borderRadius: (CHIP_SIZE - 18) / 2, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
 											{/* Color preview circle or "None" slash */}
 											{item.key === 'none' ? (
-												<View style={{ width: CHIP_SIZE - 24, height: CHIP_SIZE - 24, borderRadius: (CHIP_SIZE - 24) / 2, borderWidth: 2, borderColor: 'rgba(255,255,255,0.6)', alignItems: 'center', justifyContent: 'center' }}>
-													<View style={{ position: 'absolute', width: CHIP_SIZE - 28, height: 2, backgroundColor: 'rgba(255,255,255,0.85)', transform: [{ rotateZ: '-35deg' }] }} />
+												<View style={{ width: CHIP_SIZE - 28, height: CHIP_SIZE - 28, borderRadius: (CHIP_SIZE - 28) / 2, borderWidth: 2.5, borderColor: 'rgba(255,255,255,0.7)', alignItems: 'center', justifyContent: 'center' }}>
+													<View style={{ position: 'absolute', width: CHIP_SIZE - 32, height: 2.5, backgroundColor: 'rgba(255,255,255,0.9)', transform: [{ rotateZ: '-35deg' }] }} />
 												</View>
 											) : (
-												<View style={{ width: CHIP_SIZE - 24, height: CHIP_SIZE - 24, borderRadius: (CHIP_SIZE - 24) / 2, backgroundColor: item.color, borderWidth: 2, borderColor: 'white' }} />
+												<View style={{ width: CHIP_SIZE - 28, height: CHIP_SIZE - 28, borderRadius: (CHIP_SIZE - 28) / 2, backgroundColor: item.color, borderWidth: 2.5, borderColor: 'white' }} />
 											)}
 											{/* Glossy highlight */}
-											<View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: (CHIP_SIZE - 16) * 0.45, backgroundColor: 'rgba(255,255,255,0.06)' }} />
+											<View style={{ position: 'absolute', top: 0, left: 0, right: 0, height: (CHIP_SIZE - 18) * 0.4, backgroundColor: 'rgba(255,255,255,0.15)' }} />
 										</View>
 									</Pressable>
-									<Text style={{ marginTop: 6, color: selected ? '#fff' : 'rgba(255,255,255,0.9)', fontSize: 12, fontWeight: selected ? '800' : '700' }}>{item.label}</Text>
+									<Text style={{ marginTop: 8, color: selected ? '#fff' : 'rgba(255,255,255,0.85)', fontSize: 11, fontWeight: selected ? '800' : '600', letterSpacing: 0.3 }}>{item.label}</Text>
 								</View>
 							);
 						}}
                     />
 
+                    {/* Recording button with improved design */}
                     <Pressable
                         onPressIn={start}
                         onPressOut={stop}
                         disabled={!isReady}
                         style={{
-							width: 96,
-							height: 96,
-							borderRadius: 48,
+							width: 88,
+							height: 88,
+							borderRadius: 44,
                             alignItems: 'center',
                             justifyContent: 'center',
-							backgroundColor: 'rgba(0,0,0,0.15)',
+							backgroundColor: 'rgba(0,0,0,0.2)',
+							marginTop: 4,
                         }}
                     >
                         <View style={{
-							width: 96,
-							height: 96,
-							borderRadius: 48,
-							borderWidth: 4,
+							width: 88,
+							height: 88,
+							borderRadius: 44,
+							borderWidth: recording ? 5 : 4,
 							borderColor: recording ? '#ef4444' : '#f75507',
                             alignItems: 'center',
                             justifyContent: 'center',
+							shadowColor: recording ? '#ef4444' : '#f75507',
+							shadowOpacity: 0.5,
+							shadowRadius: 12,
+							shadowOffset: { width: 0, height: 4 },
                         }}>
-							<View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: recording ? '#ef4444' : 'white' }} />
+							<View style={{ 
+								width: recording ? 56 : 60, 
+								height: recording ? 56 : 60, 
+								borderRadius: recording ? 12 : 30, 
+								backgroundColor: recording ? '#ef4444' : 'white',
+								shadowColor: '#000',
+								shadowOpacity: 0.3,
+								shadowRadius: 8,
+								shadowOffset: { width: 0, height: 2 },
+							}} />
                         </View>
                     </Pressable>
 						{!recording && !uri && (
-							<View style={{ alignItems: 'center', marginTop: 8 }}>
-								<Text style={{ color: 'rgba(255,255,255,0.85)', fontWeight: '700' }}>Hold to record</Text>
+							<View style={{ alignItems: 'center', marginTop: 12 }}>
+								<Text style={{ color: 'rgba(255,255,255,0.9)', fontWeight: '700', fontSize: 14, letterSpacing: 0.5 }}>Hold to record</Text>
+								<Text style={{ color: 'rgba(255,255,255,0.6)', fontWeight: '500', fontSize: 12, marginTop: 4 }}>Up to 30 seconds</Text>
 							</View>
 						)}
 					</View>

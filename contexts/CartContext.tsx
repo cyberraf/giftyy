@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useMemo, useState, useEffect, useCallback } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { logProductAnalyticsEvent } from '@/lib/product-analytics';
 
 export type CartItem = {
     id: string;
@@ -72,6 +73,14 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                 return copy;
             }
             return [...prev, { ...newItem, quantity: newItem.quantity ?? 1 }];
+        });
+
+        logProductAnalyticsEvent({
+            productId: newItem.id,
+            eventType: 'added_to_cart',
+            metadata: {
+                quantity: newItem.quantity ?? 1,
+            },
         });
     }, []);
 

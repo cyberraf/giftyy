@@ -10,19 +10,26 @@ import { useRecipients, type Recipient as RecipientType } from '@/contexts/Recip
 import { useAuth } from '@/contexts/AuthContext';
 import { useOrders } from '@/contexts/OrdersContext';
 import { useVideoMessages } from '@/contexts/VideoMessagesContext';
+import { supabase } from '@/lib/supabase';
+import { useWishlist } from '@/contexts/WishlistContext';
+import { useProducts } from '@/contexts/ProductsContext';
+import { useCart } from '@/contexts/CartContext';
+import * as ImagePicker from 'expo-image-picker';
+import { decode } from 'base64-arraybuffer';
 
-const tabs = ['Overview', 'Orders', 'Recipients', 'Settings'] as const;
+const tabs = ['Overview', 'Orders', 'Recipients', 'Wishlist', 'Settings'] as const;
 type TabKey = (typeof tabs)[number];
 
 const TAB_CONFIG: { key: TabKey; icon: IconSymbolName }[] = [
     { key: 'Overview', icon: 'rectangle.grid.2x2' },
     { key: 'Orders', icon: 'doc.plaintext' },
     { key: 'Recipients', icon: 'person.2.fill' },
+    { key: 'Wishlist', icon: 'heart.fill' },
     { key: 'Settings', icon: 'gearshape.fill' },
 ];
 
 const palette = {
-    background: '#F5F4F2',
+    background: '#fff',
     card: '#FFFFFF',
     cardAlt: '#F9F5F2',
     textPrimary: '#2F2318',
@@ -388,10 +395,36 @@ export default function ProfileScreen() {
 		return null;
 	}, [authProfile, user]);
 
-	const membershipStatus = useMemo(() => {
-		// TODO: Get actual subscription status from profile or subscription table
-		return 'Premium'; // Placeholder
-	}, []);
+	const [membershipStatus, setMembershipStatus] = useState<string>('Free');
+
+	// Load active buyer plan name for header badge
+	useEffect(() => {
+		let active = true;
+		(async () => {
+			try {
+				if (!user) {
+					if (active) setMembershipStatus('Free');
+					return;
+				}
+				const { data, error } = await supabase
+					.from('buyer_plan_assignments')
+					.select('status,buyer_plans ( name )')
+					.eq('buyer_id', user.id)
+					.eq('status', 'active')
+					.maybeSingle();
+				if (error) {
+					console.warn('Failed to fetch buyer plan:', error.message);
+					if (active) setMembershipStatus('Free');
+					return;
+				}
+				const planName = (data as any)?.buyer_plans?.name || 'Free';
+				if (active) setMembershipStatus(planName);
+			} catch {
+				if (active) setMembershipStatus('Free');
+			}
+		})();
+		return () => { active = false; };
+	}, [user?.id]);
 
 	const memoriesSent = useMemo(() => {
 		return videoMessages.filter(vm => vm.direction === 'sent').length;
@@ -400,6 +433,68 @@ export default function ProfileScreen() {
 	const memoriesReceived = useMemo(() => {
 		return videoMessages.filter(vm => vm.direction === 'received').length;
 	}, [videoMessages]);
+
+	const handleAvatarPress = useCallback(async () => {
+		try {
+			const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+			if (!permission.granted) {
+				Alert.alert('Permission needed', 'Please allow photo library access to update your profile picture.');
+				return;
+			}
+
+			const result = await ImagePicker.launchImageLibraryAsync({
+				mediaTypes: ImagePicker.MediaTypeOptions.Images,
+				allowsEditing: true,
+				quality: 0.8,
+				base64: true,
+			});
+
+			if (result.canceled || !result.assets?.length) {
+				return;
+			}
+
+			const asset = result.assets[0];
+			if (!asset.base64) {
+				Alert.alert('Upload failed', 'Could not read the selected image. Please try a different photo.');
+				return;
+			}
+
+			const contentType = asset.type === 'video' ? 'video/mp4' : asset.mimeType || 'image/jpeg';
+			const fileName = `profile-${user?.id}-${Date.now()}.jpg`;
+
+			const { error: uploadError } = await supabase.storage
+				.from('profile_images')
+				.upload(`avatars/${user?.id}/${fileName}`, decode(asset.base64), {
+					contentType,
+					upsert: true,
+				});
+
+			if (uploadError) {
+				console.error('Error uploading profile image:', uploadError);
+				Alert.alert('Upload failed', 'We could not upload your profile picture. Please try again.');
+				return;
+			}
+
+			const { data } = supabase.storage.from('profile_images').getPublicUrl(`avatars/${user?.id}/${fileName}`);
+
+			const { error: updateError } = await supabase.from('profiles').update({
+				profile_image_url: data.publicUrl,
+				updated_at: new Date().toISOString(),
+			})
+			.eq('id', user?.id);
+
+			if (updateError) {
+				console.error('Error updating profile image:', updateError);
+				Alert.alert('Update failed', 'Image uploaded but we could not update your profile. Please try again.');
+				return;
+			}
+
+			Alert.alert('Profile updated', 'Your profile picture has been updated.');
+		} catch (error) {
+			console.error('Unexpected error updating profile image:', error);
+			Alert.alert('Something went wrong', 'We could not update your profile picture. Please try again.');
+		}
+	}, [user]);
 
 	return (
         <View style={[styles.screen, { paddingTop: top + 8 }]}> 
@@ -422,7 +517,7 @@ export default function ProfileScreen() {
                     {/* Main Content Section */}
                     <View style={styles.heroMainContent}>
                         {/* Profile Picture with subtle shadow */}
-                        <View style={styles.heroAvatarWrapper}>
+                        <Pressable style={styles.heroAvatarWrapper} onPress={handleAvatarPress}>
                             {authProfile?.profile_image_url ? (
                                 <Image 
                                     source={{ uri: authProfile.profile_image_url }} 
@@ -434,7 +529,7 @@ export default function ProfileScreen() {
                                 </View>
                             )}
                             <View style={styles.heroAvatarRing} />
-                        </View>
+                        </Pressable>
 
                         {/* User Info */}
                         <View style={styles.heroInfoContainer}>
@@ -485,13 +580,204 @@ export default function ProfileScreen() {
                 {activeTab === 'Overview' && <OverviewPanel onTabChange={setActiveTab} />}
                 {activeTab === 'Orders' && <OrdersPanel />}
                 {activeTab === 'Recipients' && <RecipientsPanel />}
+                {activeTab === 'Wishlist' && <WishlistPanel />}
                 {activeTab === 'Settings' && <SettingsPanel />}
             </ScrollView>
         </View>
     );
 }
 
+function WishlistPanel() {
+    const router = useRouter();
+    const { addItem } = useCart();
+    const { wishlist, toggleWishlist } = useWishlist();
+    const { getProductById } = useProducts();
+
+    const items = useMemo(() => {
+        return wishlist
+            .map((entry) => {
+                const product = getProductById(entry.productId);
+                if (!product) {
+                    return null;
+                }
+                return {
+                    entry,
+                    product,
+                };
+            })
+            .filter(Boolean) as { entry: { productId: string; addedAt: string }; product: ReturnType<typeof getProductById> }[];
+    }, [wishlist, getProductById]);
+
+    const formatPrice = (value?: number) => {
+        if (typeof value !== 'number') return '$0.00';
+        return `$${value.toFixed(2)}`;
+    };
+
+    const handleOpenProduct = (productId: string) => {
+        router.push({ pathname: '/(buyer)/(tabs)/product/[id]', params: { id: productId } });
+    };
+
+    const resolveImage = (imageUrl?: string) => {
+        if (!imageUrl) return null;
+        try {
+            const parsed = JSON.parse(imageUrl);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+                return parsed[0];
+            }
+        } catch {
+            // not JSON
+        }
+        return imageUrl;
+    };
+
+    if (wishlist.length === 0) {
+        return (
+            <View style={styles.sectionCard}>
+                <View style={styles.emptyWishlistState}>
+                    <IconSymbol name="heart.fill" size={40} color={BRAND_COLOR} />
+                    <Text style={styles.emptyWishlistTitle}>No favorites yet</Text>
+                    <Text style={styles.emptyWishlistSubtitle}>
+                        Save products you love and we’ll keep them here for easy gifting later.
+                    </Text>
+                    <Pressable style={styles.secondaryButton} onPress={() => router.push('/(buyer)/(tabs)/home')}>
+                        <Text style={styles.secondaryLabel}>Explore gifts</Text>
+                    </Pressable>
+                </View>
+            </View>
+        );
+    }
+
+    return (
+        <View style={styles.wishlistSection}>
+            <View style={styles.wishlistHeaderRow}>
+                <View>
+                    <Text style={styles.sectionHeading}>Wishlist</Text>
+                    <Text style={styles.sectionSubheading}>{items.length} saved {items.length === 1 ? 'item' : 'items'}</Text>
+                </View>
+                <Pressable style={styles.wishlistExploreButton} onPress={() => router.push('/(buyer)/(tabs)/home')}>
+                    <IconSymbol name="sparkles" size={16} color="#FFFFFF" />
+                    <Text style={styles.wishlistExploreLabel}>Browse gifts</Text>
+                </Pressable>
+            </View>
+
+            <View style={styles.wishlistGridCards}>
+                {items.map(({ entry, product }) => {
+                    if (!product) return null;
+                    const cover = resolveImage(product.imageUrl);
+                    const addedAt = new Date(entry.addedAt);
+                    const addedLabel = isNaN(addedAt.getTime())
+                        ? ''
+                        : addedAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+                    const basePrice = product.price || 0;
+                    const hasDiscount = (product.discountPercentage || 0) > 0;
+                    const discountedPrice = hasDiscount ? basePrice * (1 - (product.discountPercentage || 0) / 100) : basePrice;
+
+                    return (
+                        <View key={entry.productId} style={styles.wishlistCardModern}>
+                            <Pressable style={styles.wishlistCardImageWrap} onPress={() => handleOpenProduct(product.id)}>
+                                {cover ? (
+                                    <Image source={{ uri: cover }} style={styles.wishlistCardImage} />
+                                ) : (
+                                    <View style={[styles.wishlistCardImage, styles.wishlistImagePlaceholder]}>
+                                        <IconSymbol name="photo" size={32} color="#c4c4c4" />
+                                    </View>
+                                )}
+                                <Pressable
+                                    style={styles.wishlistRemoveFloating}
+                                    onPress={() => toggleWishlist(product.id)}
+                                    accessibilityLabel="Remove from wishlist"
+                                >
+                                    <IconSymbol name="xmark" size={14} color="#fff" />
+                                </Pressable>
+                            </Pressable>
+                            <View style={styles.wishlistCardBody}>
+                                <Text style={styles.wishlistTitle} numberOfLines={2}>
+                                    {product.name}
+                                </Text>
+                                <View style={styles.wishlistMetaRow}>
+                                    <View style={styles.wishlistPriceRow}>
+                                        <Text style={styles.wishlistPrice}>{formatPrice(discountedPrice)}</Text>
+                                        {hasDiscount && (
+                                            <Text style={styles.wishlistOriginalPrice}>{formatPrice(basePrice)}</Text>
+                                        )}
+                                    </View>
+                                    {addedLabel && (
+                                        <View style={styles.wishlistChip}>
+                                            <Text style={styles.wishlistChipLabel}>Saved {addedLabel}</Text>
+                                        </View>
+                                    )}
+                                </View>
+                                <Pressable
+                                    style={styles.wishlistPrimaryButton}
+                                    onPress={() => {
+                                        addItem({
+                                            id: product.id,
+                                            name: product.name,
+                                            price: formatPrice(discountedPrice),
+                                            image: cover || undefined,
+                                            quantity: 1,
+                                            vendorId: product.vendorId,
+                                        });
+                                        toggleWishlist(product.id);
+                                    }}
+                                >
+                                    <IconSymbol name="cart.fill" size={15} color="#FFFFFF" />
+                                    <Text style={styles.wishlistPrimaryButtonLabel}>Move to cart</Text>
+                                </Pressable>
+                                <View style={styles.wishlistCardFooter}>
+                                    <Pressable style={styles.wishlistGhostButton} onPress={() => handleOpenProduct(product.id)}>
+                                        <IconSymbol name="eye" size={15} color={BRAND_COLOR} />
+                                        <Text style={styles.wishlistGhostButtonLabel}>View</Text>
+                                    </Pressable>
+                                </View>
+                            </View>
+                        </View>
+                    );
+                })}
+            </View>
+        </View>
+    );
+}
 function OverviewPanel({ onTabChange }: { onTabChange?: (tab: TabKey) => void }) {
+    const { orders } = useOrders();
+    const { videoMessages } = useVideoMessages();
+
+    const formatDateShort = (iso: string | undefined) => {
+        if (!iso) return '';
+        try {
+            const d = new Date(iso);
+            return d.toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+        } catch {
+            return '';
+        }
+    };
+
+    const recentActivities = React.useMemo(() => {
+        const orderItems = (orders || []).slice().sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1)).slice(0, 5).map((o) => {
+            const isDelivered = o.status === 'delivered';
+            const title = isDelivered ? 'Order delivered' : o.status === 'shipped' || o.status === 'out_for_delivery' ? 'Order shipped' : 'Order update';
+            const when = formatDateShort(o.deliveredAt || o.createdAt);
+            return {
+                ts: o.deliveredAt || o.createdAt,
+                icon: isDelivered ? 'checkmark.circle.fill' : 'doc.plaintext',
+                title,
+                subtitle: `${o.orderCode} • ${when}`,
+                color: isDelivered ? palette.success : BRAND_COLOR,
+            };
+        });
+
+        const memoryItems = (videoMessages || []).slice().sort((a, b) => (b.createdAt > a.createdAt ? 1 : -1)).slice(0, 5).map((m) => ({
+            ts: m.createdAt,
+            icon: 'camera.fill' as IconSymbolName,
+            title: 'Memory saved',
+            subtitle: `${m.title || 'New video message'} • ${formatDateShort(m.createdAt)}`,
+            color: palette.textSecondary,
+        }));
+
+        return [...orderItems, ...memoryItems]
+            .sort((a, b) => (a.ts < b.ts ? 1 : -1))
+            .slice(0, 3);
+    }, [orders, videoMessages]);
     const router = useRouter();
     
     // Mock data - in a real app, this would come from state/API
@@ -581,24 +867,13 @@ function OverviewPanel({ onTabChange }: { onTabChange?: (tab: TabKey) => void })
             <View style={styles.groupCard}>
                 <Text style={styles.groupTitle}>Recent activity</Text>
                 <View style={styles.activityList}>
-                    <ActivityItem 
-                        icon="checkmark.circle.fill"
-                        title="Order delivered"
-                        subtitle="GIF-7MT912 • Jul 12"
-                        color={palette.success}
-                    />
-                    <ActivityItem 
-                        icon="doc.plaintext"
-                        title="Order shipped"
-                        subtitle="GIF-8Y2KQ1 • In transit"
-                        color={BRAND_COLOR}
-                    />
-                    <ActivityItem 
-                        icon="camera.fill"
-                        title="Memory saved"
-                        subtitle="New video message • Jul 10"
-                        color={palette.textSecondary}
-                    />
+                    {recentActivities.length === 0 ? (
+                        <Text style={styles.activitySubtitle}>No recent activity yet</Text>
+                    ) : (
+                        recentActivities.map((a, idx) => (
+                            <ActivityItem key={idx} icon={a.icon as IconSymbolName} title={a.title} subtitle={a.subtitle} color={a.color} />
+                        ))
+                    )}
                 </View>
             </View>
         </View>
@@ -714,12 +989,6 @@ function SettingsPanel() {
                     subtitle="Update your personal information"
                 />
                 <SettingsLinkRow 
-                    onPress={() => router.push('/(buyer)/settings/addresses')}
-                    label="Saved addresses"
-                    icon="location.fill"
-                    subtitle="Manage your delivery addresses"
-                />
-                <SettingsLinkRow 
                     onPress={() => router.push('/(buyer)/subscription')}
                     label="Subscription"
                     icon="creditcard.fill"
@@ -727,21 +996,7 @@ function SettingsPanel() {
                 />
             </View>
 
-            <View style={styles.groupCard}>
-                <Text style={styles.groupTitle}>Security</Text>
-                <SettingsLinkRow 
-                    onPress={() => Alert.alert('Coming soon', 'Password change feature coming soon')}
-                    label="Change password"
-                    icon="lock.fill"
-                    subtitle="Update your account password"
-                />
-                <SettingsLinkRow 
-                    onPress={() => Alert.alert('Coming soon', 'Two-factor authentication coming soon')}
-                    label="Two-factor authentication"
-                    icon="shield.fill"
-                    subtitle="Add an extra layer of security"
-                />
-            </View>
+            
 
             <View style={styles.groupCard}>
                 <Text style={styles.groupTitle}>Notification preferences</Text>
@@ -756,49 +1011,9 @@ function SettingsPanel() {
                     icon="hand.raised.fill"
                     subtitle="Read our privacy policy"
                 />
-                <SettingsLinkRow 
-                    onPress={() => Alert.alert('Coming soon', 'Terms of service coming soon')}
-                    label="Terms of service"
-                    icon="doc.plaintext.fill"
-                    subtitle="Read our terms of service"
-                />
-                <SettingsLinkRow 
-                    onPress={() => Alert.alert('Coming soon', 'Data management coming soon')}
-                    label="Data management"
-                    icon="tray.full.fill"
-                    subtitle="Manage your data"
-                />
             </View>
 
-            <View style={styles.groupCard}>
-                <Text style={styles.groupTitle}>Account data</Text>
-                <SettingsLinkRow 
-                    onPress={() => Alert.alert('Coming soon', 'Export data feature coming soon')}
-                    label="Export data"
-                    icon="square.and.arrow.up.fill"
-                    subtitle="Download your account data"
-                />
-                <Pressable 
-                    style={styles.dangerLinkRow}
-                    onPress={() => Alert.alert(
-                        'Delete account',
-                        'Are you sure you want to delete your account? This action cannot be undone.',
-                        [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Delete', style: 'destructive', onPress: () => Alert.alert('Coming soon', 'Account deletion coming soon') },
-                        ]
-                    )}
-                >
-                    <View style={styles.dangerLinkContent}>
-                        <IconSymbol name="trash.fill" size={20} color={palette.danger} />
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.dangerLinkLabel}>Delete account</Text>
-                            <Text style={styles.dangerLinkSubtitle}>Permanently delete your account</Text>
-                        </View>
-                    </View>
-                    <IconSymbol name="chevron.right" size={20} color={palette.danger} />
-                </Pressable>
-            </View>
+            
 
             <Pressable style={styles.dangerButton} onPress={handleSignOut}>
                 <IconSymbol name="arrow.right.square.fill" size={20} color={palette.danger} />
@@ -809,20 +1024,11 @@ function SettingsPanel() {
 }
 
 function SettingsNotificationsPanel() {
-    const [emailNotifications, setEmailNotifications] = useState(true);
     const [pushNotifications, setPushNotifications] = useState(true);
-    const [smsNotifications, setSmsNotifications] = useState(false);
     const [orderUpdates, setOrderUpdates] = useState(true);
-    const [promotional, setPromotional] = useState(false);
 
     return (
         <>
-            <SettingsSwitchRow
-                label="Email notifications"
-                subtitle="Receive updates via email"
-                value={emailNotifications}
-                onValueChange={setEmailNotifications}
-            />
             <SettingsSwitchRow
                 label="Push notifications"
                 subtitle="Receive push notifications on your device"
@@ -830,22 +1036,10 @@ function SettingsNotificationsPanel() {
                 onValueChange={setPushNotifications}
             />
             <SettingsSwitchRow
-                label="SMS notifications"
-                subtitle="Receive updates via text message"
-                value={smsNotifications}
-                onValueChange={setSmsNotifications}
-            />
-            <SettingsSwitchRow
                 label="Order updates"
                 subtitle="Get notified about your order status"
                 value={orderUpdates}
                 onValueChange={setOrderUpdates}
-            />
-            <SettingsSwitchRow
-                label="Promotional emails"
-                subtitle="Receive special offers and promotions"
-                value={promotional}
-                onValueChange={setPromotional}
             />
         </>
     );
@@ -2165,6 +2359,164 @@ const styles = StyleSheet.create({
     dangerLabel: {
         color: '#C53030',
         fontWeight: '800',
+    },
+    emptyWishlistState: {
+        alignItems: 'center',
+        gap: 10,
+        paddingVertical: 24,
+        paddingHorizontal: 12,
+    },
+    emptyWishlistTitle: {
+        fontSize: 18,
+        fontWeight: '800',
+        color: '#111827',
+    },
+    emptyWishlistSubtitle: {
+        color: '#6b7280',
+        textAlign: 'center',
+        lineHeight: 20,
+        paddingHorizontal: 12,
+    },
+    wishlistSection: {
+        gap: 20,
+        marginTop: 8,
+    },
+    wishlistHeaderRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    wishlistExploreButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        backgroundColor: BRAND_COLOR,
+        paddingHorizontal: 14,
+        paddingVertical: 10,
+        borderRadius: 20,
+    },
+    wishlistExploreLabel: {
+        color: '#FFFFFF',
+        fontWeight: '700',
+    },
+    wishlistGridCards: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: 14,
+    },
+    wishlistCardModern: {
+        width: '100%',
+        borderRadius: 22,
+        backgroundColor: '#FFFFFF',
+        borderWidth: 1,
+        borderColor: '#E4E5ED',
+        shadowColor: '#1F2937',
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+        elevation: 3,
+        overflow: 'hidden',
+    },
+    wishlistCardImageWrap: {
+        position: 'relative',
+    },
+    wishlistCardImage: {
+        width: '100%',
+        height: 220,
+    },
+    wishlistRemoveFloating: {
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: 'rgba(17,24,39,0.65)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    wishlistCardBody: {
+        padding: 16,
+        gap: 12,
+    },
+    wishlistMetaRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: 10,
+    },
+    wishlistPriceRow: {
+        flexDirection: 'row',
+        alignItems: 'baseline',
+        gap: 8,
+    },
+    wishlistPrice: {
+        fontSize: 18,
+        fontWeight: '800',
+        color: BRAND_COLOR,
+    },
+    wishlistOriginalPrice: {
+        fontSize: 14,
+        color: '#94A3B8',
+        textDecorationLine: 'line-through',
+    },
+    wishlistChip: {
+        paddingVertical: 4,
+        paddingHorizontal: 10,
+        borderRadius: 999,
+        backgroundColor: '#F1F5F9',
+    },
+    wishlistChipLabel: {
+        fontSize: 12,
+        color: '#475569',
+        fontWeight: '600',
+    },
+    wishlistPrimaryButton: {
+        backgroundColor: BRAND_COLOR,
+        borderRadius: 16,
+        paddingVertical: 12,
+        alignItems: 'center',
+        flexDirection: 'row',
+        justifyContent: 'center',
+        gap: 8,
+    },
+    wishlistPrimaryButtonLabel: {
+        color: '#FFFFFF',
+        fontWeight: '700',
+    },
+    wishlistCardFooter: {
+        flexDirection: 'row',
+        gap: 10,
+    },
+    wishlistGhostButton: {
+        flex: 1,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#E2E8F0',
+        paddingVertical: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+    },
+    wishlistGhostButtonLabel: {
+        color: BRAND_COLOR,
+        fontWeight: '700',
+    },
+    wishlistRemoveButton: {
+        flex: 1,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#FECACA',
+        paddingVertical: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        backgroundColor: '#FEF2F2',
+    },
+    wishlistRemoveLabel: {
+        color: '#991B1B',
+        fontWeight: '700',
     },
     settingsButton: {
         marginTop: 8,

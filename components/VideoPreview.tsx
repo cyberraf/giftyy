@@ -1,7 +1,8 @@
 import { Video, ResizeMode } from 'expo-av';
 import React, { useEffect, useRef, useState } from 'react';
-import { View, StyleSheet, ViewStyle, ActivityIndicator } from 'react-native';
+import { View, StyleSheet, ViewStyle, ActivityIndicator, Text } from 'react-native';
 import { useSignedVideoUrl } from '@/hooks/useSignedVideoUrl';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 
 type VideoPreviewProps = {
 	videoUrl: string;
@@ -27,7 +28,7 @@ export function VideoPreview({ videoUrl, style }: VideoPreviewProps) {
 					await videoRef.current.pauseAsync();
 				}
 			} catch (error) {
-				console.error('Error seeking video:', error);
+				console.warn('Video preview seek error:', error);
 				setHasError(true);
 			}
 		};
@@ -37,10 +38,26 @@ export function VideoPreview({ videoUrl, style }: VideoPreviewProps) {
 		}
 	}, [signedUrl, isReady]);
 
+	// Reset error state when URL changes
+	useEffect(() => {
+		setHasError(false);
+		setIsReady(false);
+	}, [signedUrl]);
+
 	if (!signedUrl) {
 		return (
 			<View style={[style, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
 				<ActivityIndicator size="small" color="#fff" />
+			</View>
+		);
+	}
+
+	// Show error placeholder if video failed to load
+	if (hasError) {
+		return (
+			<View style={[style, { backgroundColor: '#1a1a1a', justifyContent: 'center', alignItems: 'center' }]}>
+				<IconSymbol name="camera.fill" size={32} color="#666" />
+				<Text style={{ marginTop: 8, color: '#666', fontSize: 12 }}>Video unavailable</Text>
 			</View>
 		);
 	}
@@ -59,7 +76,25 @@ export function VideoPreview({ videoUrl, style }: VideoPreviewProps) {
 					setIsReady(true);
 				}}
 				onError={(error) => {
-					console.error('Video preview error:', error);
+					// Check if it's a 403 Forbidden error (common for expired signed URLs or access issues)
+					const errorMessage = error?.toString() || '';
+					const is403 = errorMessage.includes('403') || errorMessage.includes('Forbidden');
+					const isDemoUrl = videoUrl?.includes('coverr.co') || videoUrl?.includes('cdn.coverr');
+					
+					// Suppress warnings for demo/placeholder URLs (like coverr.co) that are expected to fail
+					if (isDemoUrl) {
+						// Silently handle demo URL failures - they're expected placeholders
+						setHasError(true);
+						return;
+					}
+					
+					if (is403) {
+						// Only log as warning for 403 errors (less noisy)
+						console.warn('Video preview access denied (403):', videoUrl);
+					} else {
+						// Log other errors normally
+						console.warn('Video preview error:', error);
+					}
 					setHasError(true);
 				}}
 			/>

@@ -7,7 +7,7 @@ import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 const palette = {
-    background: '#F5F4F2',
+    background: '#fff',
     card: '#FFFFFF',
     cardAlt: '#F9F5F2',
     textPrimary: '#2F2318',

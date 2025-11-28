@@ -4,8 +4,10 @@ import { useRouter, usePathname } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useCart } from '@/contexts/CartContext';
 import { useBottomBarVisibility } from '@/contexts/BottomBarVisibility';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BRAND_COLOR } from '@/constants/theme';
 
-const BRAND = '#f75507';
+const BRAND = BRAND_COLOR;
 
 const TAB_ROUTES = [
     { name: 'home', path: '/(buyer)/(tabs)/home', icon: 'house.fill', label: 'Home' },
@@ -19,6 +21,9 @@ export function StandaloneBottomBar() {
     const { visible } = useBottomBarVisibility();
     const router = useRouter();
     const pathname = usePathname();
+	const { bottom } = useSafeAreaInsets();
+	const bottomInset = Math.max(bottom, 0);
+	const barHeight = 68 + bottomInset;
 
     // Hide on tab screens (they have their own CustomTabBar)
     const isTabScreen = pathname?.startsWith('/(buyer)/(tabs)/') && 
@@ -43,19 +48,22 @@ export function StandaloneBottomBar() {
         <View
             style={{
                 position: 'absolute',
-                left: 12,
-                right: 12,
-                bottom: 18,
-                height: 68,
+                left: 0,
+                right: 0,
+				bottom: 0,
+				height: barHeight,
                 backgroundColor: 'white',
-                borderRadius: 26,
+                borderTopLeftRadius: 26,
+                borderTopRightRadius: 26,
                 shadowColor: '#000',
                 shadowOpacity: 0.08,
                 shadowRadius: 14,
+                shadowOffset: { width: 0, height: -4 },
                 elevation: 8,
                 flexDirection: 'row',
-                paddingHorizontal: 8,
-                paddingVertical: 8,
+                paddingHorizontal: 12,
+				paddingTop: 8,
+				paddingBottom: 8 + bottomInset,
             }}
         >
             {TAB_ROUTES.map((route) => {
@@ -75,6 +83,8 @@ export function StandaloneBottomBar() {
                                 width: '100%',
                                 alignItems: 'center',
                                 justifyContent: 'center',
+                                borderRadius: 16,
+                                backgroundColor: active ? 'rgba(247, 85, 7, 0.1)' : 'transparent',
                             }}
                         >
                             <View style={{ position: 'relative' }}>

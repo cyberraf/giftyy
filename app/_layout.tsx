@@ -19,9 +19,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Image, Text, View } from 'react-native';
 
 import { CartProvider } from '@/contexts/CartContext';
+import { WishlistProvider } from '@/contexts/WishlistContext';
 import { NotificationsProvider } from '@/contexts/NotificationsContext';
 import { RecipientsProvider } from '@/contexts/RecipientsContext';
 import { VideoMessagesProvider } from '@/contexts/VideoMessagesContext';
+import { SharedMemoriesProvider } from '@/contexts/SharedMemoriesContext';
+import { VaultsProvider } from '@/contexts/VaultsContext';
 import { AuthProvider } from '@/contexts/AuthContext';
 import { AlertProvider } from '@/contexts/AlertContext';
 import { OrdersProvider } from '@/contexts/OrdersContext';
@@ -99,9 +102,12 @@ export default function RootLayout() {
       <AlertProvider>
         <AuthProvider>
           <CartProvider>
+            <WishlistProvider>
             <CheckoutProvider>
               <RecipientsProvider>
                 <VideoMessagesProvider>
+                  <SharedMemoriesProvider>
+                    <VaultsProvider>
                   <OrdersProvider>
                     <ProductsProvider>
                       <NotificationsProvider>
@@ -114,9 +120,12 @@ export default function RootLayout() {
                       </NotificationsProvider>
                     </ProductsProvider>
                   </OrdersProvider>
+                      </VaultsProvider>
+                    </SharedMemoriesProvider>
                 </VideoMessagesProvider>
               </RecipientsProvider>
             </CheckoutProvider>
+            </WishlistProvider>
           </CartProvider>
         </AuthProvider>
       </AlertProvider>

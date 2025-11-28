@@ -32,6 +32,8 @@ const MAPPING: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   'cart.fill': 'shopping-cart',
   'person.fill': 'person',
   'camera.fill': 'video-library',
+  'video.fill': 'videocam',
+  'photo.fill': 'photo',
   house: 'home',
   'gift.fill': 'card-giftcard',
   xmark: 'close',
@@ -61,6 +63,9 @@ const MAPPING: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   'externaldrive.fill': 'storage',
   calendar: 'calendar-today',
   'envelope.fill': 'email',
+  'play.fill': 'play-arrow',
+  'arrow.down.circle.fill': 'arrow-circle-down',
+  'arrow.up.circle.fill': 'arrow-circle-up',
 };
 
 /**

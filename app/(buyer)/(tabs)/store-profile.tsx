@@ -17,7 +17,7 @@ const TAB_CONFIG: { key: TabKey; icon: IconSymbolName }[] = [
 ];
 
 const palette = {
-    background: '#F5F4F2',
+    background: '#fff',
     card: '#FFFFFF',
     cardAlt: '#F9F5F2',
     textPrimary: '#2F2318',
@@ -28,7 +28,7 @@ const palette = {
 };
 
 export default function StoreProfileScreen() {
-    const { top } = useSafeAreaInsets();
+    const { top, bottom } = useSafeAreaInsets();
     const [activeTab, setActiveTab] = useState<TabKey>('Overview');
     const { products, collections } = useProducts();
 
@@ -58,7 +58,7 @@ export default function StoreProfileScreen() {
 
     return (
         <View style={[styles.screen, { paddingTop: top + 8 }]}>
-            <ScrollView contentContainerStyle={[styles.content, { paddingBottom: BOTTOM_BAR_TOTAL_SPACE + 20 }]}>
+            <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20 }]}>
                 <View style={styles.heroCard}>
                     <View style={styles.avatarBubble}>
                         {storeData.logo ? (

@@ -1,13 +1,13 @@
-import React, { useState, useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, ActivityIndicator } from 'react-native';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { MemoryVideoItem, MessageVideoViewer } from '../(tabs)/memory';
 import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
-import { MessageVideoViewer, MemoryVideoItem } from '@/app/(buyer)/(tabs)/memory';
 import { useOrders } from '@/contexts/OrdersContext';
 import { useVideoMessages } from '@/contexts/VideoMessagesContext';
+import { Stack, useLocalSearchParams } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 const palette = {
-  background: '#F5F4F2',
+  background: '#fff',
   card: '#FFFFFF',
   border: '#E6DED6',
   textPrimary: '#2F2318',
@@ -44,6 +44,7 @@ export default function OrderDetailsScreen() {
       date: new Date(orderVideoMessage.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
       videoUrl: orderVideoMessage.videoUrl,
       direction: orderVideoMessage.direction,
+      orderId: orderVideoMessage.orderId, // Include orderId for QR code generation
     };
   }, [orderVideoMessage]);
 

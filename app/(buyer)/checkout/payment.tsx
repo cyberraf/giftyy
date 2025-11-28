@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, TextInput, StyleSheet, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
+import React, { useMemo, useState, useCallback } from 'react';
+import { View, Text, TextInput, StyleSheet, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, Pressable, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import StepBar from '@/components/StepBar';
 import BrandButton from '@/components/BrandButton';
@@ -7,20 +7,35 @@ import { useCheckout } from '@/lib/CheckoutContext';
 import { useCart } from '@/contexts/CartContext';
 import { useOrders } from '@/contexts/OrdersContext';
 import { useVideoMessages } from '@/contexts/VideoMessagesContext';
+import { useProducts } from '@/contexts/ProductsContext';
 import { calculateVendorShippingSync } from '@/lib/shipping-utils';
+import { BRAND_COLOR } from '@/constants/theme';
 
 export default function PaymentScreen() {
     const router = useRouter();
     const { items, clear: clearCart } = useCart();
-    const { payment, setPayment, cardType, cardPrice, recipient, videoUri, videoTitle } = useCheckout();
-    const { createOrder } = useOrders();
+    const { payment, setPayment, cardType, cardPrice, recipient, notifyRecipient, videoUri, videoTitle, sharedMemoryId } = useCheckout();
+    const { createOrder, refreshOrders } = useOrders();
     const { videoMessages } = useVideoMessages();
+    const { refreshProducts, refreshCollections } = useProducts();
 
     const [name, setName] = useState(payment.name);
     const [cardNumber, setCardNumber] = useState(payment.cardNumber);
     const [expiry, setExpiry] = useState(payment.expiry);
     const [cvv, setCvv] = useState(payment.cvv);
     const [loading, setLoading] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            await Promise.all([refreshProducts(), refreshCollections(), refreshOrders()]);
+        } catch (error) {
+            console.error('Error refreshing payment data:', error);
+        } finally {
+            setRefreshing(false);
+        }
+    }, [refreshProducts, refreshCollections, refreshOrders]);
 
     const parsePrice = (value?: string) => {
         if (!value) return 0;
@@ -87,20 +102,26 @@ export default function PaymentScreen() {
                 videoMessageId = videoMessage?.id;
             }
 
+            // Determine primary vendor ID if all items are from the same vendor
+            const vendorIds = Array.from(new Set(items.map(item => item.vendorId).filter(Boolean) as string[]));
+            const primaryVendorId = vendorIds.length === 1 ? vendorIds[0] : null;
+
             // Create the order
             const { order, error } = await createOrder(
                 items,
                 recipient,
                 cardType || 'Premium',
                 cardPrice,
-                false, // notifyRecipient - can be set from checkout context if needed
+                notifyRecipient, // Use the value from checkout context
                 itemsSubtotal,
                 shipping,
                 tax,
                 total,
                 last4,
                 undefined, // paymentBrand - can be detected from card number if needed
-                videoMessageId
+                videoMessageId,
+                sharedMemoryId,
+                primaryVendorId // Pass primary vendor ID if all items are from one vendor
             );
 
             if (error || !order) {
@@ -127,10 +148,20 @@ export default function PaymentScreen() {
     };
 
     return (
-        <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
-            <StepBar current={5} total={6} label="Payment" />
+        <View style={{ flex: 1, backgroundColor: '#fff' }}>
+            <StepBar current={6} total={7} label="Payment" />
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                <ScrollView contentContainerStyle={styles.content}>
+                <ScrollView 
+                    contentContainerStyle={styles.content}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={onRefresh}
+                            tintColor={BRAND_COLOR}
+                            colors={[BRAND_COLOR]}
+                        />
+                    }
+                >
                     <View style={styles.heroCard}>
                         <Text style={styles.overline}>Secure checkout</Text>
                         <Text style={styles.title}>Finalize your gift delivery</Text>
@@ -261,7 +292,7 @@ const styles = StyleSheet.create({
         padding: 20,
         paddingBottom: 34,
         gap: 18,
-        backgroundColor: '#F8FAFC',
+        backgroundColor: '#fff',
     },
     heroCard: {
         backgroundColor: 'white',

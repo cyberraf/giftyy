@@ -1,13 +1,14 @@
-import React, { useState, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput } from 'react-native';
+import React, { useState, useMemo, useCallback } from 'react';
+import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, RefreshControl } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
 import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useOrders } from '@/contexts/OrdersContext';
 
 const palette = {
-    background: '#F5F4F2',
+    background: '#fff',
     card: '#FFFFFF',
     cardAlt: '#F9F5F2',
     textPrimary: '#2F2318',
@@ -45,128 +46,32 @@ type Order = {
     events: TrackingEvent[];
 };
 
-const MOCK_ORDERS: Order[] = [
-    {
-        id: '1',
-        code: 'GIF-8Y2KQ1',
-        status: 'out-for-delivery',
-        recipient: 'Jordan Miles',
-        items: ['Curated gift box', 'Personalized video message'],
-        total: '$86.40',
-        placedDate: 'Jul 15, 2025',
-        estimatedDelivery: 'Tomorrow, Jul 16',
-        trackingNumber: '1Z999AA10123456784',
-        carrier: 'UPS',
-        events: [
-            {
-                id: 'e1',
-                status: 'processing',
-                title: 'Order placed',
-                description: 'Your order has been received',
-                timestamp: 'Jul 15, 2025 • 10:30 AM',
-                location: 'San Francisco, CA',
-            },
-            {
-                id: 'e2',
-                status: 'shipped',
-                title: 'Order shipped',
-                description: 'Package has left our facility',
-                timestamp: 'Jul 15, 2025 • 2:45 PM',
-                location: 'San Francisco, CA',
-            },
-            {
-                id: 'e3',
-                status: 'in-transit',
-                title: 'In transit',
-                description: 'Package is on the way',
-                timestamp: 'Jul 16, 2025 • 8:15 AM',
-                location: 'Oakland, CA',
-            },
-            {
-                id: 'e4',
-                status: 'out-for-delivery',
-                title: 'Out for delivery',
-                description: 'Your package will arrive today',
-                timestamp: 'Jul 16, 2025 • 6:30 AM',
-                location: 'San Francisco, CA',
-            },
-        ],
-    },
-    {
-        id: '2',
-        code: 'GIF-7MT912',
-        status: 'delivered',
-        recipient: 'Sarah Chen',
-        items: ['Premium gift set', 'Video message'],
-        total: '$124.50',
-        placedDate: 'Jul 10, 2025',
-        estimatedDelivery: 'Delivered Jul 12, 2025',
-        trackingNumber: '9400111899223197428490',
-        carrier: 'USPS',
-        events: [
-            {
-                id: 'e5',
-                status: 'processing',
-                title: 'Order placed',
-                description: 'Your order has been received',
-                timestamp: 'Jul 10, 2025 • 3:20 PM',
-                location: 'San Francisco, CA',
-            },
-            {
-                id: 'e6',
-                status: 'shipped',
-                title: 'Order shipped',
-                description: 'Package has left our facility',
-                timestamp: 'Jul 11, 2025 • 9:00 AM',
-                location: 'San Francisco, CA',
-            },
-            {
-                id: 'e7',
-                status: 'in-transit',
-                title: 'In transit',
-                description: 'Package is on the way',
-                timestamp: 'Jul 11, 2025 • 4:30 PM',
-                location: 'Los Angeles, CA',
-            },
-            {
-                id: 'e8',
-                status: 'out-for-delivery',
-                title: 'Out for delivery',
-                description: 'Your package is out for delivery',
-                timestamp: 'Jul 12, 2025 • 7:00 AM',
-                location: 'Los Angeles, CA',
-            },
-            {
-                id: 'e9',
-                status: 'delivered',
-                title: 'Delivered',
-                description: 'Package was delivered',
-                timestamp: 'Jul 12, 2025 • 2:45 PM',
-                location: 'Los Angeles, CA',
-            },
-        ],
-    },
-    {
-        id: '3',
-        code: 'GIF-6JK4Q2',
-        status: 'processing',
-        recipient: 'Michael Torres',
-        items: ['Birthday gift collection'],
-        total: '$95.00',
-        placedDate: 'Jul 14, 2025',
-        estimatedDelivery: 'Jul 18-20, 2025',
-        events: [
-            {
-                id: 'e10',
-                status: 'processing',
-                title: 'Order placed',
-                description: 'Your order is being prepared',
-                timestamp: 'Jul 14, 2025 • 11:15 AM',
-                location: 'San Francisco, CA',
-            },
-        ],
-    },
-];
+function formatMoney(n: number | undefined | null): string {
+    if (!n && n !== 0) return '$0.00';
+    try {
+        return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n);
+    } catch {
+        return `$${n?.toFixed(2) ?? '0.00'}`;
+    }
+}
+
+function mapOrderStatus(status: string): TrackingStatus {
+    switch (status) {
+        case 'processing':
+        case 'confirmed':
+            return 'processing';
+        case 'shipped':
+            return 'shipped';
+        case 'out_for_delivery':
+            return 'out-for-delivery';
+        case 'delivered':
+            return 'delivered';
+        case 'cancelled':
+            return 'cancelled';
+        default:
+            return 'processing';
+    }
+}
 
 const STATUS_CONFIG: Record<TrackingStatus, { label: string; color: string; bgColor: string }> = {
     processing: { label: 'Processing', color: palette.warning, bgColor: '#FEF3C7' },
@@ -180,19 +85,92 @@ const STATUS_CONFIG: Record<TrackingStatus, { label: string; color: string; bgCo
 export default function OrderTrackerScreen() {
     const { top, bottom } = useSafeAreaInsets();
     const router = useRouter();
+    const { orders, refreshOrders } = useOrders();
     const [searchQuery, setSearchQuery] = useState('');
     const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            await refreshOrders();
+        } catch (error) {
+            console.error('Error refreshing orders:', error);
+        } finally {
+            setRefreshing(false);
+        }
+    }, [refreshOrders]);
+
+    const mappedOrders: Order[] = useMemo(() => {
+        return (orders || []).map((o) => ({
+            id: o.id,
+            code: o.orderCode,
+            status: mapOrderStatus(o.status),
+            recipient: [o.recipient.firstName, o.recipient.lastName].filter(Boolean).join(' '),
+            items: o.items.map((i) => i.productName),
+            total: formatMoney(o.totalAmount),
+            placedDate: new Date(o.createdAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }),
+            estimatedDelivery: o.estimatedDeliveryDate
+                ? new Date(o.estimatedDeliveryDate).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })
+                : '',
+            trackingNumber: o.trackingNumber,
+            carrier: o.trackingNumber ? (o.paymentBrand ?? undefined) : undefined,
+            events: [
+                {
+                    id: `e-${o.id}-placed`,
+                    status: 'processing',
+                    title: 'Order placed',
+                    description: 'Your order has been received',
+                    timestamp: new Date(o.createdAt).toLocaleString(),
+                },
+                ...(o.status === 'shipped' || o.status === 'out_for_delivery' || o.status === 'delivered'
+                    ? [
+                          {
+                              id: `e-${o.id}-shipped`,
+                              status: 'shipped' as TrackingStatus,
+                              title: 'Order shipped',
+                              description: 'Package has left our facility',
+                              timestamp: new Date(o.updatedAt).toLocaleString(),
+                          },
+                      ]
+                    : []),
+                ...(o.status === 'out_for_delivery' || o.status === 'delivered'
+                    ? [
+                          {
+                              id: `e-${o.id}-ofd`,
+                              status: 'out-for-delivery' as TrackingStatus,
+                              title: 'Out for delivery',
+                              description: 'Your package is out for delivery',
+                              timestamp: new Date(o.updatedAt).toLocaleString(),
+                          },
+                      ]
+                    : []),
+                ...(o.status === 'delivered'
+                    ? [
+                          {
+                              id: `e-${o.id}-delivered`,
+                              status: 'delivered' as TrackingStatus,
+                              title: 'Delivered',
+                              description: 'Package was delivered',
+                              timestamp: new Date(o.deliveredAt || o.updatedAt).toLocaleString(),
+                          },
+                      ]
+                    : []),
+            ],
+        }));
+    }, [orders]);
 
     const filteredOrders = useMemo(() => {
-        if (!searchQuery.trim()) return MOCK_ORDERS;
+        const source = mappedOrders;
+        if (!searchQuery.trim()) return source;
         const query = searchQuery.toLowerCase();
-        return MOCK_ORDERS.filter(
+        return source.filter(
             (order) =>
                 order.code.toLowerCase().includes(query) ||
                 order.recipient.toLowerCase().includes(query) ||
-                order.trackingNumber?.toLowerCase().includes(query)
+                (order.trackingNumber?.toLowerCase() || '').includes(query)
         );
-    }, [searchQuery]);
+    }, [searchQuery, mappedOrders]);
 
     const toggleOrder = (orderId: string) => {
         setExpandedOrderId(expandedOrderId === orderId ? null : orderId);
@@ -203,8 +181,17 @@ export default function OrderTrackerScreen() {
     return (
         <View style={[styles.screen, { paddingTop: top + 8 }]}>
             <ScrollView
-                contentContainerStyle={[styles.content, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20 }]}
+                contentContainerStyle={[styles.content, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20, flexGrow: 1 }]}
                 showsVerticalScrollIndicator={false}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={BRAND_COLOR}
+                        colors={[BRAND_COLOR]}
+                    />
+                }
+                scrollEnabled={true}
             >
                 {/* Header */}
                 <View style={styles.header}>
@@ -395,15 +382,10 @@ export default function OrderTrackerScreen() {
                                             <View style={styles.actionsSection}>
                                                 <Pressable
                                                     style={styles.primaryButton}
-                                                    onPress={() => router.push(`/(buyer)/orders/${order.code}`)}
+                                                    onPress={() => router.push(`/(buyer)/orders/${order.id}`)}
                                                 >
                                                     <Text style={styles.primaryButtonText}>View order details</Text>
                                                 </Pressable>
-                                                {order.status !== 'delivered' && order.status !== 'cancelled' && (
-                                                    <Pressable style={styles.secondaryButton}>
-                                                        <Text style={styles.secondaryButtonText}>Contact support</Text>
-                                                    </Pressable>
-                                                )}
                                             </View>
                                         </View>
                                     )}

@@ -30,6 +30,7 @@ type AuthContextType = {
 	signOut: () => Promise<void>;
 	updateProfile: (updates: Partial<Profile>) => Promise<{ error: Error | null }>;
 	refreshProfile: () => Promise<void>;
+	deleteAccount: (password: string) => Promise<{ error: AuthError | Error | null }>;
 };
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -177,32 +178,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 	const signInWithGoogle = useCallback(async () => {
 		try {
-			// For React Native, use expo-auth-session which properly handles OAuth state
-			// This prevents "invalid state" errors
 			const { makeRedirectUri } = await import('expo-auth-session');
+			const { openBrowserAsync, WebBrowserPresentationStyle, WebBrowserResultType } = await import('expo-web-browser');
 			
-			// Create the redirect URI using makeRedirectUri
-			// In development, this might return exp:// format, but we need giftyy://
-			// So we'll construct it manually to ensure consistency
-			const redirectUri = __DEV__ 
-				? 'giftyy://auth/callback'  // Use giftyy:// in development too
-				: makeRedirectUri({
-					scheme: 'giftyy',
-					path: 'auth/callback',
-				});
+			// Create the redirect URI
+			const redirectUri = makeRedirectUri({
+				scheme: 'giftyy',
+				path: 'auth/callback',
+			});
 			
-			console.log('OAuth redirect URI:', redirectUri);
-			console.log('Environment:', __DEV__ ? 'Development' : 'Production');
-			console.log('Make sure this exact URL is added to Supabase redirect URLs:', redirectUri);
+			console.log('🔵 Google OAuth - Redirect URI:', redirectUri);
+			console.log('🔵 Make sure this URL is added to Supabase redirect URLs:', redirectUri);
 			
-			// Use Supabase's OAuth flow
-			// Get the OAuth URL and open it manually to ensure proper deep link handling
+			// Get Supabase OAuth URL
 			const { data, error } = await supabase.auth.signInWithOAuth({
 				provider: 'google',
 				options: {
 					redirectTo: redirectUri,
-					skipBrowserRedirect: true, // Get URL without opening browser (we'll open it ourselves)
-					// Query parameters to help identify OAuth flow
+					skipBrowserRedirect: true,
 					queryParams: {
 						access_type: 'offline',
 						prompt: 'consent',
@@ -211,7 +204,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			});
 
 			if (error) {
-				console.error('Google OAuth error:', error);
+				console.error('❌ Google OAuth error:', error);
 				const errorMessage = getSupabaseErrorMessage(error);
 				return {
 					error: {
@@ -221,23 +214,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				};
 			}
 
-			// Open the OAuth URL using expo-web-browser
-			// The browser will redirect to giftyy://auth/callback when OAuth completes
-			if (data?.url) {
-				console.log('Opening OAuth URL in browser:', data.url);
-				
-				const { openBrowserAsync, WebBrowserPresentationStyle } = await import('expo-web-browser');
-				
-				// Open browser - it will redirect to giftyy://auth/callback when OAuth completes
-				// The deep link handler in app/index.tsx will catch the callback
-				await openBrowserAsync(data.url, {
-					presentationStyle: WebBrowserPresentationStyle.AUTOMATIC,
-					enableBarCollapsing: false,
-				});
-				
-				console.log('Browser opened. Complete OAuth in browser, then the app will receive the callback.');
-			} else {
-				console.error('No OAuth URL returned from Supabase');
+			if (!data?.url) {
+				console.error('❌ No OAuth URL returned from Supabase');
 				return {
 					error: {
 						name: 'GoogleSignInError',
@@ -246,12 +224,116 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				};
 			}
 
-			// Note: signInWithOAuth doesn't return a session immediately
-			// The session will be established when the OAuth callback is handled
-			// The deep link handler in app/index.tsx will process the callback
-			return { error: null };
+			console.log('🔵 Opening OAuth URL in browser:', data.url);
+			
+			// Set up a listener for the callback URL BEFORE opening the browser
+			// This ensures we catch the deep link when the browser redirects
+			let callbackReceived = false;
+			let callbackUrl: string | null = null;
+			
+			const Linking = await import('expo-linking');
+			const subscription = Linking.addEventListener('url', (event) => {
+				if (event.url && event.url.includes('auth/callback')) {
+					console.log('🔵 ========================================');
+					console.log('🔵 CALLBACK URL RECEIVED IN AUTHCONTEXT!');
+					console.log('🔵 ========================================');
+					console.log('🔵 Callback URL:', event.url.substring(0, 200));
+					callbackReceived = true;
+					callbackUrl = event.url;
+					subscription.remove();
+				}
+			});
+			
+			// Open browser and wait for the result
+			// The browser will redirect to giftyy://auth/callback when OAuth completes
+			const result = await openBrowserAsync(data.url, {
+				presentationStyle: WebBrowserPresentationStyle.AUTOMATIC,
+				enableBarCollapsing: false,
+			});
+
+			console.log('🔵 Browser closed with result type:', result.type);
+			
+			// Give a moment for the deep link to be received
+			await new Promise(resolve => setTimeout(resolve, 500));
+			
+			if (callbackReceived && callbackUrl) {
+				console.log('🔵 Processing callback URL directly...');
+				// Process the callback URL immediately
+				try {
+					const url = callbackUrl;
+					const hashIndex = url.indexOf('#');
+					if (hashIndex !== -1) {
+						const hashPart = url.substring(hashIndex + 1);
+						const hashParams = new URLSearchParams(hashPart);
+						const accessToken = hashParams.get('access_token');
+						const refreshToken = hashParams.get('refresh_token');
+						
+						if (accessToken && refreshToken) {
+							console.log('🔵 Setting session with tokens from callback...');
+							const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+								access_token: accessToken,
+								refresh_token: refreshToken,
+							});
+							
+							if (sessionData?.session) {
+								console.log('✅ Session established from callback URL');
+								await fetchProfile(sessionData.session.user.id);
+								return { error: null };
+							}
+						}
+					}
+				} catch (err) {
+					console.error('❌ Error processing callback URL:', err);
+				}
+			}
+			
+			// Clean up listener if still active
+			subscription.remove();
+			
+			// After browser closes, wait for the deep link callback to be processed
+			// The browser redirects to giftyy://auth/callback which triggers the deep link handler
+			// We need to wait for the session to be established
+			console.log('🔵 Waiting for OAuth callback to be processed...');
+			
+			// Poll for session establishment (up to 10 seconds)
+			let attempts = 0;
+			const maxAttempts = 20; // 20 attempts * 500ms = 10 seconds
+			
+			while (attempts < maxAttempts) {
+				await new Promise(resolve => setTimeout(resolve, 500));
+				attempts++;
+				
+				const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+				if (sessionData?.session) {
+					console.log(`✅ Session found after ${attempts * 500}ms`);
+					await fetchProfile(sessionData.session.user.id);
+					return { error: null };
+				}
+				
+				if (attempts % 4 === 0) {
+					console.log(`🔵 Still waiting for session... (${attempts * 500}ms elapsed)`);
+				}
+			}
+			
+			// Final check
+			const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+			if (sessionData?.session) {
+				console.log('✅ Session found on final check');
+				await fetchProfile(sessionData.session.user.id);
+				return { error: null };
+			}
+			
+			console.error('❌ No session found after OAuth callback');
+			console.error('Session error:', sessionError);
+			console.error('⚠️ Make sure the redirect URL "giftyy://auth/callback" is added to Supabase redirect URLs');
+			return {
+				error: {
+					name: 'GoogleSignInError',
+					message: 'Session not established. Please check that the redirect URL is properly configured and try again.',
+				} as AuthError,
+			};
 		} catch (err: any) {
-			console.error('Google sign-in error:', err);
+			console.error('❌ Google sign-in error:', err);
 			const errorMessage = getSupabaseErrorMessage(err);
 			return {
 				error: {
@@ -260,7 +342,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				} as AuthError,
 			};
 		}
-	}, []);
+	}, [fetchProfile]);
 
 	const signUp = useCallback(async (email: string, password: string, firstName: string, lastName: string) => {
 		try {
@@ -435,24 +517,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 			let result;
 			try {
-				console.log('Calling resetPasswordForEmail...');
+				console.log('=== Password Reset Email Request ===');
+				console.log('Email:', email.trim());
+				console.log('Redirect URL being sent:', redirectUrl);
+				console.log('⚠️ IMPORTANT: Make sure "giftyy://reset-password" is in Supabase Redirect URLs');
+				console.log('⚠️ IMPORTANT: Update Site URL in Supabase to "giftyy://" (not localhost:3000)');
 				
-				// For React Native, the redirect URL might be causing the network error
-				// Let's try without redirectTo first to test basic connectivity
-				// If this works, the issue is with the redirect URL format
-				// If this fails, there's a more fundamental connectivity issue
+				// Call resetPasswordForEmail with the custom redirect URL
+				// This ensures the email link uses the deep link scheme (giftyy://reset-password)
+				// instead of defaulting to localhost:3000
+				const options = {
+					redirectTo: redirectUrl,
+				};
+				console.log('Calling supabase.auth.resetPasswordForEmail with options:', JSON.stringify(options, null, 2));
 				
-				// Try WITHOUT redirectTo first to isolate the issue
-				console.log('Testing password reset WITHOUT redirectTo...');
-				result = await supabase.auth.resetPasswordForEmail(email.trim());
-				
-				// If successful, log that basic connectivity works
-				if (result && !result.error) {
-					console.log('✓ Basic request succeeded! The issue is likely with redirectTo format.');
-					console.log('Note: Email sent without custom redirect. User will need to use default Supabase link.');
-				}
+				result = await supabase.auth.resetPasswordForEmail(email.trim(), options);
 				
 				console.log('resetPasswordForEmail response received');
+				if (result?.error) {
+					console.error('❌ Error in resetPasswordForEmail:', result.error);
+					console.error('Error details:', JSON.stringify(result.error, null, 2));
+				} else {
+					console.log('✅ Password reset email sent successfully');
+					console.log('📧 Check your email - the link should use:', redirectUrl);
+					console.log('📧 If the email shows redirect_to=giftyy:// instead, Supabase may be using Site URL');
+					console.log('📧 Our deep link handler will still work with giftyy://#access_token=...&type=recovery');
+				}
 			} catch (fetchError: any) {
 				// This catches network-level errors that occur before Supabase processes the request
 				console.error('Network error in resetPasswordForEmail:', {
@@ -651,6 +741,72 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		}
 	}, [user, fetchProfile]);
 
+	const deleteAccount = useCallback(async (password: string): Promise<{ error: AuthError | Error | null }> => {
+		if (!user || !user.email) {
+			return { error: new Error('No user logged in') };
+		}
+
+		try {
+			// Verify password by attempting to sign in
+			const { error: signInError } = await supabase.auth.signInWithPassword({
+				email: user.email,
+				password: password,
+			});
+
+			if (signInError) {
+				return { error: signInError };
+			}
+
+			// Password is correct, proceed with account deletion
+			// Delete user data from database tables (profile, orders, etc.)
+			// Note: RLS policies should handle cascade deletions if configured
+			
+			// Delete profile
+			const { error: deleteProfileError } = await supabase
+				.from('profiles')
+				.delete()
+				.eq('id', user.id);
+
+			if (deleteProfileError) {
+				console.error('Error deleting profile:', deleteProfileError);
+				// Continue with sign out even if profile deletion fails
+			}
+
+			// Call Supabase Edge Function to delete auth user
+			// This requires a Supabase Edge Function with service role key
+			// For now, we'll sign out and the user can contact support for complete deletion
+			// Note: The Edge Function may not exist yet, so we catch any errors gracefully
+			try {
+				const { error: deleteUserError } = await supabase.functions.invoke('delete-user-account', {
+					body: { userId: user.id },
+				});
+
+				if (deleteUserError) {
+					console.warn('Error calling delete-user-account function (function may not exist):', deleteUserError);
+					// If the function doesn't exist or fails, we'll still sign out
+					// In production, you should create this Edge Function to fully delete the auth user
+				}
+			} catch (error: any) {
+				// Edge Function might not exist or network error (404, network failure, etc.)
+				// This is expected if the function hasn't been deployed yet
+				if (error?.message?.includes('Network request failed') || error?.message?.includes('404')) {
+					console.warn('delete-user-account function not found or not available. Continuing with profile deletion...');
+				} else {
+					console.warn('Error calling delete-user-account function:', error);
+				}
+				// Continue with sign out even if function call fails
+			}
+
+			// Sign out the user
+			await signOut();
+
+			return { error: null };
+		} catch (error) {
+			console.error('Error during account deletion:', error);
+			return { error: error instanceof Error ? error : new Error('Unknown error during account deletion') };
+		}
+	}, [user, signOut]);
+
 	return (
 		<AuthContext.Provider
 			value={{
@@ -666,6 +822,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				signOut,
 				updateProfile,
 				refreshProfile,
+				deleteAccount,
 			}}
 		>
 			{children}

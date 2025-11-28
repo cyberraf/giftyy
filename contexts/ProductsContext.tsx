@@ -135,7 +135,17 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 				.order('created_at', { ascending: false });
 
 			if (error) {
-				console.error('[ProductsContext] Error fetching products:', error);
+				// Check if it's a network error before logging
+				const isNetworkError = error?.message?.includes('Network request failed') ||
+				                      error?.message?.includes('fetch') ||
+				                      error?.code === 'ECONNABORTED' ||
+				                      error?.code === 'ENOTFOUND';
+				
+				if (!isNetworkError) {
+					console.error('[ProductsContext] Error fetching products:', error);
+				} else {
+					console.warn('[ProductsContext] Network error fetching products (may be offline)');
+				}
 				setProducts([]);
 				return;
 			}
@@ -176,7 +186,17 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 				.order('created_at', { ascending: false });
 
 			if (collectionsError) {
-				console.error('[ProductsContext] Error fetching collections:', collectionsError);
+				// Check if it's a network error before logging
+				const isNetworkError = collectionsError?.message?.includes('Network request failed') ||
+				                      collectionsError?.message?.includes('fetch') ||
+				                      collectionsError?.code === 'ECONNABORTED' ||
+				                      collectionsError?.code === 'ENOTFOUND';
+				
+				if (!isNetworkError) {
+					console.error('[ProductsContext] Error fetching collections:', collectionsError);
+				} else {
+					console.warn('[ProductsContext] Network error fetching collections (may be offline)');
+				}
 				setCollections([]);
 				return;
 			}
@@ -195,7 +215,17 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 				.order('display_order', { ascending: true });
 
 			if (cpError) {
-				console.error('[ProductsContext] Error fetching collection products:', cpError);
+				// Check if it's a network error before logging
+				const isNetworkError = cpError?.message?.includes('Network request failed') ||
+				                      cpError?.message?.includes('fetch') ||
+				                      cpError?.code === 'ECONNABORTED' ||
+				                      cpError?.code === 'ENOTFOUND';
+				
+				if (!isNetworkError) {
+					console.error('[ProductsContext] Error fetching collection products:', cpError);
+				} else {
+					console.warn('[ProductsContext] Network error fetching collection products (may be offline)');
+				}
 				// Continue with empty collections if this fails
 				setCollections([]);
 				return;
@@ -216,7 +246,17 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 					.in('id', Array.from(productIds));
 
 				if (productsError) {
-					console.error('[ProductsContext] Error fetching collection products:', productsError);
+					// Check if it's a network error before logging
+					const isNetworkError = productsError?.message?.includes('Network request failed') ||
+					                      productsError?.message?.includes('fetch') ||
+					                      productsError?.code === 'ECONNABORTED' ||
+					                      productsError?.code === 'ENOTFOUND';
+					
+					if (!isNetworkError) {
+						console.error('[ProductsContext] Error fetching collection products:', productsError);
+					} else {
+						console.warn('[ProductsContext] Network error fetching collection products (may be offline)');
+					}
 					collectionProducts = [];
 				} else {
 					collectionProducts = (productsData || []).map(dbRowToProduct);
@@ -245,10 +285,14 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 			// Suppress repeated network error logs
 			const isNetworkError = err?.message?.includes('Network request failed') || 
 			                      err?.message?.includes('fetch') ||
-			                      err?.name === 'TypeError';
+			                      err?.name === 'TypeError' ||
+			                      err?.code === 'ECONNABORTED' ||
+			                      err?.code === 'ENOTFOUND';
 			
 			if (!isNetworkError) {
 				console.error('[ProductsContext] Unexpected error fetching collections:', err);
+			} else {
+				console.warn('[ProductsContext] Network error fetching collections (may be offline)');
 			}
 			setCollections([]);
 		} finally {

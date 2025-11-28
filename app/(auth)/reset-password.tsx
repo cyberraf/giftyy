@@ -26,9 +26,17 @@ export default function ResetPasswordScreen() {
 	useEffect(() => {
 		const checkSession = async () => {
 			try {
-				// Check for deep link with access token
-				const initialUrl = await Linking.getInitialURL();
-				let urlToProcess = initialUrl;
+				console.log('🔵 ResetPassword: Starting session check...');
+				console.log('🔵 ResetPassword: Params received:', JSON.stringify(params));
+				
+				// Check if URL was passed as param from Index component
+				let urlToProcess = (params?.deepLinkUrl as string) || null;
+				
+				// Also check for deep link with access token
+				if (!urlToProcess) {
+					const initialUrl = await Linking.getInitialURL();
+					urlToProcess = initialUrl;
+				}
 
 				// Also listen for URL changes (in case app is already open)
 				const subscription = Linking.addEventListener('url', async (event) => {
@@ -38,62 +46,116 @@ export default function ResetPasswordScreen() {
 
 				// Process initial URL if exists
 				if (urlToProcess) {
+					console.log('🔵 ResetPassword: Processing initial URL:', urlToProcess);
 					await processUrl(urlToProcess);
 				} else {
+					console.log('🔵 ResetPassword: No initial URL, checking for existing session...');
 					// Check if we already have a session
 					const { data: { session: currentSession } } = await supabase.auth.getSession();
 					if (currentSession) {
+						console.log('✅ ResetPassword: Found existing session');
 						setHasValidSession(true);
 						setCheckingSession(false);
 					} else {
-						// Wait a bit and check again (in case session is being established)
-						setTimeout(async () => {
+						console.log('🔵 ResetPassword: No session found, waiting and checking again...');
+						// Wait longer and check multiple times (in case session is being established)
+						let attempts = 0;
+						const maxAttempts = 5;
+						const checkInterval = setInterval(async () => {
+							attempts++;
+							console.log(`🔵 ResetPassword: Checking session (attempt ${attempts}/${maxAttempts})...`);
 							const { data: { session: delayedSession } } = await supabase.auth.getSession();
 							if (delayedSession) {
+								console.log('✅ ResetPassword: Session found after delay');
 								setHasValidSession(true);
-							} else {
+								setCheckingSession(false);
+								clearInterval(checkInterval);
+							} else if (attempts >= maxAttempts) {
+								console.log('❌ ResetPassword: No session found after all attempts');
 								setHasValidSession(false);
+								setCheckingSession(false);
+								clearInterval(checkInterval);
 							}
-							setCheckingSession(false);
-						}, 2000);
+						}, 1000);
 					}
 				}
 
 				async function processUrl(url: string) {
 					try {
+						console.log('🔵 ResetPassword: Processing URL:', url);
 						const parsed = Linking.parse(url);
 						
+						// Extract tokens from hash fragment or query params
+						let accessToken: string | undefined;
+						let refreshToken: string | undefined;
+						let type: string | undefined;
+						
+						// Check hash fragment first (common for Supabase)
+						const hashIndex = url.indexOf('#');
+						if (hashIndex !== -1) {
+							const hashPart = url.substring(hashIndex + 1);
+							try {
+								const hashParams = new URLSearchParams(hashPart);
+								accessToken = hashParams.get('access_token') || undefined;
+								refreshToken = hashParams.get('refresh_token') || undefined;
+								type = hashParams.get('type') || undefined;
+								console.log('🔵 ResetPassword: Found tokens in hash fragment');
+							} catch (err) {
+								console.error('🔵 ResetPassword: Error parsing hash:', err);
+							}
+						}
+						
+						// Fallback to query params
+						if (!accessToken && parsed.queryParams) {
+							accessToken = parsed.queryParams.access_token as string;
+							refreshToken = parsed.queryParams.refresh_token as string;
+							type = parsed.queryParams.type as string;
+							console.log('🔵 ResetPassword: Found tokens in query params');
+						}
+						
 						// Check if this is a password reset link
-						if (parsed.queryParams?.access_token && parsed.queryParams?.type === 'recovery') {
-							// Extract the access token and refresh token from URL
-							const accessToken = parsed.queryParams.access_token as string;
-							const refreshToken = parsed.queryParams.refresh_token as string;
+						if (accessToken && (type === 'recovery' || parsed.path === 'reset-password' || url.includes('recovery'))) {
+							console.log('🔵 ResetPassword: Password reset link detected, setting session...');
+							console.log('🔵 ResetPassword: Access token length:', accessToken.length);
+							console.log('🔵 ResetPassword: Type:', type);
 							
-							if (accessToken) {
-								// Set the session using the tokens from the URL
-								const { data, error } = await supabase.auth.setSession({
-									access_token: accessToken,
-									refresh_token: refreshToken || '',
-								});
+							// Set the session using the tokens from the URL
+							const { data, error } = await supabase.auth.setSession({
+								access_token: accessToken,
+								refresh_token: refreshToken || '',
+							});
 
-								if (error) {
-									console.error('Error setting session from URL:', error);
-									setHasValidSession(false);
-								} else if (data.session) {
-									setHasValidSession(true);
-								} else {
-									setHasValidSession(false);
-								}
+							if (error) {
+								console.error('❌ ResetPassword: Error setting session from URL:', error);
+								console.error('❌ ResetPassword: Error details:', JSON.stringify(error, null, 2));
+								setHasValidSession(false);
+							} else if (data?.session) {
+								console.log('✅ ResetPassword: Session established successfully');
+								console.log('✅ ResetPassword: User ID:', data.session.user.id);
+								setHasValidSession(true);
 							} else {
+								console.error('❌ ResetPassword: No session returned from setSession');
+								console.error('❌ ResetPassword: Data:', JSON.stringify(data, null, 2));
 								setHasValidSession(false);
 							}
 						} else {
-							// Check if we have a session anyway
-							const { data: { session: currentSession } } = await supabase.auth.getSession();
-							setHasValidSession(!!currentSession);
+							// Check if we have a session anyway (might have been set by Index component)
+							console.log('🔵 ResetPassword: No tokens in URL, checking existing session...');
+							const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
+							if (sessionError) {
+								console.error('❌ ResetPassword: Error getting session:', sessionError);
+							}
+							if (currentSession) {
+								console.log('✅ ResetPassword: Found existing session');
+								console.log('✅ ResetPassword: User ID:', currentSession.user.id);
+								setHasValidSession(true);
+							} else {
+								console.log('❌ ResetPassword: No session found');
+								setHasValidSession(false);
+							}
 						}
 					} catch (error) {
-						console.error('Error processing URL:', error);
+						console.error('❌ ResetPassword: Error processing URL:', error);
 						setHasValidSession(false);
 					} finally {
 						setCheckingSession(false);
@@ -167,7 +229,7 @@ export default function ResetPasswordScreen() {
 		}
 	};
 
-	// Show loading while checking session
+	// Show loading while checking session - give it more time
 	if (checkingSession) {
 		return (
 			<View style={[styles.container, { paddingTop: Math.max(insets.top, 20) }]}>
@@ -179,12 +241,15 @@ export default function ResetPasswordScreen() {
 					/>
 					<ActivityIndicator size="large" color={BRAND_COLOR} style={{ marginTop: 24 }} />
 					<Text style={styles.loadingText}>Verifying reset link...</Text>
+					<Text style={[styles.loadingText, { marginTop: 8, fontSize: 12, color: '#9CA3AF' }]}>
+						This may take a few seconds...
+					</Text>
 				</View>
 			</View>
 		);
 	}
 
-	// Show error if no valid session
+	// Show error if no valid session - but wait a bit longer before showing error
 	if (!hasValidSession) {
 		return (
 			<View style={[styles.container, { paddingTop: Math.max(insets.top, 20) }]}>

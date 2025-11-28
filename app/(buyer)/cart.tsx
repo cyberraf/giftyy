@@ -1,9 +1,10 @@
 import BrandButton from '@/components/BrandButton';
 import { BRAND_COLOR } from '@/constants/theme';
 import { useCart } from '@/contexts/CartContext';
+import { useProducts } from '@/contexts/ProductsContext';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
-import { FlatList, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useState } from 'react';
+import { FlatList, Image, Pressable, RefreshControl, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
@@ -14,21 +15,27 @@ function parsePriceToNumber(price: string): number {
 
 export default function CartScreen() {
     const { items, removeItem, updateQuantity, clear, totalQuantity } = useCart();
+    const { refreshProducts, refreshCollections } = useProducts();
     const subtotal = items.reduce((sum, it) => sum + parsePriceToNumber(it.price) * it.quantity, 0);
     const { top, bottom } = useSafeAreaInsets();
     const paddingTop = top + 6;
     const stickyBarHeight = 84 + bottom;
     const router = useRouter();
+    const [refreshing, setRefreshing] = useState(false);
 
-    // Simple promo + tax calculation
-    const [promoInput, setPromoInput] = useState('');
-    const [appliedCode, setAppliedCode] = useState<string | null>(null);
-    const discount = useMemo(() => (appliedCode === 'GIFTS10' ? subtotal * 0.1 : 0), [appliedCode, subtotal]);
-    const TAX_RATE = 0.08;
-    const shipping = 0;
-    const taxable = Math.max(0, subtotal - discount);
-    const estimatedTax = taxable * TAX_RATE;
-    const orderTotal = taxable + estimatedTax + shipping;
+    // Order total is just the subtotal (tax and shipping calculated at checkout)
+    const orderTotal = subtotal;
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            await Promise.all([refreshProducts(), refreshCollections()]);
+        } catch (error) {
+            console.error('Error refreshing cart data:', error);
+        } finally {
+            setRefreshing(false);
+        }
+    }, [refreshProducts, refreshCollections]);
 
     return (
 		<View style={[styles.container, { paddingTop }]}>
@@ -56,6 +63,14 @@ export default function CartScreen() {
                         ItemSeparatorComponent={() => <View style={{ height: 12 }} />}
                         ListHeaderComponent={<View />}
                         contentContainerStyle={{ paddingVertical: 12, paddingBottom: stickyBarHeight + 12 }}
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={refreshing}
+                                onRefresh={onRefresh}
+                                tintColor={BRAND_COLOR}
+                                colors={[BRAND_COLOR]}
+                            />
+                        }
                         renderItem={({ item }) => (
                             <View style={styles.card}>
                                 <View style={{ flexDirection: 'row', gap: 12 }}>
@@ -100,39 +115,11 @@ export default function CartScreen() {
                                         <Text style={styles.summaryLabel}>Items ({totalQuantity})</Text>
                                         <Text style={styles.summaryValue}>${subtotal.toFixed(2)}</Text>
                                     </View>
-                                    {discount > 0 && (
-                                        <View style={styles.summaryRow}>
-                                            <Text style={[styles.summaryLabel, { color: '#059669' }]}>Discount (GIFTS10)</Text>
-                                            <Text style={[styles.summaryValue, { color: '#059669' }]}>–${discount.toFixed(2)}</Text>
-                                        </View>
-                                    )}
-                                    <View style={styles.promoRow}>
-                                        <TextInput
-                                            value={promoInput}
-                                            onChangeText={setPromoInput}
-                                            placeholder="Promo code"
-                                            placeholderTextColor="#9ba1a6"
-                                            style={styles.promoInput}
-                                        />
-                                        <Pressable
-                                            onPress={() => setAppliedCode(promoInput.trim().toUpperCase() || null)}
-                                            style={[styles.applyBtn, { backgroundColor: '#111827' }]}>
-                                            <Text style={{ color: 'white', fontWeight: '800' }}>Apply</Text>
-                                        </Pressable>
-                                    </View>
-                                    <View style={styles.summaryRow}>
-                                        <Text style={styles.summaryLabel}>Shipping</Text>
-                                        <Text style={styles.summaryValue}>{shipping === 0 ? 'Free' : `$${shipping.toFixed(2)}`}</Text>
-                                    </View>
-                                    <View style={styles.summaryRow}>
-                                        <Text style={styles.summaryLabel}>Estimated tax</Text>
-                                        <Text style={styles.summaryValue}>${estimatedTax.toFixed(2)}</Text>
-                                    </View>
                                     <View style={[styles.summaryRow, { marginTop: 8 }]}>
-                                        <Text style={{ fontWeight: '900' }}>Order total</Text>
+                                        <Text style={{ fontWeight: '900' }}>Subtotal</Text>
                                         <Text style={{ fontWeight: '900', fontSize: 18 }}>${orderTotal.toFixed(2)}</Text>
                                     </View>
-                                    <Text style={{ color: '#9ba1a6', marginTop: 4 }}>Tax is estimated. Final amount is calculated at checkout.</Text>
+                                    <Text style={{ color: '#9ba1a6', marginTop: 4 }}>Tax and shipping will be calculated at checkout.</Text>
                                     <View style={{ height: 10 }} />
                                     <BrandButton
                                         title="Proceed to checkout"
@@ -149,7 +136,7 @@ export default function CartScreen() {
                     />
                     <View style={[styles.stickyBar, { paddingBottom: bottom + 12 }]}>
                         <View style={{ flex: 1 }}>
-                            <Text style={{ color: '#6b7280', fontWeight: '700' }}>Order total</Text>
+                            <Text style={{ color: '#6b7280', fontWeight: '700' }}>Subtotal</Text>
                             <Text style={{ fontSize: 20, fontWeight: '900' }}>${orderTotal.toFixed(2)}</Text>
                         </View>
                         <BrandButton
@@ -168,7 +155,7 @@ const styles = StyleSheet.create({
 	container: {
 		flex: 1,
 		padding: 16,
-		backgroundColor: '#F9FAFB',
+		backgroundColor: '#fff',
 	},
     emptyWrap: {
         flex: 1,
@@ -264,23 +251,6 @@ const styles = StyleSheet.create({
     summaryRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     summaryLabel: { color: '#6b7280', fontWeight: '700' },
     summaryValue: { fontWeight: '800' },
-    promoRow: { flexDirection: 'row', gap: 8, marginTop: 6 },
-    promoInput: {
-        flex: 1,
-        height: 44,
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        paddingHorizontal: 12,
-        backgroundColor: 'white',
-    },
-    applyBtn: {
-        height: 44,
-        paddingHorizontal: 14,
-        borderRadius: 12,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
 });
 
 

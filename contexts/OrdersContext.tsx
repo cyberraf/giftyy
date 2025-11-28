@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react';
+import { type Recipient } from '@/lib/CheckoutContext';
 import { supabase } from '@/lib/supabase';
+import { logProductAnalyticsEvent } from '@/lib/product-analytics';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './AuthContext';
-import { useCart, type CartItem } from './CartContext';
-import { useCheckout, type Recipient } from '@/lib/CheckoutContext';
+import { type CartItem } from './CartContext';
 import { useVideoMessages } from './VideoMessagesContext';
 
 export type OrderStatus = 'processing' | 'confirmed' | 'shipped' | 'out_for_delivery' | 'delivered' | 'cancelled';
@@ -33,6 +34,7 @@ export type Order = {
 	totalAmount: number;
 	paymentLast4?: string;
 	paymentBrand?: string;
+	sharedMemoryId?: string;
 	trackingNumber?: string;
 	estimatedDeliveryDate?: string;
 	deliveredAt?: string;
@@ -55,7 +57,9 @@ type OrdersContextValue = {
 		totalAmount: number,
 		paymentLast4?: string,
 		paymentBrand?: string,
-		videoMessageId?: string
+		videoMessageId?: string,
+		sharedMemoryId?: string,
+		vendorId?: string
 	) => Promise<{ order: Order | null; error: Error | null }>;
 	refreshOrders: () => Promise<void>;
 	getOrderById: (id: string) => Order | undefined;
@@ -101,6 +105,7 @@ function dbRowToOrder(row: any, items: any[]): Order {
 		totalAmount: parseFloat(row.total_amount || '0'),
 		paymentLast4: row.payment_last4 || undefined,
 		paymentBrand: row.payment_brand || undefined,
+		sharedMemoryId: row.shared_memory_id || undefined,
 		trackingNumber: row.tracking_number || undefined,
 		estimatedDeliveryDate: row.estimated_delivery_date || undefined,
 		deliveredAt: row.delivered_at || undefined,
@@ -203,7 +208,9 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 			totalAmount: number,
 			paymentLast4?: string,
 			paymentBrand?: string,
-			videoMessageId?: string
+			videoMessageId?: string,
+			sharedMemoryId?: string,
+			vendorId?: string
 		): Promise<{ order: Order | null; error: Error | null }> => {
 			if (!user) {
 				return { order: null, error: new Error('User not authenticated') };
@@ -232,12 +239,14 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 						card_type: cardType || null,
 						card_price: cardPrice,
 						notify_recipient: notifyRecipient,
+						vendor_id: vendorId || null,
 						items_subtotal: itemsSubtotal,
 						shipping_cost: shippingCost,
 						tax_amount: taxAmount,
 						total_amount: totalAmount,
 						payment_last4: paymentLast4 || null,
 						payment_brand: paymentBrand || null,
+						shared_memory_id: sharedMemoryId || null,
 					})
 					.select()
 					.single();
@@ -279,6 +288,54 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 					}
 				}
 
+				try {
+					const { error: qrFunctionError } = await supabase.functions.invoke('create-order-qr', {
+						body: { orderId: orderData.id },
+					});
+
+					if (qrFunctionError) {
+						console.warn('Error invoking create-order-qr function:', qrFunctionError);
+					}
+				} catch (qrInvokeError) {
+					console.warn('Unexpected error invoking create-order-qr function:', qrInvokeError);
+				}
+
+				// Reduce stock counts for purchased products via RPC (atomic decrement)
+				try {
+					await Promise.all(
+						cartItems.map(async (item) => {
+							const { error: rpcError } = await supabase.rpc('decrement_product_stock', {
+								p_product_id: item.id,
+								p_quantity: item.quantity,
+							});
+
+							if (rpcError) {
+								console.warn('Failed to decrement stock for product', item.id, rpcError);
+							}
+						})
+					);
+				} catch (stockError) {
+					console.warn('Unexpected error updating product stock levels:', stockError);
+				}
+
+				// Log purchase analytics events
+				try {
+					await Promise.all(
+						cartItems.map((item) =>
+							logProductAnalyticsEvent({
+								productId: item.id,
+								eventType: 'purchase',
+								metadata: {
+									orderId: orderData.id,
+									quantity: item.quantity,
+								},
+							})
+						)
+					);
+				} catch (analyticsError) {
+					console.warn('Failed to log purchase analytics events', analyticsError);
+				}
+
 				// Fetch the complete order with items
 				const { data: completeOrderData, error: fetchError } = await supabase
 					.from('orders')
@@ -299,6 +356,34 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 
 				// Refresh the list
 				await refreshOrders();
+
+			// Send email notification to recipient if requested
+			if (notifyRecipient && recipient.email) {
+				try {
+					console.log('[Order] Sending email notification to recipient:', recipient.email);
+					const { data: notifyData, error: notifyError } = await supabase.functions.invoke('notify-recipient-email', {
+						body: {
+							recipientEmail: recipient.email,
+							recipientName: `${recipient.firstName} ${recipient.lastName || ''}`.trim() || 'there',
+							orderCode,
+							city: recipient.city,
+							estimatedArrival: order.estimatedDeliveryDate || order.createdAt,
+						},
+					});
+
+					if (notifyError) {
+						console.error('[Order] Error invoking notify-recipient-email function:', notifyError);
+					} else if (notifyData) {
+						if (notifyData.error) {
+							console.error('[Order] Email notification failed:', notifyData.error, notifyData.details);
+						} else {
+							console.log('[Order] Email notification sent successfully to:', recipient.email);
+						}
+					}
+				} catch (notifyError) {
+					console.error('[Order] Unexpected error sending email notification:', notifyError);
+				}
+			}
 
 				return { order, error: null };
 			} catch (err: any) {

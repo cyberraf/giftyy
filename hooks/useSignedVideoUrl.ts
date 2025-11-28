@@ -1,22 +1,38 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 
-const PUBLIC_BUCKET_PATH = '/storage/v1/object/public/video-messages/';
+const BUCKET_NAME = 'video-messages';
+const PUBLIC_BUCKET_PATH = `/storage/v1/object/public/${BUCKET_NAME}/`;
+const SIGNED_BUCKET_PATH = `/storage/v1/object/sign/${BUCKET_NAME}/`;
 
-function extractFilePathFromPublicUrl(url: string): string | null {
-	const idx = url.indexOf(PUBLIC_BUCKET_PATH);
-	if (idx === -1) {
-		return null;
+function extractFilePathFromStorageUrl(url: string): string | null {
+	const decodePath = (raw: string) => {
+		const clean = raw.split('?')[0];
+		try {
+			return decodeURIComponent(clean);
+		} catch {
+			return clean;
+		}
+	};
+
+	if (url.includes(PUBLIC_BUCKET_PATH)) {
+		const start = url.indexOf(PUBLIC_BUCKET_PATH) + PUBLIC_BUCKET_PATH.length;
+		return decodePath(url.slice(start));
 	}
 
-	const start = idx + PUBLIC_BUCKET_PATH.length;
-	const pathWithQuery = url.slice(start);
-	const cleanPath = pathWithQuery.split('?')[0];
-	try {
-		return decodeURIComponent(cleanPath);
-	} catch {
-		return cleanPath;
+	if (url.includes(SIGNED_BUCKET_PATH)) {
+		const start = url.indexOf(SIGNED_BUCKET_PATH) + SIGNED_BUCKET_PATH.length;
+		return decodePath(url.slice(start));
 	}
+
+	// Fallback: if the URL contains /video-messages/, try to grab everything after it
+	const fallbackIdx = url.indexOf(`/${BUCKET_NAME}/`);
+	if (fallbackIdx !== -1) {
+		const start = fallbackIdx + (`/${BUCKET_NAME}/`.length);
+		return decodePath(url.slice(start));
+	}
+
+	return null;
 }
 
 /**
@@ -35,28 +51,22 @@ export function useSignedVideoUrl(videoUrl?: string | null): string | null {
 		let isMounted = true;
 
 		const resolveUrl = async () => {
-			// Only sign Supabase public storage URLs
-			if (videoUrl.includes(PUBLIC_BUCKET_PATH)) {
-				const filePath = extractFilePathFromPublicUrl(videoUrl);
-				if (!filePath) {
-					isMounted && setResolvedUrl(videoUrl);
-					return;
-				}
-
-				const { data, error } = await supabase.storage
-					.from('video-messages')
-					.createSignedUrl(filePath, 3600);
-
-				if (!isMounted) return;
-
-				if (error || !data?.signedUrl) {
-					console.warn('[useSignedVideoUrl] Failed to create signed URL, falling back to public URL', error);
-					setResolvedUrl(videoUrl);
-				} else {
-					setResolvedUrl(data.signedUrl);
-				}
-			} else {
+			// Only sign Supabase storage URLs
+			const filePath = extractFilePathFromStorageUrl(videoUrl);
+			if (!filePath) {
 				isMounted && setResolvedUrl(videoUrl);
+				return;
+			}
+
+			const { data, error } = await supabase.storage.from(BUCKET_NAME).createSignedUrl(filePath, 3600);
+
+			if (!isMounted) return;
+
+			if (error || !data?.signedUrl) {
+				console.warn('[useSignedVideoUrl] Failed to create signed URL, falling back to original URL', error);
+				setResolvedUrl(videoUrl);
+			} else {
+				setResolvedUrl(data.signedUrl);
 			}
 		};
 

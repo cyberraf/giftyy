@@ -18,7 +18,7 @@ const TAB_CONFIG: { key: TabKey; icon: IconSymbolName }[] = [
 ];
 
 const palette = {
-    background: '#F5F4F2',
+    background: '#fff',
     card: '#FFFFFF',
     cardAlt: '#F9F5F2',
     textPrimary: '#2F2318',
@@ -142,12 +142,6 @@ function AccountPanel() {
                     subtitle="Update your personal information"
                 />
                 <LinkRow 
-                    onPress={() => router.push('/(buyer)/settings/addresses')}
-                    label="Saved addresses"
-                    icon="location.fill"
-                    subtitle="Manage your delivery addresses"
-                />
-                <LinkRow 
                     onPress={() => router.push('/(buyer)/subscription')}
                     label="Subscription"
                     icon="creditcard.fill"
@@ -155,21 +149,7 @@ function AccountPanel() {
                 />
             </View>
 
-            <View style={styles.groupCard}>
-                <Text style={styles.groupTitle}>Security</Text>
-                <LinkRow 
-                    onPress={() => Alert.alert('Coming soon', 'Password change feature coming soon')}
-                    label="Change password"
-                    icon="lock.fill"
-                    subtitle="Update your account password"
-                />
-                <LinkRow 
-                    onPress={() => Alert.alert('Coming soon', 'Two-factor authentication coming soon')}
-                    label="Two-factor authentication"
-                    icon="shield.fill"
-                    subtitle="Add an extra layer of security"
-                />
-            </View>
+            
 
             <Pressable style={styles.dangerButton} onPress={handleSignOut}>
                 <IconSymbol name="arrow.right.square.fill" size={20} color={palette.danger} />
@@ -236,81 +216,26 @@ function PrivacyPanel() {
                     icon="doc.text.fill"
                     subtitle="Read our privacy policy"
                 />
-                <LinkRow 
-                    onPress={() => Alert.alert('Coming soon', 'Terms of service coming soon')}
-                    label="Terms of service"
-                    icon="doc.text.fill"
-                    subtitle="Read our terms of service"
-                />
-                <LinkRow 
-                    onPress={() => Alert.alert('Coming soon', 'Data management coming soon')}
-                    label="Data management"
-                    icon="externaldrive.fill"
-                    subtitle="Manage your data"
-                />
             </View>
 
-            <View style={styles.groupCard}>
-                <Text style={styles.groupTitle}>Account data</Text>
-                <LinkRow 
-                    onPress={() => Alert.alert('Coming soon', 'Export data feature coming soon')}
-                    label="Export data"
-                    icon="square.and.arrow.up.fill"
-                    subtitle="Download your account data"
-                />
-                <Pressable 
-                    style={styles.dangerLinkRow}
-                    onPress={() => Alert.alert(
-                        'Delete account',
-                        'Are you sure you want to delete your account? This action cannot be undone.',
-                        [
-                            { text: 'Cancel', style: 'cancel' },
-                            { text: 'Delete', style: 'destructive', onPress: () => Alert.alert('Coming soon', 'Account deletion coming soon') },
-                        ]
-                    )}
-                >
-                    <View style={styles.dangerLinkContent}>
-                        <IconSymbol name="trash.fill" size={20} color={palette.danger} />
-                        <View style={{ flex: 1 }}>
-                            <Text style={styles.dangerLinkLabel}>Delete account</Text>
-                            <Text style={styles.dangerLinkSubtitle}>Permanently delete your account</Text>
-                        </View>
-                    </View>
-                    <IconSymbol name="chevron.right" size={20} color={palette.danger} />
-                </Pressable>
-            </View>
+            
         </View>
     );
 }
 
 function NotificationsPanel() {
-    const [emailNotifications, setEmailNotifications] = React.useState(true);
     const [pushNotifications, setPushNotifications] = React.useState(true);
-    const [smsNotifications, setSmsNotifications] = React.useState(false);
     const [orderUpdates, setOrderUpdates] = React.useState(true);
-    const [promotional, setPromotional] = React.useState(false);
 
     return (
         <View style={styles.sectionGap}>
             <View style={styles.groupCard}>
                 <Text style={styles.groupTitle}>Notification preferences</Text>
                 <SwitchRow
-                    label="Email notifications"
-                    subtitle="Receive updates via email"
-                    value={emailNotifications}
-                    onValueChange={setEmailNotifications}
-                />
-                <SwitchRow
                     label="Push notifications"
                     subtitle="Receive push notifications on your device"
                     value={pushNotifications}
                     onValueChange={setPushNotifications}
-                />
-                <SwitchRow
-                    label="SMS notifications"
-                    subtitle="Receive updates via text message"
-                    value={smsNotifications}
-                    onValueChange={setSmsNotifications}
                 />
             </View>
 
@@ -321,12 +246,6 @@ function NotificationsPanel() {
                     subtitle="Get notified about your order status"
                     value={orderUpdates}
                     onValueChange={setOrderUpdates}
-                />
-                <SwitchRow
-                    label="Promotional emails"
-                    subtitle="Receive special offers and promotions"
-                    value={promotional}
-                    onValueChange={setPromotional}
                 />
             </View>
         </View>

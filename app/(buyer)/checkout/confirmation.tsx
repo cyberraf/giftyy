@@ -1,26 +1,42 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, Animated, StyleSheet, Pressable, ScrollView } from 'react-native';
-import { LinearGradient } from 'expo-linear-gradient';
-import StepBar from '@/components/StepBar';
-import { useCheckout } from '@/lib/CheckoutContext';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { MessageVideoViewer, type MemoryVideoItem } from '../(tabs)/memory';
 import BrandButton from '@/components/BrandButton';
-import { MessageVideoViewer, type MemoryVideoItem } from '@/app/(buyer)/(tabs)/memory';
+import StepBar from '@/components/StepBar';
 import { useOrders } from '@/contexts/OrdersContext';
 import { useVideoMessages } from '@/contexts/VideoMessagesContext';
+import { useSharedMemories } from '@/contexts/SharedMemoriesContext';
+import { useCheckout } from '@/lib/CheckoutContext';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { BRAND_COLOR } from '@/constants/theme';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import { Animated, Pressable, ScrollView, StyleSheet, Text, View, RefreshControl } from 'react-native';
 
 export default function ConfirmationScreen() {
     const { recipient, cardType, videoUri, videoTitle, reset } = useCheckout();
     const router = useRouter();
     const { orderId } = useLocalSearchParams<{ orderId?: string }>();
-    const { getOrderById } = useOrders();
-    const { videoMessages } = useVideoMessages();
+    const { getOrderById, refreshOrders } = useOrders();
+    const { videoMessages, refreshVideoMessages } = useVideoMessages();
+    const { sharedMemories, refreshSharedMemories } = useSharedMemories();
 
     const fadeIn = useRef(new Animated.Value(0)).current;
     const pop = useRef(new Animated.Value(0.92)).current;
 
     const [videoVisible, setVideoVisible] = useState(false);
+    const [sharedMemoryVisible, setSharedMemoryVisible] = useState(false);
     const [showOrderDetails, setShowOrderDetails] = useState(false);
+    const [refreshing, setRefreshing] = useState(false);
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            await Promise.all([refreshOrders(), refreshVideoMessages(), refreshSharedMemories()]);
+        } catch (error) {
+            console.error('Error refreshing confirmation data:', error);
+        } finally {
+            setRefreshing(false);
+        }
+    }, [refreshOrders, refreshVideoMessages, refreshSharedMemories]);
 
     useEffect(() => {
         Animated.parallel([
@@ -59,10 +75,41 @@ export default function ConfirmationScreen() {
             date: new Date(video.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
             videoUrl: video.videoUrl,
             direction: video.direction,
+            orderId: video.orderId, // Include orderId for QR code generation
         };
     }, [orderVideoMessage]);
     
     const hasVideo = Boolean(orderVideoMessage);
+    
+    // Get shared memory associated with this order
+    const orderSharedMemory = useMemo(() => {
+        if (!order?.sharedMemoryId) return null;
+        return sharedMemories.find((sm) => sm.id === order.sharedMemoryId);
+    }, [order, sharedMemories]);
+    
+    // Convert shared memory to MemoryVideoItem format
+    const sharedMemoryItem: (MemoryVideoItem & { mediaType: 'video' | 'photo' }) | null = useMemo(() => {
+        if (!orderSharedMemory) return null;
+        
+        const date = new Date(orderSharedMemory.createdAt);
+        const formattedDate = date.toLocaleDateString('en-US', { 
+            month: 'short', 
+            day: 'numeric', 
+            year: 'numeric' 
+        });
+        
+        return {
+            id: orderSharedMemory.id,
+            title: orderSharedMemory.title,
+            duration: orderSharedMemory.mediaType === 'video' ? '00:00' : '',
+            date: formattedDate,
+            videoUrl: orderSharedMemory.fileUrl,
+            direction: 'sent',
+            mediaType: orderSharedMemory.mediaType,
+        };
+    }, [orderSharedMemory]);
+    
+    const hasSharedMemory = Boolean(orderSharedMemory);
     
     const shippingAddress = useMemo(() => {
         const rec = order?.recipient || recipient;
@@ -102,9 +149,19 @@ export default function ConfirmationScreen() {
     };
 
     return (
-        <View style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
-            <StepBar current={6} total={6} label="Confirmation" />
-            <ScrollView contentContainerStyle={styles.content}>
+        <View style={{ flex: 1, backgroundColor: '#fff' }}>
+            <StepBar current={7} total={7} label="Confirmation" />
+            <ScrollView 
+                contentContainerStyle={styles.content}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={BRAND_COLOR}
+                        colors={[BRAND_COLOR]}
+                    />
+                }
+            >
                 <LinearGradient colors={[ '#FDF6EC', '#FFFFFF' ]} style={styles.heroCard}>
                     <Animated.View style={[styles.badge, { opacity: fadeIn, transform: [{ scale: pop }] }]}> 
                         <Text style={styles.badgeEmoji}>🎉</Text>
@@ -121,12 +178,21 @@ export default function ConfirmationScreen() {
                     <SummaryRow label="Recipient" value={fullName} />
                     <SummaryRow label="Card style" value={order?.cardType || cardType || 'Premium'} />
                     <SummaryRow label="Video message" value={hasVideo ? 'Attached successfully' : 'Not added'} valueStyle={{ color: hasVideo ? '#16a34a' : '#64748B' }} />
+                    <SummaryRow label="Shared memory" value={hasSharedMemory ? (orderSharedMemory?.mediaType === 'photo' ? 'Photo attached' : 'Video attached') : 'Not added'} valueStyle={{ color: hasSharedMemory ? '#16a34a' : '#64748B' }} />
                     <SummaryRow label="Estimated arrival" value={order?.estimatedDeliveryDate ? new Date(order.estimatedDeliveryDate).toLocaleDateString() : '2 – 5 business days'} />
                 </View>
 
                 {hasVideo && (
                     <Pressable style={styles.tertiaryButton} onPress={() => setVideoVisible(true)}>
                         <Text style={styles.tertiaryLabel}>Watch recorded message</Text>
+                    </Pressable>
+                )}
+
+                {hasSharedMemory && sharedMemoryItem && (
+                    <Pressable style={styles.tertiaryButton} onPress={() => setSharedMemoryVisible(true)}>
+                        <Text style={styles.tertiaryLabel}>
+                            {sharedMemoryItem.mediaType === 'photo' ? 'View shared photo' : 'Watch shared memory'}
+                        </Text>
                     </Pressable>
                 )}
 
@@ -175,6 +241,15 @@ export default function ConfirmationScreen() {
                     initialIndex={0}
                     data={[videoItem]}
                     onClose={() => setVideoVisible(false)}
+                />
+            )}
+
+            {sharedMemoryItem && (
+                <MessageVideoViewer
+                    visible={sharedMemoryVisible}
+                    initialIndex={0}
+                    data={[sharedMemoryItem]}
+                    onClose={() => setSharedMemoryVisible(false)}
                 />
             )}
         </View>

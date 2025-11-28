@@ -1,7 +1,7 @@
 import { Redirect, useRouter, useSegments } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
-import { View, ActivityIndicator } from 'react-native';
-import { useEffect } from 'react';
+import { View, ActivityIndicator, Text, Alert } from 'react-native';
+import React, { useEffect } from 'react';
 import * as Linking from 'expo-linking';
 import { supabase } from '@/lib/supabase';
 
@@ -9,10 +9,29 @@ export default function Index() {
 	const { user, loading } = useAuth();
 	const router = useRouter();
 	const segments = useSegments();
+	const [isHandlingDeepLink, setIsHandlingDeepLink] = React.useState(false);
+	const [hasCheckedInitialUrl, setHasCheckedInitialUrl] = React.useState(false);
+
+	// Log component render for debugging
+	React.useEffect(() => {
+		console.log('🔵 ========================================');
+		console.log('🔵 Index component rendered');
+		console.log('🔵 User:', user ? 'Present' : 'None');
+		console.log('🔵 Loading:', loading);
+		console.log('🔵 isHandlingDeepLink:', isHandlingDeepLink);
+		console.log('🔵 hasCheckedInitialUrl:', hasCheckedInitialUrl);
+		console.log('🔵 ========================================');
+	});
 
 	useEffect(() => {
+		console.log('🔵 useEffect for deep links initialized');
+		
 		// Handle deep links for password reset and OAuth callbacks
 		const handleDeepLink = async (url: string) => {
+			console.log('🔵 ========================================');
+			console.log('🔵 handleDeepLink called with URL:', url);
+			console.log('🔵 ========================================');
+			setIsHandlingDeepLink(true);
 			console.log('=== Deep Link Received ===');
 			console.log('Full URL:', url);
 			console.log('URL length:', url.length);
@@ -20,8 +39,11 @@ export default function Index() {
 			console.log('Has ?:', url.includes('?'));
 			
 			const parsed = Linking.parse(url);
-			console.log('Parsed path:', parsed.path);
-			console.log('Parsed queryParams keys:', Object.keys(parsed.queryParams || {}));
+			console.log('🔵 Parsed path:', parsed.path || '(empty)');
+			console.log('🔵 Parsed hostname:', parsed.hostname || '(none)');
+			console.log('🔵 Parsed scheme:', parsed.scheme || '(none)');
+			console.log('🔵 Parsed queryParams keys:', Object.keys(parsed.queryParams || {}));
+			console.log('🔵 Parsed queryParams:', JSON.stringify(parsed.queryParams, null, 2));
 			
 			// Supabase OAuth URLs can have tokens in queryParams (?) or hash fragments (#)
 			// We need to manually parse hash fragments if present
@@ -86,27 +108,76 @@ export default function Index() {
 			});
 			
 			// Check if this is a password reset link
-			if (parsed.path === 'reset-password' || type === 'recovery') {
+			// Password reset links can have:
+			// - path === 'reset-password'
+			// - type === 'recovery' in query params or hash
+			// - access_token with type=recovery
+			// - Empty path but type=recovery (when redirect_to is just giftyy://)
+			// - URL contains "recovery" anywhere (fallback check)
+			const urlLower = url.toLowerCase();
+			const hasRecoveryInUrl = urlLower.includes('recovery') || urlLower.includes('reset');
+			const isPasswordReset = 
+				parsed.path === 'reset-password' || 
+				type === 'recovery' ||
+				(accessToken && type === 'recovery') ||
+				(accessToken && parsed.queryParams?.type === 'recovery') ||
+				(accessToken && !parsed.path && type === 'recovery') || // Handle empty path with type=recovery
+				(accessToken && hasRecoveryInUrl && !code); // Fallback: if URL has "recovery" and access token but no OAuth code
+			
+			if (isPasswordReset) {
+				console.log('🔵 ========================================');
+				console.log('🔵 PASSWORD RESET LINK DETECTED!');
+				console.log('🔵 ========================================');
+				console.log('🔵 Path:', parsed.path || '(empty)');
+				console.log('🔵 Type:', type);
+				console.log('🔵 Has access token:', !!accessToken);
+				console.log('🔵 Access token length:', accessToken?.length || 0);
+				console.log('🔵 Has refresh token:', !!refreshToken);
+				
 				if (accessToken) {
 					try {
-						console.log('Handling password reset deep link...');
+						console.log('🔵 Handling password reset deep link...');
 						// Set the session using the tokens from the URL
-						const { error } = await supabase.auth.setSession({
+						const { data, error } = await supabase.auth.setSession({
 							access_token: accessToken,
 							refresh_token: refreshToken || '',
 						});
 
-						if (!error) {
-							console.log('Password reset session established');
-							// Navigate to reset password screen
-							router.replace('/(auth)/reset-password');
+						if (!error && data?.session) {
+							console.log('✅ Password reset session established');
+							console.log('✅ Session user ID:', data.session.user.id);
+							
+							// Verify the session was actually saved
+							const { data: verifyData, error: verifyError } = await supabase.auth.getSession();
+							if (verifyError || !verifyData?.session) {
+								console.error('❌ Session verification failed:', verifyError);
+								// Still try to navigate - the reset password page will handle it
+							} else {
+								console.log('✅ Session verified and saved');
+							}
+							
+							// Wait a moment for auth state to update in AuthContext
+							await new Promise(resolve => setTimeout(resolve, 1000));
+							
+							// Navigate to reset password screen with URL as param so it can also process it
+							console.log('🔵 Navigating to reset password page...');
+							router.replace({
+								pathname: '/(auth)/reset-password',
+								params: { deepLinkUrl: url }, // Pass URL so reset page can also process it
+							});
 							return;
 						} else {
-							console.error('Error setting password reset session:', error);
+							console.error('❌ Error setting password reset session:', error);
+							console.error('❌ Session data:', data);
+							setIsHandlingDeepLink(false);
 						}
 					} catch (error) {
-						console.error('Error handling password reset deep link:', error);
+						console.error('❌ Error handling password reset deep link:', error);
+						setIsHandlingDeepLink(false);
 					}
+				} else {
+					console.error('❌ Password reset link missing access token');
+					setIsHandlingDeepLink(false);
 				}
 			}
 			
@@ -118,11 +189,15 @@ export default function Index() {
 			// If it's an OAuth callback with path 'auth/callback', handle it directly here
 			// This ensures we have access to the full URL with all parameters
 			if (parsed.path === 'auth/callback') {
-				console.log('🔴 OAuth callback detected with path "auth/callback"');
+				console.log('🔴 ========================================');
+				console.log('🔴 GOOGLE OAUTH CALLBACK DETECTED!');
+				console.log('🔴 ========================================');
 				console.log('🔴 Full URL:', url);
+				console.log('🔴 Parsed path:', parsed.path);
 				console.log('🔴 Access token from hash:', !!accessToken);
 				console.log('🔴 Refresh token from hash:', !!refreshToken);
 				console.log('🔴 Access token from query:', !!parsed.queryParams?.access_token);
+				console.log('🔴 Code from query:', !!code);
 				
 				// Handle OAuth callback directly here
 				if (accessToken && refreshToken) {
@@ -246,57 +321,116 @@ export default function Index() {
 				}
 			} else {
 				console.log('⚠️ Deep link does not contain OAuth or password reset tokens');
+				setIsHandlingDeepLink(false);
 			}
 		};
 
 		// Check for initial URL (when app is opened via deep link)
-		Linking.getInitialURL().then((url) => {
-			if (url) {
-				console.log('🔴 Initial URL detected:', url);
-				// Only handle if it's not the Expo dev client URL
-				if (url && !url.includes('expo-development-client')) {
-					handleDeepLink(url);
-				} else {
-					console.log('🔴 Ignoring Expo dev client URL');
-				}
-			} else {
-				console.log('🔴 No initial URL found');
+		console.log('🔵 Checking for initial URL...');
+		
+		// Use a timeout to ensure we always set hasCheckedInitialUrl
+		const urlCheckTimeout = setTimeout(() => {
+			if (!hasCheckedInitialUrl) {
+				console.log('⚠️ URL check timeout - proceeding with normal flow');
+				setHasCheckedInitialUrl(true);
+				setIsHandlingDeepLink(false);
 			}
-		}).catch((err) => {
-			console.error('🔴 Error getting initial URL:', err);
-		});
+		}, 5000); // Increased timeout to 5 seconds
+
+		Linking.getInitialURL()
+			.then((url) => {
+				console.log('🔵 getInitialURL promise resolved');
+				console.log('🔵 URL received:', url || '(null)');
+				clearTimeout(urlCheckTimeout);
+				setHasCheckedInitialUrl(true);
+				if (url) {
+					console.log('🔴 ========================================');
+					console.log('🔴 INITIAL URL DETECTED!');
+					console.log('🔴 ========================================');
+					console.log('🔴 Initial URL:', url);
+					console.log('🔴 Full URL string:', JSON.stringify(url));
+					console.log('🔴 URL length:', url.length);
+					
+					// Show alert in dev mode to verify URL is received
+					if (__DEV__) {
+						// Use setTimeout to avoid blocking
+						setTimeout(() => {
+							Alert.alert('Deep Link Received', `URL: ${url.substring(0, 100)}...`);
+						}, 100);
+					}
+					
+					// Only handle if it's not the Expo dev client URL
+					if (url && !url.includes('expo-development-client')) {
+						console.log('🔴 Processing deep link...');
+						handleDeepLink(url);
+					} else {
+						console.log('🔴 Ignoring Expo dev client URL');
+						setIsHandlingDeepLink(false);
+					}
+				} else {
+					console.log('🔴 No initial URL found - app opened normally');
+					setIsHandlingDeepLink(false);
+				}
+			})
+			.catch((err) => {
+				console.error('🔴 ========================================');
+				console.error('🔴 ERROR getting initial URL');
+				console.error('🔴 ========================================');
+				console.error('🔴 Error:', err);
+				clearTimeout(urlCheckTimeout);
+				setHasCheckedInitialUrl(true);
+				setIsHandlingDeepLink(false);
+			});
 
 		// Listen for URL changes (when app is already open)
 		// This is the key listener that should catch the OAuth callback
+		console.log('🔵 Setting up URL event listener...');
 		const subscription = Linking.addEventListener('url', (event) => {
+			console.log('🔴 ========================================');
+			console.log('🔴 URL EVENT RECEIVED!');
+			console.log('🔴 ========================================');
 			console.log('🔴 URL event received in app/index.tsx:', event.url);
 			console.log('🔴 Full event object:', JSON.stringify(event, null, 2));
 			
 			// Only handle if it's not the Expo dev client URL
 			if (event.url && !event.url.includes('expo-development-client')) {
+				console.log('🔴 Processing URL event...');
 				handleDeepLink(event.url);
 			} else {
 				console.log('🔴 Ignoring Expo dev client URL event');
+				setIsHandlingDeepLink(false);
 			}
 		});
 
 		return () => {
 			subscription.remove();
 		};
-	}, [router]);
+	}, [router, hasCheckedInitialUrl]);
 
-	if (loading) {
+	// Show loading while checking initial URL or handling deep link
+	if (loading || isHandlingDeepLink || !hasCheckedInitialUrl) {
+		console.log('🔵 Showing loading screen - loading:', loading, 'isHandlingDeepLink:', isHandlingDeepLink, 'hasCheckedInitialUrl:', hasCheckedInitialUrl);
 		return (
 			<View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'white' }}>
 				<ActivityIndicator size="large" color="#f75507" />
+				{__DEV__ && (
+					<View style={{ marginTop: 20, padding: 10, backgroundColor: '#f0f0f0', borderRadius: 5 }}>
+						<Text style={{ fontSize: 12, color: '#666' }}>
+							Loading: {loading ? 'Auth loading' : ''} {isHandlingDeepLink ? 'Deep link' : ''} {!hasCheckedInitialUrl ? 'Checking URL' : ''}
+						</Text>
+					</View>
+				)}
 			</View>
 		);
 	}
 
+	console.log('🔵 About to redirect - user:', user ? 'Present' : 'None');
 	if (user) {
+		console.log('🔵 Redirecting to home');
 		return <Redirect href="/(buyer)/(tabs)/home" />;
 	}
 
+	console.log('🔵 Redirecting to login');
 	return <Redirect href="/(auth)/login" />;
 }
 

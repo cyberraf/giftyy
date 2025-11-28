@@ -1,21 +1,26 @@
-import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TextInput, Alert, Modal, Pressable, ScrollView, Switch, KeyboardAvoidingView, Platform } from 'react-native';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import { View, Text, StyleSheet, TextInput, Alert, Modal, Pressable, ScrollView, Switch, KeyboardAvoidingView, Platform, RefreshControl } from 'react-native';
 import { useRouter } from 'expo-router';
 import StepBar from '@/components/StepBar';
 import BrandButton from '@/components/BrandButton';
 import { useCheckout } from '@/lib/CheckoutContext';
 import { useCart } from '@/contexts/CartContext';
 import { useRecipients } from '@/contexts/RecipientsContext';
+import { useProducts } from '@/contexts/ProductsContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { BRAND_COLOR } from '@/constants/theme';
 import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { calculateVendorShippingSync } from '@/lib/shipping-utils';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { supabase } from '@/lib/supabase';
 
 export default function RecipientScreen() {
     const router = useRouter();
     const { recipient, setRecipient, notifyRecipient, setNotifyRecipient, cardPrice } = useCheckout();
     const { items } = useCart();
-    const { recipients } = useRecipients();
+    const { recipients, refreshRecipients } = useRecipients();
+    const { refreshProducts, refreshCollections } = useProducts();
+    const { bottom } = useSafeAreaInsets();
     const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null);
     const [firstName, setFirstName] = useState(recipient.firstName);
     const [lastName, setLastName] = useState(recipient.lastName);
@@ -28,11 +33,100 @@ export default function RecipientScreen() {
     const [phone, setPhone] = useState(recipient.phone ?? '');
     const [email, setEmail] = useState(recipient.email ?? '');
     const [statePickerVisible, setStatePickerVisible] = useState(false);
+    const [vendorNames, setVendorNames] = useState<Map<string, string>>(new Map());
+    const [refreshing, setRefreshing] = useState(false);
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            await Promise.all([refreshProducts(), refreshCollections(), refreshRecipients()]);
+            // Re-fetch vendor names after refresh
+            const vendorIds = Array.from(new Set(items.map(item => item.vendorId).filter(Boolean) as string[]));
+            if (vendorIds.length > 0) {
+                console.log('[RecipientScreen] Refreshing vendor names for IDs:', vendorIds);
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('id, store_name, role')
+                    .in('id', vendorIds);
+                if (error) {
+                    console.error('[RecipientScreen] Error refreshing vendor names:', error);
+                } else {
+                    console.log('[RecipientScreen] Refreshed raw vendor data:', data);
+                    const namesMap = new Map<string, string>();
+                    data?.forEach((vendor: any) => {
+                        if (vendor.id) {
+                            // Use store_name if available and not empty, otherwise use a fallback
+                            const storeName = vendor.store_name?.trim();
+                            if (storeName) {
+                                namesMap.set(vendor.id, storeName);
+                            } else {
+                                // Still add to map with fallback so we know the vendor exists
+                                namesMap.set(vendor.id, `Vendor ${vendor.id.slice(0, 8)}`);
+                            }
+                        }
+                    });
+                    console.log('[RecipientScreen] Refreshed vendor names map:', Array.from(namesMap.entries()));
+                    setVendorNames(namesMap);
+                }
+            }
+        } catch (error) {
+            console.error('Error refreshing recipient data:', error);
+        } finally {
+            setRefreshing(false);
+        }
+    }, [refreshProducts, refreshCollections, refreshRecipients, items]);
 
     const subtotal = useMemo(
         () => items.reduce((s, it) => s + (parseFloat(it.price.replace(/[^0-9.]/g, '')) || 0) * it.quantity, 0),
         [items]
     );
+
+    // Fetch vendor store names
+    useEffect(() => {
+        const fetchVendorNames = async () => {
+            const vendorIds = Array.from(new Set(items.map(item => item.vendorId).filter(Boolean) as string[]));
+            if (vendorIds.length === 0) {
+                setVendorNames(new Map());
+                return;
+            }
+
+            console.log('[RecipientScreen] Fetching vendor names for IDs:', vendorIds);
+
+            try {
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('id, store_name, role')
+                    .in('id', vendorIds);
+
+                if (error) {
+                    console.error('[RecipientScreen] Error fetching vendor names:', error);
+                    return;
+                }
+
+                console.log('[RecipientScreen] Raw vendor data from database:', data);
+
+                const namesMap = new Map<string, string>();
+                data?.forEach((vendor: any) => {
+                    if (vendor.id) {
+                        // Use store_name if available and not empty, otherwise use a fallback
+                        const storeName = vendor.store_name?.trim();
+                        if (storeName) {
+                            namesMap.set(vendor.id, storeName);
+                        } else {
+                            // Still add to map with fallback so we know the vendor exists
+                            namesMap.set(vendor.id, `Vendor ${vendor.id.slice(0, 8)}`);
+                        }
+                    }
+                });
+                console.log('[RecipientScreen] Fetched vendor names map:', Array.from(namesMap.entries()));
+                setVendorNames(namesMap);
+            } catch (err) {
+                console.error('[RecipientScreen] Error fetching vendor names:', err);
+            }
+        };
+
+        fetchVendorNames();
+    }, [items]);
 
     function getTaxRateFromState(code: string): number {
         const state = (code || '').toUpperCase();
@@ -46,13 +140,75 @@ export default function RecipientScreen() {
         }
     }
 
-    // Calculate shipping based on vendors (cumulate shipping costs from all vendors)
-    const shipping = useMemo(() => {
-        return calculateVendorShippingSync(items, 4.99, 50);
-    }, [items]);
+    // Calculate detailed shipping breakdown by vendor
+    const shippingBreakdown = useMemo(() => {
+        const DEFAULT_SHIPPING = 4.99;
+        const FREE_SHIPPING_THRESHOLD = 50;
+        
+        // Group items by vendor
+        const itemsByVendor = new Map<string, typeof items>();
+        items.forEach(item => {
+            const vendorId = item.vendorId || 'default';
+            if (!itemsByVendor.has(vendorId)) {
+                itemsByVendor.set(vendorId, []);
+            }
+            itemsByVendor.get(vendorId)!.push(item);
+        });
+
+        const breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number }> = [];
+        let totalShipping = 0;
+
+        itemsByVendor.forEach((vendorItems, vendorId) => {
+            const vendorSubtotal = vendorItems.reduce((sum, item) => {
+                const price = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
+                return sum + price * item.quantity;
+            }, 0);
+            
+            const itemCount = vendorItems.reduce((sum, item) => sum + item.quantity, 0);
+            const shipping = vendorSubtotal >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING;
+            totalShipping += shipping;
+
+            // Get vendor store name, fallback to default names
+            let vendorName = 'Giftyy Store';
+            if (vendorId !== 'default') {
+                const fetchedName = vendorNames.get(vendorId);
+                if (fetchedName) {
+                    vendorName = fetchedName;
+                } else {
+                    // If not found in map, it might still be loading - use a temporary name
+                    vendorName = `Vendor ${vendorId.slice(0, 8)}`;
+                    console.log(`[RecipientScreen] Vendor name not found for ${vendorId}. Available names:`, Array.from(vendorNames.keys()));
+                }
+            }
+
+            breakdown.push({
+                vendorId,
+                vendorName,
+                subtotal: vendorSubtotal,
+                shipping,
+                itemCount,
+            });
+        });
+
+        return { breakdown, total: totalShipping };
+    }, [items, vendorNames]);
+
+    const shipping = shippingBreakdown.total;
     const taxRate = useMemo(() => getTaxRateFromState(stateCode), [stateCode]);
     const taxable = Math.max(0, subtotal + (cardPrice || 0));
-    const estimatedTax = taxable * taxRate;
+    
+    // Detailed tax breakdown
+    const taxBreakdown = useMemo(() => {
+        const itemsTax = subtotal * taxRate;
+        const cardTax = (cardPrice || 0) * taxRate;
+        return {
+            items: itemsTax,
+            card: cardTax,
+            total: itemsTax + cardTax,
+        };
+    }, [subtotal, cardPrice, taxRate]);
+    
+    const estimatedTax = taxBreakdown.total;
     const orderTotal = taxable + estimatedTax + shipping;
 
     const handleSelectRecipient = (recipientFromList: typeof recipients[0]) => {
@@ -98,9 +254,20 @@ export default function RecipientScreen() {
 
     return (
         <View style={{ flex: 1, backgroundColor: 'white' }}>
-            <StepBar current={3} total={6} label="Recipient details" />
+            <StepBar current={3} total={7} label="Recipient details" />
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-            <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ paddingBottom: 20 + BOTTOM_BAR_TOTAL_SPACE }}>
+            <ScrollView 
+                keyboardShouldPersistTaps="handled" 
+                contentContainerStyle={{ paddingBottom: 20 + bottom + BOTTOM_BAR_TOTAL_SPACE }}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={BRAND_COLOR}
+                        colors={[BRAND_COLOR]}
+                    />
+                }
+            >
             <View style={{ padding: 16, gap: 12 }}>
                 {/* Saved Recipients Section */}
                 {recipients.length > 0 ? (
@@ -244,19 +411,52 @@ export default function RecipientScreen() {
                         <Text style={styles.muted}>Card price</Text>
                         <Text style={styles.bold}>${(cardPrice || 0).toFixed(2)}</Text>
                     </View>
-                    <View style={styles.rowBetween}>
-                        <Text style={styles.muted}>Shipping</Text>
-                        <Text style={styles.bold}>{shipping === 0 ? 'Free' : `$${shipping.toFixed(2)}`}</Text>
+                    
+                    {/* Detailed Shipping Breakdown */}
+                    <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
+                        <Text style={{ fontWeight: '800', fontSize: 14, marginBottom: 6, color: '#374151' }}>Shipping breakdown</Text>
+                        {shippingBreakdown.breakdown.map((vendor, idx) => (
+                            <View key={vendor.vendorId || idx} style={[styles.rowBetween, { marginTop: 4 }]}>
+                                <Text style={[styles.muted, { fontSize: 13 }]}>
+                                    {vendor.vendorName} ({vendor.itemCount} item{vendor.itemCount !== 1 ? 's' : ''})
+                                </Text>
+                                <Text style={[styles.bold, { fontSize: 13 }]}>
+                                    {vendor.shipping === 0 ? 'Free' : `$${vendor.shipping.toFixed(2)}`}
+                                </Text>
+                            </View>
+                        ))}
+                        <View style={[styles.rowBetween, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E5E7EB' }]}>
+                            <Text style={styles.muted}>Total shipping</Text>
+                            <Text style={styles.bold}>{shipping === 0 ? 'Free' : `$${shipping.toFixed(2)}`}</Text>
+                        </View>
                     </View>
-                    <View style={styles.rowBetween}>
-                        <Text style={styles.muted}>Estimated tax ({(taxRate * 100).toFixed(1)}%)</Text>
-                        <Text style={styles.bold}>${estimatedTax.toFixed(2)}</Text>
+
+                    {/* Detailed Tax Breakdown */}
+                    <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
+                        <Text style={{ fontWeight: '800', fontSize: 14, marginBottom: 6, color: '#374151' }}>
+                            Tax breakdown ({(taxRate * 100).toFixed(1)}%)
+                        </Text>
+                        <View style={[styles.rowBetween, { marginTop: 4 }]}>
+                            <Text style={[styles.muted, { fontSize: 13 }]}>Tax on items</Text>
+                            <Text style={[styles.bold, { fontSize: 13 }]}>${taxBreakdown.items.toFixed(2)}</Text>
+                        </View>
+                        {(cardPrice || 0) > 0 && (
+                            <View style={[styles.rowBetween, { marginTop: 4 }]}>
+                                <Text style={[styles.muted, { fontSize: 13 }]}>Tax on card</Text>
+                                <Text style={[styles.bold, { fontSize: 13 }]}>${taxBreakdown.card.toFixed(2)}</Text>
+                            </View>
+                        )}
+                        <View style={[styles.rowBetween, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E5E7EB' }]}>
+                            <Text style={styles.muted}>Total tax</Text>
+                            <Text style={styles.bold}>${estimatedTax.toFixed(2)}</Text>
+                        </View>
                     </View>
-                    <View style={[styles.rowBetween, { marginTop: 6 }]}>
+
+                    <View style={[styles.rowBetween, { marginTop: 8, paddingTop: 8, borderTopWidth: 2, borderTopColor: '#E5E7EB' }]}>
                         <Text style={{ fontWeight: '900' }}>Order total</Text>
                         <Text style={{ fontWeight: '900', fontSize: 18 }}>${orderTotal.toFixed(2)}</Text>
                     </View>
-                    <Text style={{ color: '#9ba1a6', marginTop: 4 }}>Tax and shipping are estimated. Final amounts at payment.</Text>
+                    <Text style={{ color: '#9ba1a6', marginTop: 4, fontSize: 12 }}>Tax and shipping are estimated. Final amounts calculated at payment.</Text>
                 </View>
 
                 <BrandButton title="Continue" onPress={onNext} />

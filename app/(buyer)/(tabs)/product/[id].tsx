@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, Pressable, Dimensions, Modal, ActivityIndicator } from 'react-native';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
+import { View, Text, StyleSheet, Image, ScrollView, Pressable, Dimensions, Modal, ActivityIndicator, Share } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
@@ -9,6 +9,8 @@ import { supabase } from '@/lib/supabase';
 import BrandButton from '@/components/BrandButton';
 import { BRAND_COLOR } from '@/constants/theme';
 import AddedToCartDialog from '@/components/AddedToCartDialog';
+import { useWishlist } from '@/contexts/WishlistContext';
+import { logProductAnalyticsEvent } from '@/lib/product-analytics';
 
 const BRAND = '#f75507';
 const { width } = Dimensions.get('window');
@@ -49,11 +51,86 @@ export default function ProductDetailsScreen() {
 
 	const { getProductById, products, loading: productsLoading } = useProducts();
 	const product = productId ? getProductById(productId) : undefined;
+	const { isWishlisted, toggleWishlist } = useWishlist();
+	const viewLoggedRef = useRef<string | null>(null);
 
 	const [activeImage, setActiveImage] = useState(0);
 	const [variations, setVariations] = useState<ProductVariation[]>([]);
 	const [variationsLoading, setVariationsLoading] = useState(false);
 	const [selectedVariation, setSelectedVariation] = useState<ProductVariation | null>(null);
+	const isInWishlist = product ? isWishlisted(product.id) : false;
+
+	const getFirstImageUri = (raw?: string) => {
+		if (!raw) return null;
+		try {
+			const parsed = JSON.parse(raw);
+			if (Array.isArray(parsed) && parsed.length > 0) {
+				return parsed[0];
+			}
+		} catch {
+			// not JSON array, treat as direct uri
+		}
+		return raw;
+	};
+
+	const sharePreviewImage = useMemo(() => {
+		if (selectedVariation?.imageUrl) {
+			const uri = getFirstImageUri(selectedVariation.imageUrl);
+			if (uri) {
+				return uri;
+			}
+		}
+		if (product?.imageUrl) {
+			return getFirstImageUri(product.imageUrl);
+		}
+		return imageUris[0] ?? null;
+	}, [product, selectedVariation, imageUris]);
+
+	useEffect(() => {
+		if (!product?.id) return;
+		if (viewLoggedRef.current === product.id) return;
+		viewLoggedRef.current = product.id;
+
+		logProductAnalyticsEvent({
+			productId: product.id,
+			eventType: 'view',
+		});
+	}, [product?.id]);
+
+	const handleShare = async () => {
+		if (!product) {
+			return;
+		}
+
+		try {
+			const shareUrl = `https://giftyy.com/products/${product.id}`;
+			const result = await Share.share({
+				title: product.name,
+				message: `Check out "${product.name}" on Giftyy: ${shareUrl}`,
+				url: sharePreviewImage || shareUrl,
+			});
+
+			if (result.action === Share.sharedAction) {
+				logProductAnalyticsEvent({
+					productId: product.id,
+					eventType: 'share',
+					metadata: {
+						shareUrl,
+					},
+				});
+			}
+		} catch (error) {
+			console.warn('[Product] Share failed', error);
+		}
+	};
+
+	const handleWishlistToggle = () => {
+		if (!product) {
+			return;
+		}
+		toggleWishlist(product.id);
+	};
+
 
 	// Image handling - collect ALL images from product and ALL variations
 	const imageUris: string[] = useMemo(() => {
@@ -640,8 +717,17 @@ export default function ProductDetailsScreen() {
 					<IconSymbol size={20} name="chevron.left" color="#111" />
 				</Pressable>
 				<View style={{ flexDirection: 'row', gap: 12 }}>
-					<Pressable style={styles.headerBtn}><IconSymbol size={18} name="square.and.arrow.up" color="#111" /></Pressable>
-					<Pressable style={styles.headerBtn}><IconSymbol size={18} name="heart" color="#111" /></Pressable>
+					<Pressable style={styles.headerBtn} onPress={handleShare}>
+						<IconSymbol size={18} name="square.and.arrow.up" color="#111" />
+					</Pressable>
+					<Pressable
+						style={[styles.headerBtn, isInWishlist && styles.headerBtnActive]}
+						onPress={handleWishlistToggle}
+						accessibilityRole="button"
+						accessibilityLabel={isInWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+					>
+						<IconSymbol size={18} name={isInWishlist ? 'heart.fill' : 'heart'} color={isInWishlist ? BRAND_COLOR : '#111'} />
+					</Pressable>
 				</View>
 			</View>
 
@@ -1057,6 +1143,7 @@ export default function ProductDetailsScreen() {
 const styles = StyleSheet.create({
 	header: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20, height: 56, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
 	headerBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#eee' },
+	headerBtnActive: { backgroundColor: '#FFF4ED', borderColor: BRAND_COLOR },
 	title: { fontSize: 22, fontWeight: '800', color: '#111827' },
 	price: { fontSize: 24, color: '#16a34a', fontWeight: '900' },
 	originalPrice: { fontSize: 18, color: '#9ca3af', textDecorationLine: 'line-through', fontWeight: '600' },

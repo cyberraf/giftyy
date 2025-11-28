@@ -4,13 +4,18 @@ import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useCart } from '@/contexts/CartContext';
 import { useBottomBarVisibility } from '@/contexts/BottomBarVisibility';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BRAND_COLOR } from '@/constants/theme';
 
-const BRAND = '#f75507';
+const BRAND = BRAND_COLOR;
 
 export default function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
     const { totalQuantity } = useCart();
     const { visible } = useBottomBarVisibility();
+	const { bottom } = useSafeAreaInsets();
     const allowed = new Set(['home', 'cart', 'memory', 'store-profile', 'profile']);
+	const bottomInset = Math.max(bottom, 0);
+	const barHeight = 68 + bottomInset;
     
     if (!visible) {
         return null;
@@ -20,25 +25,30 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
         <View
             style={{
                 position: 'absolute',
-                left: 12,
-                right: 12,
-                bottom: 18,
-                height: 68,
+                left: 0,
+                right: 0,
+				bottom: 0,
+				height: barHeight,
                 backgroundColor: 'white',
-                borderRadius: 26,
+                borderTopLeftRadius: 26,
+                borderTopRightRadius: 26,
                 shadowColor: '#000',
                 shadowOpacity: 0.08,
                 shadowRadius: 14,
-                elevation: 8,
+                shadowOffset: { width: 0, height: -4 },
+                elevation: 12,
+				zIndex: 999,
                 flexDirection: 'row',
-                paddingHorizontal: 8,
-                paddingVertical: 8,
+                paddingHorizontal: 12,
+				paddingTop: 8,
+				paddingBottom: 8 + bottomInset,
             }}
         >
             {state.routes.filter((r) => allowed.has(r.name)).map((route, index) => {
 				const { options } = descriptors[route.key];
 				// Compare keys to avoid index mismatches after filtering routes
-				const isFocused = state.routes[state.index]?.key === route.key;
+				const currentRoute = state.routes[state.index];
+				const isFocused = currentRoute?.key === route.key || currentRoute?.name === route.name;
 
 				const onPress = () => {
 					const event = navigation.emit({
@@ -73,7 +83,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
                                 alignItems: 'center',
                                 justifyContent: 'center',
                                 borderRadius: 16,
-                                backgroundColor: isFocused ? '#FFF5F0' : 'transparent',
+                                backgroundColor: isFocused ? 'rgba(247, 85, 7, 0.1)' : 'transparent',
 							}}
 						>
                             <View style={{ position: 'relative' }}>

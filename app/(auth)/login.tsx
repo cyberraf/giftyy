@@ -4,14 +4,15 @@ import { useAuth } from '@/contexts/AuthContext';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Link, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function LoginScreen() {
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
 	const [loading, setLoading] = useState(false);
-	const { signIn } = useAuth();
+	const [googleLoading, setGoogleLoading] = useState(false);
+	const { signIn, signInWithGoogle } = useAuth();
 	const { alert } = useAlert();
 	const router = useRouter();
 	const insets = useSafeAreaInsets();
@@ -36,9 +37,24 @@ export default function LoginScreen() {
 		}
 	};
 
+	const handleGoogleSignIn = async () => {
+		setGoogleLoading(true);
+		const { error } = await signInWithGoogle();
+		setGoogleLoading(false);
+
+		if (error) {
+			alert('Google Sign-In Failed', error.message || 'Unable to sign in with Google. Please try again.');
+		}
+	};
+
 	return (
 		<View style={[styles.container, { paddingTop: Math.max(insets.top, 20) }]}>
-			<View style={styles.content}>
+			<ScrollView 
+				style={styles.scrollView}
+				contentContainerStyle={styles.content}
+				showsVerticalScrollIndicator={false}
+				keyboardShouldPersistTaps="handled"
+			>
 				{/* Logo and Welcome Section */}
 				<View style={styles.header}>
 					<Image
@@ -96,21 +112,46 @@ export default function LoginScreen() {
 				<Pressable
 					style={styles.forgotPasswordButton}
 					onPress={() => router.push('/(auth)/forgot-password')}
-					disabled={loading}
+					disabled={loading || googleLoading}
 				>
 					<Text style={styles.forgotPasswordText}>Forgot password?</Text>
+				</Pressable>
+
+				{/* Divider */}
+				<View style={styles.dividerContainer}>
+					<View style={styles.dividerLine} />
+					<Text style={styles.dividerText}>OR</Text>
+					<View style={styles.dividerLine} />
+				</View>
+
+				{/* Google Sign In Button */}
+				<Pressable
+					style={[styles.googleButton, (loading || googleLoading) && styles.buttonDisabled]}
+					onPress={handleGoogleSignIn}
+					disabled={loading || googleLoading}
+				>
+					{googleLoading ? (
+						<ActivityIndicator color="#4285F4" />
+					) : (
+						<>
+							<View style={styles.googleIconContainer}>
+								<Text style={styles.googleIconText}>G</Text>
+							</View>
+							<Text style={styles.googleButtonText}>Continue with Google</Text>
+						</>
+					)}
 				</Pressable>
 
 				{/* Sign Up Link */}
 				<View style={styles.signupContainer}>
 					<Text style={styles.signupText}>Don't have an account? </Text>
 					<Link href="/(auth)/signup" asChild>
-						<Pressable disabled={loading}>
+						<Pressable disabled={loading || googleLoading}>
 							<Text style={styles.signupLink}>Sign up</Text>
 						</Pressable>
 					</Link>
 				</View>
-			</View>
+			</ScrollView>
 		</View>
 	);
 }
@@ -120,10 +161,14 @@ const styles = StyleSheet.create({
 		flex: 1,
 		backgroundColor: '#FFFFFF',
 	},
-	content: {
+	scrollView: {
 		flex: 1,
+	},
+	content: {
+		flexGrow: 1,
 		paddingHorizontal: 24,
 		paddingTop: 40,
+		paddingBottom: 32,
 	},
 	header: {
 		alignItems: 'center',
@@ -188,7 +233,8 @@ const styles = StyleSheet.create({
 	},
 	forgotPasswordButton: {
 		alignSelf: 'center',
-		marginBottom: 24,
+		marginTop: 8,
+		marginBottom: 16,
 	},
 	forgotPasswordText: {
 		fontSize: 14,
@@ -199,8 +245,8 @@ const styles = StyleSheet.create({
 		flexDirection: 'row',
 		justifyContent: 'center',
 		alignItems: 'center',
-		marginTop: 'auto',
-		paddingBottom: 32,
+		marginTop: 16,
+		marginBottom: 16,
 	},
 	signupText: {
 		fontSize: 14,
@@ -210,5 +256,57 @@ const styles = StyleSheet.create({
 		fontSize: 14,
 		color: BRAND_COLOR,
 		fontWeight: '700',
+	},
+	dividerContainer: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		marginVertical: 24,
+	},
+	dividerLine: {
+		flex: 1,
+		height: 1,
+		backgroundColor: '#E5E7EB',
+	},
+	dividerText: {
+		marginHorizontal: 16,
+		fontSize: 14,
+		color: '#9CA3AF',
+		fontWeight: '500',
+	},
+	googleButton: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'center',
+		backgroundColor: '#FFFFFF',
+		borderWidth: 1,
+		borderColor: '#E5E7EB',
+		borderRadius: 12,
+		paddingVertical: 16,
+		marginBottom: 16,
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.1,
+		shadowRadius: 4,
+		elevation: 2,
+	},
+	googleIconContainer: {
+		marginRight: 12,
+		width: 20,
+		height: 20,
+		alignItems: 'center',
+		justifyContent: 'center',
+		backgroundColor: '#FFFFFF',
+		borderRadius: 2,
+	},
+	googleIconText: {
+		fontSize: 16,
+		fontWeight: 'bold',
+		color: '#4285F4',
+		fontFamily: 'Roboto',
+	},
+	googleButtonText: {
+		color: '#1F2937',
+		fontSize: 16,
+		fontWeight: '600',
 	},
 });
