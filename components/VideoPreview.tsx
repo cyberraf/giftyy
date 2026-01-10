@@ -7,17 +7,38 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 type VideoPreviewProps = {
 	videoUrl: string;
 	style?: ViewStyle;
+	pauseWhenViewerOpen?: boolean; // If true, unload video when viewer is open
 };
 
 /**
  * Component that displays a video preview (paused at the first frame)
  * Handles both public URLs and Supabase Storage URLs that may need authentication
  */
-export function VideoPreview({ videoUrl, style }: VideoPreviewProps) {
+export function VideoPreview({ videoUrl, style, pauseWhenViewerOpen = false }: VideoPreviewProps) {
 	const videoRef = useRef<Video>(null);
 	const [hasError, setHasError] = useState(false);
 	const [isReady, setIsReady] = useState(false);
 	const signedUrl = useSignedVideoUrl(videoUrl);
+	
+	// Aggressively unload video when viewer opens to free decoder resources
+	// This prevents HEVC decoder conflicts on Android devices
+	useEffect(() => {
+		if (pauseWhenViewerOpen) {
+			const unloadVideo = async () => {
+				try {
+					if (videoRef.current) {
+						await videoRef.current.pauseAsync().catch(() => {});
+						await videoRef.current.unloadAsync().catch(() => {});
+						setIsReady(false);
+						setHasError(false);
+					}
+				} catch (error) {
+					// Ignore errors during cleanup
+				}
+			};
+			unloadVideo();
+		}
+	}, [pauseWhenViewerOpen]);
 
 	useEffect(() => {
 		// Seek to 0 seconds to show the first frame once video is loaded
@@ -38,10 +59,17 @@ export function VideoPreview({ videoUrl, style }: VideoPreviewProps) {
 		}
 	}, [signedUrl, isReady]);
 
-	// Reset error state when URL changes
+	// Reset error state when URL changes and cleanup on unmount
 	useEffect(() => {
 		setHasError(false);
 		setIsReady(false);
+		
+		return () => {
+			// Cleanup: unload video when component unmounts or URL changes
+			if (videoRef.current) {
+				videoRef.current.unloadAsync().catch(() => {});
+			}
+		};
 	}, [signedUrl]);
 
 	if (!signedUrl) {

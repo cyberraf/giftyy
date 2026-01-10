@@ -12,6 +12,7 @@ export type VideoMessage = {
 	durationSeconds?: number;
 	fileSizeBytes?: number;
 	direction: 'sent' | 'received';
+	isFeatured?: boolean;
 	createdAt: string;
 	updatedAt: string;
 };
@@ -29,6 +30,7 @@ type VideoMessagesContextValue = {
 	) => Promise<{ videoMessage: VideoMessage | null; error: Error | null }>;
 	deleteVideoMessage: (id: string) => Promise<{ error: Error | null }>;
 	updateVideoMessageOrderId: (videoMessageId: string, orderId: string) => Promise<{ error: Error | null }>;
+	updateVideoMessageFeatured: (videoMessageId: string, isFeatured: boolean) => Promise<{ error: Error | null }>;
 	refreshVideoMessages: () => Promise<void>;
 };
 
@@ -45,6 +47,7 @@ function dbRowToVideoMessage(row: any): VideoMessage {
 		durationSeconds: row.duration_seconds || undefined,
 		fileSizeBytes: row.file_size_bytes || undefined,
 		direction: row.direction || 'sent',
+		isFeatured: row.is_featured || false,
 		createdAt: row.created_at,
 		updatedAt: row.updated_at,
 	};
@@ -88,7 +91,22 @@ export function VideoMessagesProvider({ children }: { children: React.ReactNode 
 	// Fetch video messages when user changes
 	useEffect(() => {
 		refreshVideoMessages();
-	}, [refreshVideoMessages]);
+
+		// Real-time updates for video_messages
+		if (!user) return;
+		const channel = supabase
+			.channel('video_messages_realtime')
+			.on(
+				'postgres_changes',
+				{ event: '*', schema: 'public', table: 'video_messages', filter: `user_id=eq.${user.id}` },
+				() => refreshVideoMessages()
+			)
+			.subscribe();
+
+		return () => {
+			channel.unsubscribe();
+		};
+	}, [refreshVideoMessages, user]);
 
 	const addVideoMessage = useCallback(
 		async (
@@ -228,6 +246,35 @@ export function VideoMessagesProvider({ children }: { children: React.ReactNode 
 		[user, refreshVideoMessages]
 	);
 
+	const updateVideoMessageFeatured = useCallback(
+		async (videoMessageId: string, isFeatured: boolean): Promise<{ error: Error | null }> => {
+			if (!user) {
+				return { error: new Error('User not authenticated') };
+			}
+
+			try {
+				const { error } = await supabase
+					.from('video_messages')
+					.update({ is_featured: isFeatured })
+					.eq('id', videoMessageId)
+					.eq('user_id', user.id);
+
+				if (error) {
+					console.error('Error updating video message featured status:', error);
+					return { error: new Error(error.message) };
+				}
+
+				// Refresh the list
+				await refreshVideoMessages();
+				return { error: null };
+			} catch (err: any) {
+				console.error('Unexpected error updating video message featured status:', err);
+				return { error: err instanceof Error ? err : new Error(String(err)) };
+			}
+		},
+		[user, refreshVideoMessages]
+	);
+
 	const value = useMemo(
 		() => ({
 			videoMessages,
@@ -235,9 +282,10 @@ export function VideoMessagesProvider({ children }: { children: React.ReactNode 
 			addVideoMessage,
 			deleteVideoMessage,
 			updateVideoMessageOrderId,
+			updateVideoMessageFeatured,
 			refreshVideoMessages,
 		}),
-		[videoMessages, loading, addVideoMessage, deleteVideoMessage, updateVideoMessageOrderId, refreshVideoMessages]
+		[videoMessages, loading, addVideoMessage, deleteVideoMessage, updateVideoMessageOrderId, updateVideoMessageFeatured, refreshVideoMessages]
 	);
 
 	return <VideoMessagesContext.Provider value={value}>{children}</VideoMessagesContext.Provider>;

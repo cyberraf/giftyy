@@ -1,3 +1,10 @@
+// Configure React Native Reanimated logger to disable strict mode warnings
+import { configureReanimatedLogger } from 'react-native-reanimated';
+
+configureReanimatedLogger({
+	strict: false, // Disable strict mode warnings about reading from `value` during render
+});
+
 // Import polyfills for React Native (required for Supabase)
 import 'react-native-url-polyfill/auto';
 import 'react-native-get-random-values';
@@ -11,7 +18,7 @@ if (!global.atob) {
 	global.atob = decode;
 }
 
-import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
+import { DefaultTheme, ThemeProvider } from '@react-navigation/native';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -19,6 +26,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Image, Text, View } from 'react-native';
 
 import { CartProvider } from '@/contexts/CartContext';
+import { CategoriesProvider } from '@/contexts/CategoriesContext';
 import { WishlistProvider } from '@/contexts/WishlistContext';
 import { NotificationsProvider } from '@/contexts/NotificationsContext';
 import { RecipientsProvider } from '@/contexts/RecipientsContext';
@@ -29,7 +37,6 @@ import { AuthProvider } from '@/contexts/AuthContext';
 import { AlertProvider } from '@/contexts/AlertContext';
 import { OrdersProvider } from '@/contexts/OrdersContext';
 import { ProductsProvider } from '@/contexts/ProductsContext';
-import { useColorScheme } from '@/hooks/use-color-scheme';
 import { CheckoutProvider } from '@/lib/CheckoutContext';
 
 export const unstable_settings = {
@@ -39,7 +46,6 @@ export const unstable_settings = {
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
-  const colorScheme = useColorScheme();
   const [appReady, setAppReady] = useState(false);
   const [showLoader, setShowLoader] = useState(true);
   const opacity = useRef(new Animated.Value(1)).current;
@@ -98,7 +104,7 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+    <ThemeProvider value={DefaultTheme}>
       <AlertProvider>
         <AuthProvider>
           <CartProvider>
@@ -109,6 +115,7 @@ export default function RootLayout() {
                   <SharedMemoriesProvider>
                     <VaultsProvider>
                   <OrdersProvider>
+                    <CategoriesProvider>
                     <ProductsProvider>
                       <NotificationsProvider>
                   <Stack>
@@ -119,6 +126,7 @@ export default function RootLayout() {
                   </Stack>
                       </NotificationsProvider>
                     </ProductsProvider>
+                    </CategoriesProvider>
                   </OrdersProvider>
                       </VaultsProvider>
                     </SharedMemoriesProvider>
@@ -147,16 +155,17 @@ export default function RootLayout() {
           }}>
           <Animated.View style={{ alignItems: 'center', transform: [{ scale }] }}>
             <Image
-              source={require('@/assets/images/logo.png')}
-              style={{ width: 140, height: 140, borderRadius: 28 }}
+              source={require('@/assets/images/giftyy.png')}
+              style={{ width: 200, height: 200 }}
               resizeMode="contain"
             />
             <View style={{ height: 14 }} />
             <Text
               style={{
-                fontSize: 28,
+                fontSize: 36,
                 fontWeight: '800',
                 color: '#f75507',
+                letterSpacing: 0.3,
                 // If you add the Cooper BT font file later (assets/fonts/CooperBT.ttf),
                 // set fontFamily: 'Cooper BT' or 'CooperBT' depending on the loaded name
                 // without requiring it here to keep builds stable.

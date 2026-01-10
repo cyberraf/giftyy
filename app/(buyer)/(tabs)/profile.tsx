@@ -1,21 +1,25 @@
-import React, { useCallback, useMemo, useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Alert, Modal, KeyboardAvoidingView, Platform, Image } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Link, useRouter, useLocalSearchParams } from 'expo-router';
-import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
-import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { IconSymbol, IconSymbolName } from '@/components/ui/icon-symbol';
-import { useRecipients, type Recipient as RecipientType } from '@/contexts/RecipientsContext';
+import { MarketplaceProductCard } from '@/components/marketplace/ProductCard';
+import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
+import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
-import { useOrders } from '@/contexts/OrdersContext';
-import { useVideoMessages } from '@/contexts/VideoMessagesContext';
-import { supabase } from '@/lib/supabase';
-import { useWishlist } from '@/contexts/WishlistContext';
-import { useProducts } from '@/contexts/ProductsContext';
 import { useCart } from '@/contexts/CartContext';
-import * as ImagePicker from 'expo-image-picker';
+import { useOrders } from '@/contexts/OrdersContext';
+import { useProducts } from '@/contexts/ProductsContext';
+import { useRecipients, type Recipient as RecipientType } from '@/contexts/RecipientsContext';
+import { useVideoMessages } from '@/contexts/VideoMessagesContext';
+import { useWishlist } from '@/contexts/WishlistContext';
+import { supabase } from '@/lib/supabase';
+import { getVendorsInfo, type VendorInfo } from '@/lib/vendor-utils';
+import { Picker } from '@react-native-picker/picker';
 import { decode } from 'base64-arraybuffer';
+import * as ImagePicker from 'expo-image-picker';
+import { Link, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Alert, Dimensions, Image, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 const tabs = ['Overview', 'Orders', 'Recipients', 'Wishlist', 'Settings'] as const;
 type TabKey = (typeof tabs)[number];
@@ -333,6 +337,7 @@ const INITIAL_RECIPIENTS: Recipient[] = [
 
 export default function ProfileScreen() {
 	const { top } = useSafeAreaInsets();
+    const router = useRouter();
     const params = useLocalSearchParams<{ tab?: string }>();
     const [activeTab, setActiveTab] = useState<TabKey>('Overview');
 
@@ -346,6 +351,25 @@ export default function ProfileScreen() {
 	const { bottom } = useSafeAreaInsets();
 	const { profile: authProfile, user } = useAuth();
 	const { videoMessages } = useVideoMessages();
+	const { refreshOrders } = useOrders();
+	const { refreshRecipients } = useRecipients();
+	const { refreshProducts } = useProducts();
+	const [refreshing, setRefreshing] = useState(false);
+
+	const onRefresh = useCallback(async () => {
+		setRefreshing(true);
+		try {
+			await Promise.all([
+				refreshOrders(),
+				refreshRecipients(),
+				refreshProducts(),
+			]);
+		} catch (error) {
+			console.error('Error refreshing profile data:', error);
+		} finally {
+			setRefreshing(false);
+		}
+	}, [refreshOrders, refreshRecipients, refreshProducts]);
 	
 	const displayName = useMemo(() => {
 		if (authProfile?.first_name) {
@@ -498,7 +522,17 @@ export default function ProfileScreen() {
 
 	return (
         <View style={[styles.screen, { paddingTop: top + 8 }]}> 
-            <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20 }]}>
+            <ScrollView 
+				contentContainerStyle={[styles.content, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20 }]}
+				refreshControl={
+					<RefreshControl
+						refreshing={refreshing}
+						onRefresh={onRefresh}
+						tintColor={BRAND_COLOR}
+						colors={[BRAND_COLOR]}
+					/>
+				}
+			>
                 <View style={styles.heroCard}>
                     {/* Top Section: Badges */}
                     <View style={styles.heroTopSection}>
@@ -561,7 +595,9 @@ export default function ProfileScreen() {
                             <Pressable
                                 key={key}
                                 style={[styles.tabPill, active && styles.tabPillActive]}
-                                onPress={() => setActiveTab(key)}
+                                onPress={() => {
+                                    setActiveTab(key);
+                                }}
                                 accessibilityRole="button"
                                 accessibilityLabel={key}
                                 accessibilityState={active ? { selected: true } : {}}
@@ -589,46 +625,34 @@ export default function ProfileScreen() {
 
 function WishlistPanel() {
     const router = useRouter();
-    const { addItem } = useCart();
-    const { wishlist, toggleWishlist } = useWishlist();
+    const { wishlist } = useWishlist();
     const { getProductById } = useProducts();
+    const [vendorsMap, setVendorsMap] = useState<Map<string, VendorInfo>>(new Map());
 
     const items = useMemo(() => {
         return wishlist
             .map((entry) => {
                 const product = getProductById(entry.productId);
-                if (!product) {
-                    return null;
-                }
-                return {
-                    entry,
-                    product,
-                };
+                return product;
             })
-            .filter(Boolean) as { entry: { productId: string; addedAt: string }; product: ReturnType<typeof getProductById> }[];
+            .filter(Boolean) as ReturnType<typeof getProductById>[];
     }, [wishlist, getProductById]);
 
-    const formatPrice = (value?: number) => {
-        if (typeof value !== 'number') return '$0.00';
-        return `$${value.toFixed(2)}`;
-    };
-
-    const handleOpenProduct = (productId: string) => {
-        router.push({ pathname: '/(buyer)/(tabs)/product/[id]', params: { id: productId } });
-    };
-
-    const resolveImage = (imageUrl?: string) => {
-        if (!imageUrl) return null;
-        try {
-            const parsed = JSON.parse(imageUrl);
-            if (Array.isArray(parsed) && parsed.length > 0) {
-                return parsed[0];
+    // Fetch vendor info for products
+    useEffect(() => {
+        const fetchVendors = async () => {
+            const vendorIds = Array.from(new Set(items.filter(p => p?.vendorId).map(p => p!.vendorId!)));
+            if (vendorIds.length > 0) {
+                const vendors = await getVendorsInfo(vendorIds);
+                const map = new Map<string, VendorInfo>();
+                vendors.forEach(v => map.set(v.id, v));
+                setVendorsMap(map);
             }
-        } catch {
-            // not JSON
+        };
+        if (items.length > 0) {
+            fetchVendors();
         }
-        return imageUrl;
-    };
+    }, [items]);
 
     if (wishlist.length === 0) {
         return (
@@ -661,76 +685,42 @@ function WishlistPanel() {
             </View>
 
             <View style={styles.wishlistGridCards}>
-                {items.map(({ entry, product }) => {
+                {items.map((product, index) => {
                     if (!product) return null;
-                    const cover = resolveImage(product.imageUrl);
-                    const addedAt = new Date(entry.addedAt);
-                    const addedLabel = isNaN(addedAt.getTime())
-                        ? ''
-                        : addedAt.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
-                    const basePrice = product.price || 0;
-                    const hasDiscount = (product.discountPercentage || 0) > 0;
-                    const discountedPrice = hasDiscount ? basePrice * (1 - (product.discountPercentage || 0) / 100) : basePrice;
-
+                    const vendor = product.vendorId ? vendorsMap.get(product.vendorId) : undefined;
+                    const imageUrl = product.imageUrl ? (() => {
+                        try {
+                            const parsed = JSON.parse(product.imageUrl);
+                            return Array.isArray(parsed) ? parsed[0] : product.imageUrl;
+                        } catch {
+                            return product.imageUrl;
+                        }
+                    })() : undefined;
+                    
+                    // Ensure 3-column layout - remove marginRight from last item in each row
+                    const isLastInRow = (index + 1) % 3 === 0;
+                    
                     return (
-                        <View key={entry.productId} style={styles.wishlistCardModern}>
-                            <Pressable style={styles.wishlistCardImageWrap} onPress={() => handleOpenProduct(product.id)}>
-                                {cover ? (
-                                    <Image source={{ uri: cover }} style={styles.wishlistCardImage} />
-                                ) : (
-                                    <View style={[styles.wishlistCardImage, styles.wishlistImagePlaceholder]}>
-                                        <IconSymbol name="photo" size={32} color="#c4c4c4" />
-                                    </View>
-                                )}
-                                <Pressable
-                                    style={styles.wishlistRemoveFloating}
-                                    onPress={() => toggleWishlist(product.id)}
-                                    accessibilityLabel="Remove from wishlist"
-                                >
-                                    <IconSymbol name="xmark" size={14} color="#fff" />
-                                </Pressable>
-                            </Pressable>
-                            <View style={styles.wishlistCardBody}>
-                                <Text style={styles.wishlistTitle} numberOfLines={2}>
-                                    {product.name}
-                                </Text>
-                                <View style={styles.wishlistMetaRow}>
-                                    <View style={styles.wishlistPriceRow}>
-                                        <Text style={styles.wishlistPrice}>{formatPrice(discountedPrice)}</Text>
-                                        {hasDiscount && (
-                                            <Text style={styles.wishlistOriginalPrice}>{formatPrice(basePrice)}</Text>
-                                        )}
-                                    </View>
-                                    {addedLabel && (
-                                        <View style={styles.wishlistChip}>
-                                            <Text style={styles.wishlistChipLabel}>Saved {addedLabel}</Text>
-                                        </View>
-                                    )}
-                                </View>
-                                <Pressable
-                                    style={styles.wishlistPrimaryButton}
-                                    onPress={() => {
-                                        addItem({
-                                            id: product.id,
-                                            name: product.name,
-                                            price: formatPrice(discountedPrice),
-                                            image: cover || undefined,
-                                            quantity: 1,
-                                            vendorId: product.vendorId,
-                                        });
-                                        toggleWishlist(product.id);
-                                    }}
-                                >
-                                    <IconSymbol name="cart.fill" size={15} color="#FFFFFF" />
-                                    <Text style={styles.wishlistPrimaryButtonLabel}>Move to cart</Text>
-                                </Pressable>
-                                <View style={styles.wishlistCardFooter}>
-                                    <Pressable style={styles.wishlistGhostButton} onPress={() => handleOpenProduct(product.id)}>
-                                        <IconSymbol name="eye" size={15} color={BRAND_COLOR} />
-                                        <Text style={styles.wishlistGhostButtonLabel}>View</Text>
-                                    </Pressable>
-                                </View>
-                            </View>
+                        <View
+                            key={product.id}
+                            style={{ 
+                                marginRight: isLastInRow ? 0 : 10, 
+                                marginBottom: 10 
+                            }}
+                        >
+                            <MarketplaceProductCard
+                                id={product.id}
+                                name={product.name || ''}
+                                price={typeof product.price === 'number' && !isNaN(product.price) ? product.price : 0}
+                                originalPrice={product.originalPrice !== undefined && product.originalPrice > product.price ? product.originalPrice : (typeof product.discountPercentage === 'number' && product.discountPercentage > 0 && typeof product.price === 'number' && !isNaN(product.price) ? product.price / (1 - product.discountPercentage / 100) : undefined)}
+                                discountPercentage={typeof product.discountPercentage === 'number' && !isNaN(product.discountPercentage) ? product.discountPercentage : undefined}
+                                image={imageUrl}
+                                vendorName={vendor?.storeName || undefined}
+                                onPress={() => router.push({
+                                    pathname: '/(buyer)/(tabs)/product/[id]',
+                                    params: { id: product.id },
+                                })}
+                            />
                         </View>
                     );
                 })}
@@ -960,22 +950,12 @@ function OrdersPanel() {
 function SettingsPanel() {
     const router = useRouter();
     const { signOut } = useAuth();
+    const [signOutVisible, setSignOutVisible] = useState(false);
 
-    const handleSignOut = async () => {
-        Alert.alert(
-            'Sign out',
-            'Are you sure you want to sign out?',
-            [
-                { text: 'Cancel', style: 'cancel' },
-                {
-                    text: 'Sign out',
-                    style: 'destructive',
-                    onPress: async () => {
-                        await signOut();
-                    },
-                },
-            ]
-        );
+    const handleSignOut = () => setSignOutVisible(true);
+    const handleConfirmSignOut = async () => {
+        setSignOutVisible(false);
+        await signOut();
     };
 
     return (
@@ -1016,9 +996,36 @@ function SettingsPanel() {
             
 
             <Pressable style={styles.dangerButton} onPress={handleSignOut}>
-                <IconSymbol name="arrow.right.square.fill" size={20} color={palette.danger} />
+                <IconSymbol name="arrow.right.square" size={18} color={palette.textPrimary} />
                 <Text style={styles.dangerLabel}>Sign out</Text>
             </Pressable>
+
+            <Modal
+                transparent
+                visible={signOutVisible}
+                animationType="fade"
+                onRequestClose={() => setSignOutVisible(false)}
+            >
+                <Pressable style={styles.modalOverlay} onPress={() => setSignOutVisible(false)}>
+                    <Pressable style={styles.signOutCard} onPress={(e) => e.stopPropagation()}>
+                        <View style={styles.signOutIcon}>
+                            <IconSymbol name="arrow.right.square.fill" size={22} color={BRAND_COLOR} />
+                        </View>
+                        <Text style={styles.signOutTitle}>Sign out?</Text>
+                        <Text style={styles.signOutSubtitle}>
+                            We’ll keep your preferences saved. You can sign back in anytime.
+                        </Text>
+                        <View style={styles.signOutActions}>
+                            <Pressable style={styles.signOutGhostButton} onPress={() => setSignOutVisible(false)}>
+                                <Text style={styles.signOutGhostLabel}>Cancel</Text>
+                            </Pressable>
+                            <Pressable style={styles.signOutPrimaryButton} onPress={handleConfirmSignOut}>
+                                <Text style={styles.signOutPrimaryLabel}>Sign out</Text>
+                            </Pressable>
+                        </View>
+                    </Pressable>
+                </Pressable>
+            </Modal>
         </View>
     );
 }
@@ -1312,7 +1319,8 @@ function RecipientsPanel() {
             >
                 <View style={styles.modalOverlay}>
                     <KeyboardAvoidingView
-                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                        keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
                         style={styles.modalCardWrapper}
                     >
                         <View style={styles.modalCard}>
@@ -1349,7 +1357,7 @@ function RecipientsPanel() {
                                         <Pressable style={styles.modalSecondaryButton} onPress={() => setFormPage(0)} accessibilityRole="button">
                                             <Text style={styles.modalSecondaryLabel}>Back</Text>
                                         </Pressable>
-                                        <Pressable style={styles.modalPrimaryButton} onPress={handleSave} accessibilityRole="button">
+                                        <Pressable style={styles.modalPrimaryButton} onPress={handleSave} accessibilityRole="button" hitSlop={8}>
                                             <Text style={styles.modalPrimaryLabel}>Save</Text>
                                         </Pressable>
                                     </View>
@@ -2349,16 +2357,104 @@ const styles = StyleSheet.create({
         fontWeight: '800',
     },
     dangerButton: {
-        paddingVertical: 12,
-        borderRadius: 999,
-        alignItems: 'center',
-        backgroundColor: '#FAE1E1',
+        marginTop: 12,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        borderRadius: 14,
         borderWidth: 1,
-        borderColor: '#F5B5B5',
+        borderColor: palette.border,
+        backgroundColor: palette.card,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        shadowColor: '#000',
+        shadowOpacity: 0.04,
+        shadowRadius: 6,
+        shadowOffset: { width: 0, height: 3 },
+        elevation: 2,
     },
     dangerLabel: {
         color: '#C53030',
         fontWeight: '800',
+        fontSize: 15,
+        letterSpacing: 0.2,
+    },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.35)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+    },
+    signOutCard: {
+        width: '100%',
+        maxWidth: 360,
+        backgroundColor: palette.card,
+        borderRadius: 18,
+        padding: 20,
+        gap: 12,
+        shadowColor: '#000',
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 6,
+        borderWidth: 1,
+        borderColor: palette.border,
+    },
+    signOutIcon: {
+        width: 48,
+        height: 48,
+        borderRadius: 12,
+        backgroundColor: palette.accentSoft,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: palette.border,
+    },
+    signOutTitle: {
+        fontSize: 18,
+        fontWeight: '800',
+        color: palette.textPrimary,
+        letterSpacing: -0.2,
+    },
+    signOutSubtitle: {
+        color: palette.textSecondary,
+        fontSize: 14,
+        lineHeight: 20,
+    },
+    signOutActions: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        gap: 10,
+        marginTop: 4,
+    },
+    signOutGhostButton: {
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: palette.border,
+        backgroundColor: palette.card,
+    },
+    signOutGhostLabel: {
+        color: palette.textPrimary,
+        fontWeight: '700',
+        fontSize: 14,
+    },
+    signOutPrimaryButton: {
+        paddingVertical: 10,
+        paddingHorizontal: 16,
+        borderRadius: 12,
+        backgroundColor: BRAND_COLOR,
+        minWidth: 110,
+        alignItems: 'center',
+    },
+    signOutPrimaryLabel: {
+        color: '#fff',
+        fontWeight: '800',
+        fontSize: 14,
+        letterSpacing: 0.2,
     },
     emptyWishlistState: {
         alignItems: 'center',
@@ -2402,7 +2498,8 @@ const styles = StyleSheet.create({
     wishlistGridCards: {
         flexDirection: 'row',
         flexWrap: 'wrap',
-        gap: 14,
+        paddingHorizontal: 16,
+        justifyContent: 'flex-start',
     },
     wishlistCardModern: {
         width: '100%',

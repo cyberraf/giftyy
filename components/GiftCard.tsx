@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, Image, Pressable } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
 	name: string;
@@ -37,36 +37,36 @@ export function GiftCard({ name, price, image, onPress, originalPrice, discount 
 }
 
 const styles = StyleSheet.create({
-	card: { borderRadius: 14, overflow: 'hidden', backgroundColor: 'white', borderWidth: 1, borderColor: '#eee', position: 'relative' },
-	image: { width: '100%', height: 160, backgroundColor: '#f3f4f6' },
+	card: { borderRadius: 12, overflow: 'hidden', backgroundColor: 'white', borderWidth: 1, borderColor: '#eee', position: 'relative' },
+	image: { width: '100%', aspectRatio: 1, backgroundColor: '#f3f4f6' },
 	imagePlaceholder: { alignItems: 'center', justifyContent: 'center' },
 	discountBadge: {
 		position: 'absolute',
-		top: 8,
-		left: 8,
+		top: 6,
+		left: 6,
 		backgroundColor: '#ef4444',
-		paddingHorizontal: 8,
-		paddingVertical: 4,
-		borderRadius: 6,
+		paddingHorizontal: 6,
+		paddingVertical: 3,
+		borderRadius: 4,
 		zIndex: 1,
 	},
 	discountText: {
 		color: 'white',
-		fontSize: 11,
+		fontSize: 9,
 		fontWeight: '800',
 	},
-	info: { padding: 12 },
-	name: { fontWeight: '700', color: '#111' },
+	info: { padding: 8 },
+	name: { fontWeight: '700', color: '#111', fontSize: 11, lineHeight: 14, minHeight: 28 },
 	priceContainer: {
-		marginTop: 6,
+		marginTop: 4,
 		flexDirection: 'row',
 		alignItems: 'center',
-		gap: 6,
+		gap: 4,
 	},
-	price: { color: '#16a34a', fontWeight: '700' },
+	price: { color: '#16a34a', fontWeight: '700', fontSize: 13 },
 	originalPrice: {
 		color: '#9ca3af',
-		fontSize: 12,
+		fontSize: 10,
 		textDecorationLine: 'line-through',
 		fontWeight: '500',
 	},

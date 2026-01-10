@@ -32,9 +32,9 @@ export default function CheckoutCart() {
                     )}
                 />
                 <View style={{ height: 12 }} />
-                <BrandButton title="Enter recipient details" onPress={() => router.push('/(buyer)/checkout/recipient')} />
+                <BrandButton title="Choose a card style" onPress={() => router.push('/(buyer)/checkout/design')} />
                 <Pressable style={{ marginTop: 10, alignSelf: 'center' }} onPress={() => router.back()}>
-                    <Text style={{ color: '#2563eb', fontWeight: '700' }}>Back to cart</Text>
+                    <Text style={{ color: '#2563eb', fontWeight: '700' }}>Back to shopping</Text>
                 </Pressable>
             </View>
         </View>

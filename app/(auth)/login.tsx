@@ -33,7 +33,10 @@ export default function LoginScreen() {
 		setLoading(false);
 
 		if (error) {
-			alert('Login Failed', error.message || 'Invalid email or password');
+			// If the account isn't verified, AuthContext already routes to the verify screen.
+			if (error.name !== 'EmailNotVerified') {
+				alert('Login Failed', error.message || 'Invalid email or password');
+			}
 		}
 	};
 
@@ -135,7 +138,11 @@ export default function LoginScreen() {
 					) : (
 						<>
 							<View style={styles.googleIconContainer}>
-								<Text style={styles.googleIconText}>G</Text>
+								<Image
+									source={require('@/assets/images/google-icon.png')}
+									style={styles.googleIcon}
+									resizeMode="contain"
+								/>
 							</View>
 							<Text style={styles.googleButtonText}>Continue with Google</Text>
 						</>
@@ -298,11 +305,9 @@ const styles = StyleSheet.create({
 		backgroundColor: '#FFFFFF',
 		borderRadius: 2,
 	},
-	googleIconText: {
-		fontSize: 16,
-		fontWeight: 'bold',
-		color: '#4285F4',
-		fontFamily: 'Roboto',
+	googleIcon: {
+		width: 20,
+		height: 20,
 	},
 	googleButtonText: {
 		color: '#1F2937',

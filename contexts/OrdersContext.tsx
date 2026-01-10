@@ -6,7 +6,7 @@ import { useAuth } from './AuthContext';
 import { type CartItem } from './CartContext';
 import { useVideoMessages } from './VideoMessagesContext';
 
-export type OrderStatus = 'processing' | 'confirmed' | 'shipped' | 'out_for_delivery' | 'delivered' | 'cancelled';
+export type OrderStatus = 'awaiting_qr_assignment' | 'qr_assigned' | 'processing' | 'confirmed' | 'shipped' | 'out_for_delivery' | 'delivered' | 'cancelled';
 
 export type OrderItem = {
 	id: string;
@@ -24,7 +24,7 @@ export type Order = {
 	orderCode: string;
 	status: OrderStatus;
 	recipient: Recipient;
-	cardType?: 'Standard' | 'Premium' | 'Luxury';
+	cardType?: 'Standard' | 'Premium' | 'Luxury' | 'Giftyy Card';
 	cardPrice: number;
 	notifyRecipient: boolean;
 	items: OrderItem[];
@@ -225,7 +225,7 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 					.insert({
 						user_id: user.id,
 						order_code: orderCode,
-						status: 'processing',
+						status: 'awaiting_qr_assignment',
 						recipient_first_name: recipient.firstName,
 						recipient_last_name: recipient.lastName || null,
 						recipient_street: recipient.street,
@@ -286,18 +286,6 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 						console.error('Error linking video message to order:', videoError);
 						// Don't fail the order creation if video linking fails
 					}
-				}
-
-				try {
-					const { error: qrFunctionError } = await supabase.functions.invoke('create-order-qr', {
-						body: { orderId: orderData.id },
-					});
-
-					if (qrFunctionError) {
-						console.warn('Error invoking create-order-qr function:', qrFunctionError);
-					}
-				} catch (qrInvokeError) {
-					console.warn('Unexpected error invoking create-order-qr function:', qrInvokeError);
 				}
 
 				// Reduce stock counts for purchased products via RPC (atomic decrement)
@@ -361,13 +349,22 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 			if (notifyRecipient && recipient.email) {
 				try {
 					console.log('[Order] Sending email notification to recipient:', recipient.email);
+					
+					// Calculate estimated arrival (3-5 business days from now)
+					const estimatedDays = '3-5 business days';
+					
 					const { data: notifyData, error: notifyError } = await supabase.functions.invoke('notify-recipient-email', {
 						body: {
 							recipientEmail: recipient.email,
 							recipientName: `${recipient.firstName} ${recipient.lastName || ''}`.trim() || 'there',
 							orderCode,
+							street: recipient.street,
+							apartment: recipient.apartment || undefined,
 							city: recipient.city,
-							estimatedArrival: order.estimatedDeliveryDate || order.createdAt,
+							state: recipient.state || undefined,
+							zip: recipient.zip,
+							country: recipient.country || undefined,
+							estimatedArrival: estimatedDays,
 						},
 					});
 

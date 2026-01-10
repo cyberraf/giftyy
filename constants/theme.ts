@@ -1,5 +1,9 @@
-export const BRAND_COLOR = '#f75507';
-export const BRAND_FONT = 'Cooper BT';
+// Re-export from GIFTYY_THEME for backward compatibility
+// New code should use GIFTYY_THEME directly for responsive values
+import { GIFTYY_THEME } from './giftyy-theme';
+
+export const BRAND_COLOR = GIFTYY_THEME.colors.primary;
+export const BRAND_FONT = GIFTYY_THEME.typography.brandFont;
 
 /**
  * Below are the colors that are used in the app. The colors are defined in the light and dark mode.

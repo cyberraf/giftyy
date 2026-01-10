@@ -7,7 +7,7 @@ import { useSharedMemories } from '@/contexts/SharedMemoriesContext';
 import { useCheckout } from '@/lib/CheckoutContext';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { BRAND_COLOR } from '@/constants/theme';
+import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { Animated, Pressable, ScrollView, StyleSheet, Text, View, RefreshControl } from 'react-native';
 
@@ -44,6 +44,13 @@ export default function ConfirmationScreen() {
             Animated.spring(pop, { toValue: 1, friction: 6, tension: 80, useNativeDriver: true }),
         ]).start();
     }, [fadeIn, pop]);
+
+    // Refresh orders when orderId is provided to ensure we have the latest data
+    useEffect(() => {
+        if (orderId) {
+            refreshOrders();
+        }
+    }, [orderId, refreshOrders]);
 
     // Get order from database if orderId is provided
     const order = orderId ? getOrderById(orderId) : null;
@@ -140,7 +147,7 @@ export default function ConfirmationScreen() {
 
     const handleSendAnother = () => {
         reset();
-        router.replace('/(buyer)/checkout/design');
+        router.replace('/(buyer)/(tabs)/home');
     };
 
     const handleViewOrders = () => {
@@ -157,8 +164,8 @@ export default function ConfirmationScreen() {
                     <RefreshControl
                         refreshing={refreshing}
                         onRefresh={onRefresh}
-                        tintColor={BRAND_COLOR}
-                        colors={[BRAND_COLOR]}
+                        tintColor={GIFTYY_THEME.colors.primary}
+                        colors={[GIFTYY_THEME.colors.primary]}
                     />
                 }
             >
@@ -206,6 +213,7 @@ export default function ConfirmationScreen() {
                             <Text style={styles.orderBodyLabel}>Shipping address</Text>
                             <Text style={styles.orderBodyValue}>{shippingAddress || 'Not provided'}</Text>
                             <View style={styles.orderDivider} />
+
                             <Text style={styles.orderBodyLabel}>Status</Text>
                             <Text style={styles.orderBodyValue}>{statusDisplay}</Text>
                             {order?.trackingNumber && (
@@ -213,6 +221,50 @@ export default function ConfirmationScreen() {
                                     <View style={styles.orderDivider} />
                                     <Text style={styles.orderBodyLabel}>Tracking Number</Text>
                                     <Text style={styles.orderBodyValue}>{order.trackingNumber}</Text>
+                                </>
+                            )}
+
+                            <View style={styles.orderDivider} />
+                            <Text style={styles.orderBodyLabel}>Order total</Text>
+                            <Text style={styles.orderBodyValue}>
+                                {order?.totalAmount !== undefined
+                                    ? `$${Number(order.totalAmount).toFixed(2)}`
+                                    : '—'}
+                            </Text>
+
+                            {order?.shippingCost !== undefined && (
+                                <>
+                                    <View style={styles.orderDivider} />
+                                    <Text style={styles.orderBodyLabel}>Shipping</Text>
+                                    <Text style={styles.orderBodyValue}>
+                                        {Number(order.shippingCost) === 0 ? 'Free' : `$${Number(order.shippingCost).toFixed(2)}`}
+                                    </Text>
+                                </>
+                            )}
+
+                            {order?.taxAmount !== undefined && (
+                                <>
+                                    <View style={styles.orderDivider} />
+                                    <Text style={styles.orderBodyLabel}>Tax</Text>
+                                    <Text style={styles.orderBodyValue}>${Number(order.taxAmount).toFixed(2)}</Text>
+                                </>
+                            )}
+
+                            {order?.items && order.items.length > 0 && (
+                                <>
+                                    <View style={styles.orderDivider} />
+                                    <Text style={styles.orderBodyLabel}>Items</Text>
+                                    {order.items.map((it, idx) => (
+                                        <View key={it.id || idx} style={styles.orderItemRow}>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.orderItemName}>{it.productName || `Item ${idx + 1}`}</Text>
+                                                <Text style={styles.orderItemQty}>Qty: {it.quantity ?? 1}</Text>
+                                            </View>
+                                            <Text style={styles.orderItemPrice}>
+                                                {it.unitPrice !== undefined ? `$${Number(it.unitPrice).toFixed(2)}` : '—'}
+                                            </Text>
+                                        </View>
+                                    ))}
                                 </>
                             )}
                         </View>
@@ -229,10 +281,6 @@ export default function ConfirmationScreen() {
                     </Pressable>
                 </View>
 
-                <View style={styles.helpBox}>
-                    <Text style={styles.helpTitle}>Need anything else?</Text>
-                    <Text style={styles.helpBody}>Our gifting experts can make edits or answer questions at <Text style={{ fontWeight: '700' }}>support@giftyy.com</Text>.</Text>
-                </View>
             </ScrollView>
 
             {videoItem && (
@@ -267,17 +315,17 @@ function SummaryRow({ label, value, valueStyle }: { label: string; value: string
 
 const styles = StyleSheet.create({
     content: {
-        padding: 20,
-        paddingBottom: 32,
-        gap: 20,
+        padding: GIFTYY_THEME.spacing.xl,
+        paddingBottom: 140,
+        gap: GIFTYY_THEME.spacing.xl,
     },
     heroCard: {
-        borderRadius: 24,
-        padding: 20,
-        gap: 10,
-        shadowColor: '#F97316',
+        borderRadius: GIFTYY_THEME.radius['2xl'],
+        padding: GIFTYY_THEME.spacing.xl,
+        gap: GIFTYY_THEME.spacing.sm,
+        shadowColor: GIFTYY_THEME.colors.primaryLight,
         shadowOpacity: 0.08,
-        shadowRadius: 20,
+        shadowRadius: GIFTYY_THEME.spacing.xl,
         elevation: 3,
     },
     badge: {
@@ -290,34 +338,31 @@ const styles = StyleSheet.create({
         alignSelf: 'flex-start',
     },
     badgeEmoji: {
-        fontSize: 28,
+        fontSize: GIFTYY_THEME.typography.sizes['3xl'],
     },
     title: {
-        fontSize: 28,
-        fontWeight: '900',
-        color: '#0F172A',
+        fontSize: GIFTYY_THEME.typography.sizes['3xl'],
+        fontWeight: GIFTYY_THEME.typography.weights.black,
+        color: GIFTYY_THEME.colors.gray900,
     },
     subtitle: {
-        color: '#475569',
-        fontSize: 15,
+        color: GIFTYY_THEME.colors.gray600,
+        fontSize: GIFTYY_THEME.typography.sizes.base,
         lineHeight: 22,
     },
     summaryCard: {
-        backgroundColor: 'white',
-        borderRadius: 20,
-        padding: 18,
-        gap: 12,
+        backgroundColor: GIFTYY_THEME.colors.white,
+        borderRadius: GIFTYY_THEME.radius.xl,
+        padding: GIFTYY_THEME.spacing.lg,
+        gap: GIFTYY_THEME.spacing.md,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
-        shadowColor: '#0F172A',
-        shadowOpacity: 0.04,
-        shadowRadius: 16,
-        elevation: 2,
+        borderColor: GIFTYY_THEME.colors.gray200,
+        ...GIFTYY_THEME.shadows.sm,
     },
     summaryHeading: {
-        fontSize: 16,
-        fontWeight: '800',
-        color: '#0F172A',
+        fontSize: GIFTYY_THEME.typography.sizes.md,
+        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+        color: GIFTYY_THEME.colors.gray900,
     },
     summaryRow: {
         flexDirection: 'row',
@@ -325,114 +370,123 @@ const styles = StyleSheet.create({
         alignItems: 'center',
     },
     summaryLabel: {
-        color: '#475569',
-        fontWeight: '600',
+        color: GIFTYY_THEME.colors.gray600,
+        fontWeight: GIFTYY_THEME.typography.weights.semibold,
     },
     summaryValue: {
-        color: '#0F172A',
-        fontWeight: '700',
+        color: GIFTYY_THEME.colors.gray900,
+        fontWeight: GIFTYY_THEME.typography.weights.bold,
     },
     actions: {
-        gap: 12,
+        gap: GIFTYY_THEME.spacing.md,
     },
     secondaryButton: {
-        paddingVertical: 14,
-        borderRadius: 999,
+        paddingVertical: GIFTYY_THEME.spacing.md,
+        borderRadius: GIFTYY_THEME.radius.full,
         borderWidth: 1,
-        borderColor: '#CBD5F5',
+        borderColor: '#CBD5F5', // Keep as is - brand-specific color
         alignItems: 'center',
-        backgroundColor: 'white',
+        backgroundColor: GIFTYY_THEME.colors.white,
     },
     secondaryLabel: {
-        fontWeight: '800',
-        color: '#1D4ED8',
+        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+        color: '#1D4ED8', // Keep as is - brand-specific color
     },
     ordersButton: {
-        paddingVertical: 14,
-        borderRadius: 999,
+        paddingVertical: GIFTYY_THEME.spacing.md,
+        borderRadius: GIFTYY_THEME.radius.full,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: GIFTYY_THEME.colors.gray200,
         alignItems: 'center',
-        backgroundColor: '#F1F5F9',
+        backgroundColor: GIFTYY_THEME.colors.gray50,
     },
     ordersLabel: {
-        fontWeight: '800',
-        color: '#0F172A',
+        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+        color: GIFTYY_THEME.colors.gray900,
     },
     tertiaryButton: {
-        paddingVertical: 12,
-        borderRadius: 14,
+        paddingVertical: GIFTYY_THEME.spacing.md,
+        borderRadius: GIFTYY_THEME.radius.lg,
         alignItems: 'center',
-        backgroundColor: '#E0F2FE',
+        backgroundColor: '#E0F2FE', // Keep as is - specific accent color
         borderWidth: 1,
-        borderColor: '#BAE6FD',
+        borderColor: '#BAE6FD', // Keep as is - specific accent color
     },
     tertiaryLabel: {
-        color: '#0369A1',
-        fontWeight: '800',
+        color: '#0369A1', // Keep as is - brand-specific color
+        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
     },
     orderDetailsCard: {
-        backgroundColor: 'white',
-        borderRadius: 16,
+        backgroundColor: GIFTYY_THEME.colors.white,
+        borderRadius: GIFTYY_THEME.radius.md,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
+        borderColor: GIFTYY_THEME.colors.gray200,
         overflow: 'hidden',
     },
     orderHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 14,
+        paddingHorizontal: GIFTYY_THEME.spacing.md,
+        paddingVertical: GIFTYY_THEME.spacing.md,
     },
     orderHeaderLabel: {
-        fontWeight: '800',
-        color: '#0F172A',
+        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+        color: GIFTYY_THEME.colors.gray900,
     },
     orderHeaderChevron: {
-        fontSize: 20,
-        fontWeight: '800',
-        color: '#2563EB',
+        fontSize: GIFTYY_THEME.typography.sizes.xl,
+        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+        color: GIFTYY_THEME.colors.info,
     },
     orderBody: {
-        paddingHorizontal: 16,
-        paddingBottom: 16,
-        gap: 10,
+        paddingHorizontal: GIFTYY_THEME.spacing.md,
+        paddingBottom: GIFTYY_THEME.spacing.md,
+        gap: GIFTYY_THEME.spacing.sm,
     },
     orderBodyLabel: {
-        fontWeight: '700',
-        color: '#475569',
+        fontWeight: GIFTYY_THEME.typography.weights.bold,
+        color: GIFTYY_THEME.colors.gray600,
         textTransform: 'uppercase',
-        fontSize: 12,
+        fontSize: GIFTYY_THEME.typography.sizes.sm,
         letterSpacing: 0.6,
     },
     orderBodyValue: {
-        color: '#0F172A',
-        fontWeight: '600',
+        color: GIFTYY_THEME.colors.gray900,
+        fontWeight: GIFTYY_THEME.typography.weights.semibold,
         lineHeight: 20,
+    },
+    orderItemRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        paddingVertical: 6,
+    },
+    orderItemName: {
+        color: GIFTYY_THEME.colors.gray900,
+        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+        fontSize: GIFTYY_THEME.typography.sizes.base,
+    },
+    orderItemVendor: {
+        color: GIFTYY_THEME.colors.gray500,
+        fontSize: GIFTYY_THEME.typography.sizes.sm,
+        marginTop: GIFTYY_THEME.spacing.xs / 2,
+    },
+    orderItemQty: {
+        color: GIFTYY_THEME.colors.gray600,
+        fontSize: GIFTYY_THEME.typography.sizes.sm,
+        marginTop: GIFTYY_THEME.spacing.xs / 2,
+    },
+    orderItemPrice: {
+        color: GIFTYY_THEME.colors.gray900,
+        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+        fontSize: GIFTYY_THEME.typography.sizes.base,
+        marginLeft: GIFTYY_THEME.spacing.sm,
     },
     orderDivider: {
         height: 1,
-        backgroundColor: '#E2E8F0',
+        backgroundColor: GIFTYY_THEME.colors.gray200,
         marginVertical: 6,
-    },
-    helpBox: {
-        backgroundColor: '#EEF2FF',
-        borderRadius: 16,
-        padding: 16,
-        gap: 6,
-        borderWidth: 1,
-        borderColor: '#DBEAFE',
-    },
-    helpTitle: {
-        color: '#1D4ED8',
-        fontWeight: '800',
-        fontSize: 14,
-    },
-    helpBody: {
-        color: '#475569',
-        lineHeight: 20,
-        fontSize: 13,
     },
 });
 

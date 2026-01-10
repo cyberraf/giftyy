@@ -8,9 +8,9 @@ import { useCart } from '@/contexts/CartContext';
 import { useRecipients } from '@/contexts/RecipientsContext';
 import { useProducts } from '@/contexts/ProductsContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { BRAND_COLOR } from '@/constants/theme';
+import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
-import { calculateVendorShippingSync } from '@/lib/shipping-utils';
+import { calculateVendorShippingSync, calculateVendorShippingByZone } from '@/lib/shipping-utils';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '@/lib/supabase';
 
@@ -35,6 +35,8 @@ export default function RecipientScreen() {
     const [statePickerVisible, setStatePickerVisible] = useState(false);
     const [vendorNames, setVendorNames] = useState<Map<string, string>>(new Map());
     const [refreshing, setRefreshing] = useState(false);
+    const [shippingBreakdown, setShippingBreakdown] = useState<{ total: number; breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number }> }>({ total: 0, breakdown: [] });
+    const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -140,58 +142,114 @@ export default function RecipientScreen() {
         }
     }
 
-    // Calculate detailed shipping breakdown by vendor
-    const shippingBreakdown = useMemo(() => {
-        const DEFAULT_SHIPPING = 4.99;
-        const FREE_SHIPPING_THRESHOLD = 50;
-        
-        // Group items by vendor
-        const itemsByVendor = new Map<string, typeof items>();
-        items.forEach(item => {
-            const vendorId = item.vendorId || 'default';
-            if (!itemsByVendor.has(vendorId)) {
-                itemsByVendor.set(vendorId, []);
+    // Calculate shipping based on zones when recipient location is available
+    useEffect(() => {
+        const calculateShipping = async () => {
+            if (!stateCode || !country || items.length === 0) {
+                // Use default calculation if location not available
+                const DEFAULT_SHIPPING = 4.99;
+                const FREE_SHIPPING_THRESHOLD = 50;
+                
+                const itemsByVendor = new Map<string, typeof items>();
+                items.forEach(item => {
+                    const vendorId = item.vendorId || 'default';
+                    if (!itemsByVendor.has(vendorId)) {
+                        itemsByVendor.set(vendorId, []);
+                    }
+                    itemsByVendor.get(vendorId)!.push(item);
+                });
+
+                const breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number }> = [];
+                let totalShipping = 0;
+
+                itemsByVendor.forEach((vendorItems, vendorId) => {
+                    const vendorSubtotal = vendorItems.reduce((sum, item) => {
+                        const price = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
+                        return sum + price * item.quantity;
+                    }, 0);
+                    
+                    const itemCount = vendorItems.reduce((sum, item) => sum + item.quantity, 0);
+                    const shipping = vendorSubtotal >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING;
+                    totalShipping += shipping;
+
+                    let vendorName = 'Giftyy Store';
+                    if (vendorId !== 'default') {
+                        const fetchedName = vendorNames.get(vendorId);
+                        vendorName = fetchedName || `Vendor ${vendorId.slice(0, 8)}`;
+                    }
+
+                    breakdown.push({
+                        vendorId,
+                        vendorName,
+                        subtotal: vendorSubtotal,
+                        shipping,
+                        itemCount,
+                    });
+                });
+
+                setShippingBreakdown({ breakdown, total: totalShipping });
+                return;
             }
-            itemsByVendor.get(vendorId)!.push(item);
-        });
 
-        const breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number }> = [];
-        let totalShipping = 0;
+            setIsCalculatingShipping(true);
+            try {
+                const result = await calculateVendorShippingByZone(
+                    items,
+                    stateCode,
+                    country
+                );
+                setShippingBreakdown(result);
+            } catch (error) {
+                console.error('[RecipientScreen] Error calculating shipping:', error);
+                // Fallback to default calculation
+                const DEFAULT_SHIPPING = 4.99;
+                const FREE_SHIPPING_THRESHOLD = 50;
+                
+                const itemsByVendor = new Map<string, typeof items>();
+                items.forEach(item => {
+                    const vendorId = item.vendorId || 'default';
+                    if (!itemsByVendor.has(vendorId)) {
+                        itemsByVendor.set(vendorId, []);
+                    }
+                    itemsByVendor.get(vendorId)!.push(item);
+                });
 
-        itemsByVendor.forEach((vendorItems, vendorId) => {
-            const vendorSubtotal = vendorItems.reduce((sum, item) => {
-                const price = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
-                return sum + price * item.quantity;
-            }, 0);
-            
-            const itemCount = vendorItems.reduce((sum, item) => sum + item.quantity, 0);
-            const shipping = vendorSubtotal >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING;
-            totalShipping += shipping;
+                const breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number }> = [];
+                let totalShipping = 0;
 
-            // Get vendor store name, fallback to default names
-            let vendorName = 'Giftyy Store';
-            if (vendorId !== 'default') {
-                const fetchedName = vendorNames.get(vendorId);
-                if (fetchedName) {
-                    vendorName = fetchedName;
-                } else {
-                    // If not found in map, it might still be loading - use a temporary name
-                    vendorName = `Vendor ${vendorId.slice(0, 8)}`;
-                    console.log(`[RecipientScreen] Vendor name not found for ${vendorId}. Available names:`, Array.from(vendorNames.keys()));
-                }
+                itemsByVendor.forEach((vendorItems, vendorId) => {
+                    const vendorSubtotal = vendorItems.reduce((sum, item) => {
+                        const price = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
+                        return sum + price * item.quantity;
+                    }, 0);
+                    
+                    const itemCount = vendorItems.reduce((sum, item) => sum + item.quantity, 0);
+                    const shipping = vendorSubtotal >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING;
+                    totalShipping += shipping;
+
+                    let vendorName = 'Giftyy Store';
+                    if (vendorId !== 'default') {
+                        const fetchedName = vendorNames.get(vendorId);
+                        vendorName = fetchedName || `Vendor ${vendorId.slice(0, 8)}`;
+                    }
+
+                    breakdown.push({
+                        vendorId,
+                        vendorName,
+                        subtotal: vendorSubtotal,
+                        shipping,
+                        itemCount,
+                    });
+                });
+
+                setShippingBreakdown({ breakdown, total: totalShipping });
+            } finally {
+                setIsCalculatingShipping(false);
             }
+        };
 
-            breakdown.push({
-                vendorId,
-                vendorName,
-                subtotal: vendorSubtotal,
-                shipping,
-                itemCount,
-            });
-        });
-
-        return { breakdown, total: totalShipping };
-    }, [items, vendorNames]);
+        calculateShipping();
+    }, [items, stateCode, country, vendorNames]);
 
     const shipping = shippingBreakdown.total;
     const taxRate = useMemo(() => getTaxRateFromState(stateCode), [stateCode]);
@@ -263,8 +321,8 @@ export default function RecipientScreen() {
                     <RefreshControl
                         refreshing={refreshing}
                         onRefresh={onRefresh}
-                        tintColor={BRAND_COLOR}
-                        colors={[BRAND_COLOR]}
+                        tintColor={GIFTYY_THEME.colors.primary}
+                        colors={[GIFTYY_THEME.colors.primary]}
                     />
                 }
             >
@@ -315,7 +373,7 @@ export default function RecipientScreen() {
                     <View style={styles.addRecipientCTACard}>
                         <View style={styles.addRecipientCTAHeader}>
                             <View style={styles.addRecipientCTAIcon}>
-                                <IconSymbol name="person.2.fill" size={24} color={BRAND_COLOR} />
+                                <IconSymbol name="person.2.fill" size={24} color={GIFTYY_THEME.colors.primary} />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.addRecipientCTATitle}>Save recipients for faster checkout</Text>
@@ -339,7 +397,7 @@ export default function RecipientScreen() {
                         style={styles.addMoreRecipientsButton}
                         onPress={() => router.push('/(buyer)/(tabs)/profile?tab=Recipients')}
                     >
-                        <IconSymbol name="plus.circle.fill" size={20} color={BRAND_COLOR} />
+                        <IconSymbol name="plus.circle.fill" size={20} color={GIFTYY_THEME.colors.primary} />
                         <Text style={styles.addMoreRecipientsText}>Add more recipients for future orders</Text>
                     </Pressable>
                 )}
@@ -375,14 +433,14 @@ export default function RecipientScreen() {
                             value={notifyRecipient}
                             onValueChange={setNotifyRecipient}
                             trackColor={{ false: '#E5E7EB', true: '#FFE8DC' }}
-                            thumbColor={notifyRecipient ? BRAND_COLOR : '#ffffff'}
+                            thumbColor={notifyRecipient ? GIFTYY_THEME.colors.primary : GIFTYY_THEME.colors.white}
                             ios_backgroundColor="#E5E7EB"
                         />
                     </View>
                     <View style={styles.infoCard}>
                         <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
                             <View style={styles.infoIconCircle}>
-                                <IconSymbol name="info.circle" size={16} color={BRAND_COLOR} />
+                                <IconSymbol name="info.circle" size={16} color={GIFTYY_THEME.colors.primary} />
                             </View>
                             <View style={{ flex: 1 }}>
                                 <Text style={styles.infoTitle}>Heads up</Text>
@@ -414,7 +472,12 @@ export default function RecipientScreen() {
                     
                     {/* Detailed Shipping Breakdown */}
                     <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
-                        <Text style={{ fontWeight: '800', fontSize: 14, marginBottom: 6, color: '#374151' }}>Shipping breakdown</Text>
+                        <View style={[styles.rowBetween, { marginBottom: 6 }]}>
+                            <Text style={{ fontWeight: '800', fontSize: 14, color: '#374151' }}>Shipping breakdown</Text>
+                            {isCalculatingShipping && (
+                                <Text style={{ fontSize: 12, color: '#6b7280' }}>Calculating...</Text>
+                            )}
+                        </View>
                         {shippingBreakdown.breakdown.map((vendor, idx) => (
                             <View key={vendor.vendorId || idx} style={[styles.rowBetween, { marginTop: 4 }]}>
                                 <Text style={[styles.muted, { fontSize: 13 }]}>
@@ -427,7 +490,7 @@ export default function RecipientScreen() {
                         ))}
                         <View style={[styles.rowBetween, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E5E7EB' }]}>
                             <Text style={styles.muted}>Total shipping</Text>
-                            <Text style={styles.bold}>{shipping === 0 ? 'Free' : `$${shipping.toFixed(2)}`}</Text>
+                            <Text style={styles.bold}>{shippingBreakdown.total === 0 ? 'Free' : `$${shippingBreakdown.total.toFixed(2)}`}</Text>
                         </View>
                     </View>
 
@@ -460,6 +523,12 @@ export default function RecipientScreen() {
                 </View>
 
                 <BrandButton title="Continue" onPress={onNext} />
+                <Pressable 
+                    style={{ marginTop: 12, alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 20 }}
+                    onPress={() => router.back()}
+                >
+                    <Text style={{ color: '#6b7280', fontWeight: '700', fontSize: 15 }}>Back to card selection</Text>
+                </Pressable>
             </View>
             </ScrollView>
             </KeyboardAvoidingView>
@@ -516,8 +585,8 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     recipientCardSelected: {
-        borderColor: BRAND_COLOR,
-        backgroundColor: '#FFF7F3',
+        borderColor: GIFTYY_THEME.colors.primary,
+        backgroundColor: GIFTYY_THEME.colors.cream,
     },
     recipientCardHeader: {
         flexDirection: 'row',
@@ -535,8 +604,8 @@ const styles = StyleSheet.create({
         backgroundColor: '#FFFFFF',
     },
     recipientCheckboxSelected: {
-        backgroundColor: BRAND_COLOR,
-        borderColor: BRAND_COLOR,
+        backgroundColor: GIFTYY_THEME.colors.primary,
+        borderColor: GIFTYY_THEME.colors.primary,
     },
     recipientName: {
         fontSize: 16,
@@ -565,9 +634,9 @@ const styles = StyleSheet.create({
         paddingHorizontal: 12,
     },
     clearSelectionText: {
-        color: BRAND_COLOR,
-        fontWeight: '700',
-        fontSize: 14,
+        color: GIFTYY_THEME.colors.primary,
+        fontWeight: GIFTYY_THEME.typography.weights.bold,
+        fontSize: GIFTYY_THEME.typography.sizes.base,
     },
     divider: {
         height: 1,
@@ -612,7 +681,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'center',
-        backgroundColor: BRAND_COLOR,
+        backgroundColor: GIFTYY_THEME.colors.primary,
         borderRadius: 10,
         paddingVertical: 12,
         paddingHorizontal: 16,
@@ -635,7 +704,7 @@ const styles = StyleSheet.create({
         borderRadius: 10,
     },
     addMoreRecipientsText: {
-        color: BRAND_COLOR,
+        color: GIFTYY_THEME.colors.primary,
         fontWeight: '700',
         fontSize: 14,
     },

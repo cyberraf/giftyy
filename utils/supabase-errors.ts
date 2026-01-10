@@ -50,7 +50,17 @@ export function getSupabaseErrorMessage(error: AuthError | Error | null | undefi
 			if (code === 'invalid_credentials' || code === 'invalid_password' || message.toLowerCase().includes('invalid login credentials')) {
 				return 'Invalid email or password. Please try again.';
 			}
-			if (code === 'signup_disabled' || message.toLowerCase().includes('already registered')) {
+			// Supabase can represent "email already registered" in multiple ways depending on project settings/version.
+			if (
+				code === 'signup_disabled' ||
+				code === 'user_already_registered' ||
+				code === 'user_already_exists' ||
+				code === 'email_exists' ||
+				message.toLowerCase().includes('already registered') ||
+				message.toLowerCase().includes('already exists') ||
+				message.toLowerCase().includes('email already') ||
+				message.toLowerCase().includes('user already')
+			) {
 				return 'An account with this email already exists. Please sign in instead.';
 			}
 			if (message.toLowerCase().includes('invalid email')) {
@@ -97,7 +107,7 @@ export function getSupabaseErrorMessage(error: AuthError | Error | null | undefi
 		}
 
 		// Handle by error code
-		if (code === 'signup_disabled' || code === 'user_already_registered') {
+		if (code === 'signup_disabled' || code === 'user_already_registered' || code === 'user_already_exists' || code === 'email_exists') {
 			return 'An account with this email already exists. Please sign in instead.';
 		}
 
@@ -151,15 +161,28 @@ export function isDuplicateUserError(error: AuthError | Error | null | undefined
 	const code = authError.code || '';
 	const message = (authError.message || '').toLowerCase();
 
-	return (
-		status === 422 ||
-		status === 400 ||
-		code === 'signup_disabled' ||
-		code === 'user_already_registered' ||
+	const duplicateCodes = new Set([
+		'signup_disabled', // sometimes returned when an email is already registered (depending on settings)
+		'user_already_registered',
+		'user_already_exists',
+		'email_exists',
+	]);
+
+	const messageLooksDuplicate =
 		message.includes('already registered') ||
 		message.includes('already exists') ||
-		message.includes('email already')
-	);
+		message.includes('email already') ||
+		message.includes('user already') ||
+		message.includes('has already been registered') ||
+		message.includes('duplicate') ||
+		message.includes('unique constraint');
+
+	// Only treat 400/422 as duplicate when we have supporting signal from code/message.
+	if (status === 400 || status === 422) {
+		return duplicateCodes.has(code) || messageLooksDuplicate;
+	}
+
+	return duplicateCodes.has(code) || messageLooksDuplicate;
 }
 
 /**

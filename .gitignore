@@ -17,6 +17,14 @@ expo-env.d.ts
 *.p12
 *.key
 *.mobileprovision
+*.json
+!package.json
+!package-lock.json
+!tsconfig.json
+!tailwind.config.js
+!babel.config.js
+!eslint.config.js
+store-loc-*.json
 
 # Metro
 .metro-health-check*

@@ -1,15 +1,15 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Alert, Image, KeyboardAvoidingView, Platform, ActivityIndicator, Modal } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
-import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
+import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
-import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
-import * as Crypto from 'expo-crypto';
 import { checkSupabaseConnection } from '@/utils/supabase-diagnostics';
+import * as Crypto from 'expo-crypto';
+import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useState } from 'react';
+import { ActivityIndicator, Alert, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Generate a unique ID using expo-crypto (compatible with React Native)
 const generateUniqueId = async (): Promise<string> => {
@@ -184,7 +184,8 @@ export default function ProfilePreferencesScreen() {
             const uniqueId = await generateUniqueId();
             // Take first 16 chars for shorter filename (still unique enough)
             const fileName = `${uniqueId.substring(0, 16)}.${fileExt}`;
-            const filePath = `profile_images/${user?.id}/${fileName}`;
+            // Use avatars/ prefix to match profile.tsx upload path structure
+            const filePath = `avatars/${user?.id}/${fileName}`;
 
             // Upload to Supabase storage
             const { data, error } = await supabase.storage
@@ -216,12 +217,14 @@ export default function ProfilePreferencesScreen() {
     const deleteImageFromSupabase = async (imageUrl: string): Promise<void> => {
         try {
             // Extract file path from URL
+            // URL format: https://...supabase.co/storage/v1/object/public/profile_images/avatars/{userId}/{fileName}
             const urlParts = imageUrl.split('/profile_images/');
             if (urlParts.length < 2) {
                 console.warn('Could not extract file path from URL:', imageUrl);
                 return;
             }
-            const filePath = `profile_images/${urlParts[1]}`;
+            // The path after /profile_images/ is the storage path (e.g., "avatars/userId/fileName")
+            const filePath = urlParts[1];
 
             // Delete from Supabase storage
             const { error } = await supabase.storage
@@ -521,10 +524,10 @@ export default function ProfilePreferencesScreen() {
                                 <Text style={styles.dangerButtonText}>Delete account</Text>
                                 <IconSymbol name="chevron.right" size={20} color={palette.danger} />
                             </Pressable>
-                        </View>
+                                </View>
                     </View>
                 </ScrollView>
-            </View>
+                            </View>
 
             {/* Delete Account Password Modal */}
             <Modal
@@ -566,7 +569,7 @@ export default function ProfilePreferencesScreen() {
                             >
                                 <IconSymbol name={showDeletePassword ? 'eye.slash.fill' : 'eye.fill'} size={18} color={palette.textSecondary} />
                             </Pressable>
-                        </View>
+                                </View>
 
                         <View style={styles.modalButtons}>
                             <Pressable
@@ -615,9 +618,9 @@ export default function ProfilePreferencesScreen() {
                                     <Text style={styles.modalButtonDeleteText}>Delete Account</Text>
                                 )}
                             </Pressable>
+                            </View>
                         </View>
                     </View>
-                </View>
             </Modal>
 
             {/* Change Password Modal */}
@@ -653,7 +656,7 @@ export default function ProfilePreferencesScreen() {
                                 autoCorrect={false}
                                 editable={!changingPassword}
                             />
-                            <Pressable
+                                <Pressable
                                 onPress={() => setShowCurrentPassword((v) => !v)}
                                 style={styles.modalIconToggle}
                                 disabled={changingPassword}
@@ -661,8 +664,8 @@ export default function ProfilePreferencesScreen() {
                                 accessibilityLabel={showCurrentPassword ? 'Hide password' : 'Show password'}
                             >
                                 <IconSymbol name={showCurrentPassword ? 'eye.slash.fill' : 'eye.fill'} size={18} color={palette.textSecondary} />
-                            </Pressable>
-                        </View>
+                                </Pressable>
+                            </View>
 
                         <View style={styles.modalInputWrapper}>
                             <TextInput
@@ -676,7 +679,7 @@ export default function ProfilePreferencesScreen() {
                                 autoCorrect={false}
                                 editable={!changingPassword}
                             />
-                            <Pressable
+                                <Pressable
                                 onPress={() => setShowNewPassword((v) => !v)}
                                 style={styles.modalIconToggle}
                                 disabled={changingPassword}
@@ -684,8 +687,8 @@ export default function ProfilePreferencesScreen() {
                                 accessibilityLabel={showNewPassword ? 'Hide password' : 'Show password'}
                             >
                                 <IconSymbol name={showNewPassword ? 'eye.slash.fill' : 'eye.fill'} size={18} color={palette.textSecondary} />
-                            </Pressable>
-                        </View>
+                                </Pressable>
+                            </View>
 
                         {newPassword.length > 0 && (
                             <View style={{ marginBottom: 10 }}>
@@ -710,7 +713,7 @@ export default function ProfilePreferencesScreen() {
                                                         ]}
                                                     />
                                                 ))}
-                                            </View>
+                                </View>
                                             <Text style={[styles.helperText, { color: strengthColor }]}>
                                                 {strengthLabel}
                                             </Text>
@@ -732,7 +735,7 @@ export default function ProfilePreferencesScreen() {
                                 autoCorrect={false}
                                 editable={!changingPassword}
                             />
-                            <Pressable
+                                <Pressable
                                 onPress={() => setShowConfirmNewPassword((v) => !v)}
                                 style={styles.modalIconToggle}
                                 disabled={changingPassword}
@@ -740,8 +743,8 @@ export default function ProfilePreferencesScreen() {
                                 accessibilityLabel={showConfirmNewPassword ? 'Hide password' : 'Show password'}
                             >
                                 <IconSymbol name={showConfirmNewPassword ? 'eye.slash.fill' : 'eye.fill'} size={18} color={palette.textSecondary} />
-                            </Pressable>
-                        </View>
+                                </Pressable>
+                            </View>
 
                         <View style={{ gap: 6, marginTop: -6, marginBottom: 12 }}>
                             {(() => {
@@ -754,7 +757,7 @@ export default function ProfilePreferencesScreen() {
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                                         <IconSymbol name={ok ? 'checkmark.circle.fill' : 'circle'} size={16} color={ok ? palette.success : palette.textSecondary} />
                                         <Text style={[styles.helperText, { color: ok ? palette.textPrimary : palette.textSecondary }]}>{text}</Text>
-                                    </View>
+                        </View>
                                 );
                                 return (
                                     <View>
@@ -766,7 +769,7 @@ export default function ProfilePreferencesScreen() {
                                     </View>
                                 );
                             })()}
-                        </View>
+                    </View>
 
                         <Pressable
                             onPress={() => {
@@ -777,7 +780,7 @@ export default function ProfilePreferencesScreen() {
                             style={styles.linkButton}
                         >
                             <Text style={styles.linkText}>Forgot your current password?</Text>
-                        </Pressable>
+                            </Pressable>
 
                         <View style={styles.modalButtons}>
                             <Pressable
@@ -913,7 +916,7 @@ export default function ProfilePreferencesScreen() {
                             </Pressable>
                         </View>
                     </View>
-                </View>
+            </View>
             </Modal>
         </KeyboardAvoidingView>
     );

@@ -1,11 +1,11 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, TextInput, Alert, Image } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
-import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { IconSymbol, IconSymbolName } from '@/components/ui/icon-symbol';
+import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
+import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
 import { useProducts } from '@/contexts/ProductsContext';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const tabs = ['Overview', 'Products', 'Settings'] as const;
 type TabKey = (typeof tabs)[number];
@@ -30,7 +30,22 @@ const palette = {
 export default function StoreProfileScreen() {
     const { top, bottom } = useSafeAreaInsets();
     const [activeTab, setActiveTab] = useState<TabKey>('Overview');
-    const { products, collections } = useProducts();
+    const { products, collections, refreshProducts, refreshCollections } = useProducts();
+    const [refreshing, setRefreshing] = useState(false);
+
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            await Promise.all([
+                refreshProducts(),
+                refreshCollections(),
+            ]);
+        } catch (error) {
+            console.error('Error refreshing store data:', error);
+        } finally {
+            setRefreshing(false);
+        }
+    }, [refreshProducts, refreshCollections]);
 
     // Mock store data - in a real app, this would come from a store context/API
     const storeData = {
@@ -58,7 +73,17 @@ export default function StoreProfileScreen() {
 
     return (
         <View style={[styles.screen, { paddingTop: top + 8 }]}>
-            <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20 }]}>
+            <ScrollView 
+				contentContainerStyle={[styles.content, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20 }]}
+				refreshControl={
+					<RefreshControl
+						refreshing={refreshing}
+						onRefresh={onRefresh}
+						tintColor={BRAND_COLOR}
+						colors={[BRAND_COLOR]}
+					/>
+				}
+			>
                 <View style={styles.heroCard}>
                     <View style={styles.avatarBubble}>
                         {storeData.logo ? (

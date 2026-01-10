@@ -14,7 +14,8 @@ export default function SignupScreen() {
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
 	const [loading, setLoading] = useState(false);
-	const { signUp } = useAuth();
+	const [googleLoading, setGoogleLoading] = useState(false);
+	const { signUp, signInWithGoogle } = useAuth();
 	const { alert } = useAlert();
 	const router = useRouter();
 	const insets = useSafeAreaInsets();
@@ -46,9 +47,15 @@ export default function SignupScreen() {
 			
 			if (error) {
 				const errorMessage = error.message || 'Unable to create account. Please try again.';
+				const errorMessageLower = errorMessage.toLowerCase();
 				
 				// Check if it's a duplicate user error using the utility function
-				if (isDuplicateUserError(error)) {
+				if (
+					isDuplicateUserError(error) ||
+					errorMessageLower.includes('already exists') ||
+					errorMessageLower.includes('already registered') ||
+					errorMessageLower.includes('account with this email')
+				) {
 					alert(
 						'Account Already Exists',
 						'An account with this email already exists.\n\nWould you like to sign in instead?',
@@ -80,7 +87,11 @@ export default function SignupScreen() {
 				} else {
 					alert('Signup Failed', errorMessage);
 				}
+				return;
 			}
+
+			// Signup succeeded: prompt user to verify email (do not auto-login)
+			router.replace(`/(auth)/verify-email?email=${encodeURIComponent(email.trim())}`);
 		} catch (err: any) {
 			console.error('Unexpected signup error:', err);
 			const errorMsg = err?.message || 'An unexpected error occurred. Please try again.';
@@ -105,6 +116,16 @@ export default function SignupScreen() {
 			}
 		} finally {
 			setLoading(false);
+		}
+	};
+
+	const handleGoogleSignIn = async () => {
+		setGoogleLoading(true);
+		const { error } = await signInWithGoogle();
+		setGoogleLoading(false);
+
+		if (error) {
+			alert('Google Sign-In Failed', error.message || 'Unable to sign up with Google. Please try again.');
 		}
 	};
 
@@ -185,14 +206,43 @@ export default function SignupScreen() {
 
 				{/* Sign Up Button */}
 				<Pressable
-					style={[styles.primaryButton, loading && styles.buttonDisabled]}
+					style={[styles.primaryButton, (loading || googleLoading) && styles.buttonDisabled]}
 					onPress={handleSignup}
-					disabled={loading}
+					disabled={loading || googleLoading}
 				>
 					{loading ? (
 						<ActivityIndicator color="white" />
 					) : (
 						<Text style={styles.primaryButtonText}>Create Account</Text>
+					)}
+				</Pressable>
+
+				{/* Divider */}
+				<View style={styles.dividerContainer}>
+					<View style={styles.dividerLine} />
+					<Text style={styles.dividerText}>OR</Text>
+					<View style={styles.dividerLine} />
+				</View>
+
+				{/* Google Sign In Button */}
+				<Pressable
+					style={[styles.googleButton, (loading || googleLoading) && styles.buttonDisabled]}
+					onPress={handleGoogleSignIn}
+					disabled={loading || googleLoading}
+				>
+					{googleLoading ? (
+						<ActivityIndicator color="#4285F4" />
+					) : (
+						<>
+							<View style={styles.googleIconContainer}>
+								<Image
+									source={require('@/assets/images/google-icon.png')}
+									style={styles.googleIcon}
+									resizeMode="contain"
+								/>
+							</View>
+							<Text style={styles.googleButtonText}>Continue with Google</Text>
+						</>
 					)}
 				</Pressable>
 
@@ -205,7 +255,7 @@ export default function SignupScreen() {
 				<View style={styles.loginContainer}>
 					<Text style={styles.loginText}>Already have an account? </Text>
 					<Link href="/(auth)/login" asChild>
-						<Pressable disabled={loading}>
+						<Pressable disabled={loading || googleLoading}>
 							<Text style={styles.loginLink}>Sign in</Text>
 						</Pressable>
 					</Link>
@@ -286,6 +336,56 @@ const styles = StyleSheet.create({
 	},
 	buttonDisabled: {
 		opacity: 0.6,
+	},
+	dividerContainer: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		marginVertical: 24,
+	},
+	dividerLine: {
+		flex: 1,
+		height: 1,
+		backgroundColor: '#E5E7EB',
+	},
+	dividerText: {
+		marginHorizontal: 16,
+		fontSize: 14,
+		color: '#9CA3AF',
+		fontWeight: '500',
+	},
+	googleButton: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'center',
+		backgroundColor: '#FFFFFF',
+		borderWidth: 1,
+		borderColor: '#E5E7EB',
+		borderRadius: 12,
+		paddingVertical: 16,
+		marginBottom: 16,
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.1,
+		shadowRadius: 4,
+		elevation: 2,
+	},
+	googleIconContainer: {
+		marginRight: 12,
+		width: 20,
+		height: 20,
+		alignItems: 'center',
+		justifyContent: 'center',
+		backgroundColor: '#FFFFFF',
+		borderRadius: 2,
+	},
+	googleIcon: {
+		width: 20,
+		height: 20,
+	},
+	googleButtonText: {
+		color: '#1F2937',
+		fontSize: 16,
+		fontWeight: '600',
 	},
 	termsText: {
 		fontSize: 12,

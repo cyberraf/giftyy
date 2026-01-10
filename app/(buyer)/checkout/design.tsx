@@ -1,17 +1,18 @@
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { View, Text, Pressable, StyleSheet, Alert, Image, FlatList, useWindowDimensions, Animated, RefreshControl, ScrollView } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
 import StepBar from '@/components/StepBar';
-import { useCheckout } from '@/lib/CheckoutContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { BRAND_COLOR } from '@/constants/theme';
 import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
+import { BRAND_COLOR } from '@/constants/theme';
 import { useCart } from '@/contexts/CartContext';
 import { useProducts } from '@/contexts/ProductsContext';
+import { useCheckout, type CardType } from '@/lib/CheckoutContext';
 import { calculateVendorShippingSync } from '@/lib/shipping-utils';
+import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Alert, Animated, FlatList, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-type CardLabel = 'Standard' | 'Premium' | 'Luxury';
+type CardLabel = 'Giftyy Card';
 
 type CardConfig = {
     label: CardLabel | string;
@@ -24,37 +25,15 @@ type CardConfig = {
     features: string[];
 };
 
-// Defaults, used when admin-provided config is not passed via route params
-const DEFAULT_CARDS: CardConfig[] = [
-    {
-        label: 'Standard',
-        bg: '#FFF3EC',
-        fg: '#111827',
-        accent: '#FDA566',
-        features: ['QR video message', '30-day storage', 'Premium print stock'],
-        price: '$4.99',
-        image: 'https://images.unsplash.com/photo-1518441982129-5bcf8f6dbfa0?q=80&w=1200&auto=format&fit=crop',
-    },
-    {
-        label: 'Premium',
-        bg: '#EEF2FF',
-        fg: '#111827',
-        accent: '#6366F1',
-        tag: 'Most popular',
-        features: ['Foil finish', 'Custom note inside', '90-day storage', 'Priority support'],
-        price: '$9.99',
-        image: 'https://images.unsplash.com/photo-1514369118554-e20d93546b30?q=80&w=1200&auto=format&fit=crop',
-    },
-    {
-        label: 'Luxury',
-        bg: '#111827',
-        fg: 'white',
-        accent: '#F59E0B',
-        features: ['Gold foil + emboss', 'Hardcover design', 'Velvet envelope', 'Lifetime storage'],
-        price: '$19.99',
-        image: 'https://images.unsplash.com/photo-1503602642458-232111445657?q=80&w=1200&auto=format&fit=crop',
-    },
-];
+// Giftyy Card design based on admin card template
+const GIFTYY_CARD: CardConfig = {
+    label: 'Giftyy Card',
+    bg: '#f75507', // Orange brand color
+    fg: 'white',
+    accent: '#f75507',
+    features: ['QR video message', 'Personal video greeting', 'Physical card included'],
+    price: '$2.99',
+};
 
 export default function DesignScreen() {
     const router = useRouter();
@@ -62,16 +41,19 @@ export default function DesignScreen() {
     const { items } = useCart();
     const { refreshProducts, refreshCollections } = useProducts();
     const [pressedCard, setPressedCard] = useState<CardLabel | null>(null);
+    const [isFlipped, setIsFlipped] = useState(false);
+    const flipAnimation = useRef(new Animated.Value(0)).current;
     const params = useLocalSearchParams<{ cards?: string }>();
     const { width } = useWindowDimensions();
     const gap = 10;
-    const cardWidth = Math.min(320, Math.round(width * 0.72));
+    const cardWidth = Math.min(360, Math.round(width * 0.85));
     const sidePadding = Math.max(12, Math.round((width - cardWidth) / 2));
     const listRef = useRef<FlatList<CardConfig>>(null);
     const scrollX = useRef(new Animated.Value(0)).current;
     const [currentIndex, setCurrentIndex] = useState(0);
     const { bottom } = useSafeAreaInsets();
     const [refreshing, setRefreshing] = useState(false);
+    const [showInfoModal, setShowInfoModal] = useState(false);
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -84,26 +66,54 @@ export default function DesignScreen() {
         }
     }, [refreshProducts, refreshCollections]);
 
-    // Allow admin-provided cards via route param ?cards=[{...}]
-    let cards: CardConfig[] = DEFAULT_CARDS;
-    if (typeof params.cards === 'string') {
-        try {
-            const parsed = JSON.parse(params.cards);
-            if (Array.isArray(parsed) && parsed.length) {
-                // Normalize minimal fields, fallback to defaults for colors
-                cards = parsed.map((c, idx) => ({
-                    label: c.label ?? `Card ${idx + 1}`,
-                    price: c.price ?? '$0.00',
-                    image: c.image,
-                    features: Array.isArray(c.features) ? c.features : [],
-                    bg: c.bg ?? DEFAULT_CARDS[idx % DEFAULT_CARDS.length].bg,
-                    fg: c.fg ?? DEFAULT_CARDS[idx % DEFAULT_CARDS.length].fg,
-                    accent: c.accent ?? DEFAULT_CARDS[idx % DEFAULT_CARDS.length].accent,
-                    tag: c.tag,
-                }));
-            }
-        } catch {}
-    }
+    const handleCardFlip = (cardLabel: CardLabel, cardPrice: number) => {
+        // Select the card
+        setCardType(cardLabel);
+        setCardPrice(cardPrice);
+        
+        // Flip the card
+        const toValue = isFlipped ? 0 : 1;
+        Animated.spring(flipAnimation, {
+            toValue,
+            friction: 8,
+            tension: 10,
+            useNativeDriver: true,
+        }).start();
+        setIsFlipped(!isFlipped);
+    };
+
+    const frontInterpolate = flipAnimation.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['0deg', '180deg'],
+    });
+
+    const backInterpolate = flipAnimation.interpolate({
+        inputRange: [0, 1],
+        outputRange: ['180deg', '360deg'],
+    });
+
+    const frontOpacity = flipAnimation.interpolate({
+        inputRange: [0, 0.5, 0.5, 1],
+        outputRange: [1, 1, 0, 0],
+    });
+
+    const backOpacity = flipAnimation.interpolate({
+        inputRange: [0, 0.5, 0.5, 1],
+        outputRange: [0, 0, 1, 1],
+    });
+
+    const frontAnimatedStyle = {
+        transform: [{ rotateY: frontInterpolate }],
+        opacity: frontOpacity,
+    };
+
+    const backAnimatedStyle = {
+        transform: [{ rotateY: backInterpolate }],
+        opacity: backOpacity,
+    };
+
+    // Use the Giftyy card design
+    const cards: CardConfig[] = [GIFTYY_CARD];
 
     const disabled = !cardType;
 
@@ -123,12 +133,11 @@ export default function DesignScreen() {
 
     const middleIndex = useMemo(() => Math.max(0, Math.floor(orderedCards.length / 2)), [orderedCards.length]);
 
-    // Ensure Premium is active by default if not set
+    // Ensure Giftyy Card is active by default if not set
     useEffect(() => {
         if (!cardType) {
-            const premium = orderedCards.find((c) => String(c.label).toLowerCase() === 'premium');
-            const chosen = (premium?.label as CardLabel) ?? (orderedCards[0]?.label as CardLabel);
-            setCardType(chosen);
+            const chosen = (orderedCards[0]?.label as CardLabel) ?? 'Giftyy Card';
+            setCardType(chosen as CardType);
             const chosenPrice = priceToNumber(orderedCards.find((c) => String(c.label) === String(chosen))?.price);
             setCardPrice(chosenPrice);
         }
@@ -199,10 +208,25 @@ export default function DesignScreen() {
             >
                 {/* Subheader with selection summary */}
                 <View style={{ paddingHorizontal: sidePadding, paddingTop: 6, paddingBottom: 2, flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
-                    <Text style={{ fontWeight: '900', fontSize: 18 }}>{String(cardType || 'Select a card')}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                        <Text style={{ fontWeight: '900', fontSize: 18 }}>{String(cardType || 'Giftyy Card')}</Text>
+                    </View>
                     {!!orderedCards[currentIndex] && (
                         <Text style={{ color: '#6b7280', fontWeight: '800' }}>{orderedCards[currentIndex].price}</Text>
                     )}
+                </View>
+                
+                {/* Info Button Section */}
+                <View style={{ paddingHorizontal: sidePadding, paddingTop: 8, paddingBottom: 8 }}>
+                    <Pressable 
+                        onPress={() => setShowInfoModal(true)}
+                        style={styles.infoButton}
+                    >
+                        <View style={styles.infoButtonContent}>
+                            <IconSymbol name="info.circle.fill" size={20} color="#374151" />
+                            <Text style={styles.infoButtonText}>Learn more about Giftyy Cards</Text>
+                        </View>
+                    </Pressable>
                 </View>
 
                 <Animated.FlatList
@@ -234,7 +258,7 @@ export default function DesignScreen() {
                     index = Math.max(0, Math.min(index, orderedCards.length - 1));
                     const label = orderedCards[index]?.label as CardLabel;
                     if (label && label !== cardType) {
-                        setCardType(label);
+                        setCardType(label as CardType);
                         setCardPrice(priceToNumber(orderedCards[index]?.price));
                     }
                     setCurrentIndex(index);
@@ -262,67 +286,93 @@ export default function DesignScreen() {
                     return (
                         <Animated.View style={{ transform: [{ scale }, { translateY }], opacity }}>
                         <Pressable
-                            onPress={() => { setCardType(c.label as CardLabel); setCardPrice(priceToNumber(c.price)); }}
+                            onPress={() => handleCardFlip(c.label as CardLabel, priceToNumber(c.price))}
                             onPressIn={() => setPressedCard(c.label as CardLabel)}
                             onPressOut={() => setPressedCard(null)}
                             style={[
                                 styles.cardOuter,
-                                { borderColor: isActive ? BRAND_COLOR : '#eee', backgroundColor: '#fff', width: cardWidth },
+                                { borderWidth: 0, backgroundColor: '#fff', width: cardWidth },
                                 isPressed && { transform: [{ scale: 0.98 }] },
                             ]}
                         >
-                            {!!c.tag && (
-                                <View style={[styles.tag, { backgroundColor: c.accent + '22' }]}>
-                                    <Text style={[styles.tagText, { color: c.accent }]}>{c.tag}</Text>
-                                </View>
-                            )}
-                            <View
-                                style={[
-                                    styles.cardVisual,
-                                    {
-                                        backgroundColor: c.bg,
-                                        shadowOpacity: isActive ? 0.18 : 0.08,
-                                        height: isActive ? 140 : 120,
-                                    },
-                                ]}
-                            >
-                                {/* Emphasis halo for active card (subtle 3D glow) */}
-                                {isActive && (
-                                    <View style={[styles.activeHalo, { backgroundColor: c.accent + '33' }]} />
-                                )}
-                                {c.image ? (
-                                    <>
-                                        <Image source={{ uri: c.image }} style={styles.cardImage} />
-                                        <View style={[styles.imageOverlay, { backgroundColor: c.fg === 'white' ? 'rgba(17,24,39,0.35)' : 'rgba(0,0,0,0.18)' }]} />
-                                        {/* Bottom content area for title and price */}
-                                        <View style={{ position: 'absolute', left: 12, right: 12, bottom: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                                            <Text style={{ color: c.fg, fontWeight: '900', fontSize: 18 }}>{c.label} Card</Text>
-                                            <View style={[styles.pricePill, { backgroundColor: c.accent }]}>
-                                                <Text style={{ color: c.fg === 'white' ? '#111827' : 'white', fontWeight: '900' }}>{c.price}</Text>
-                                            </View>
+                            <View style={[styles.cardContainer, { height: isActive ? 200 : 180 }]}>
+                                {/* Giftyy Card Design - Front */}
+                                <Animated.View
+                                    style={[
+                                        styles.giftyyCardFront,
+                                        styles.cardSide,
+                                        frontAnimatedStyle,
+                                        {
+                                            backgroundColor: c.bg,
+                                            shadowOpacity: isActive ? 0.18 : 0.08,
+                                        },
+                                    ]}
+                                >
+                                    {/* Card Header with Logo */}
+                                    <View style={styles.cardHeader}>
+                                        <View style={styles.logoContainer}>
+                                            <LinearGradient
+                                                colors={['#f75507', '#ff8c42']}
+                                                start={{ x: 0, y: 0 }}
+                                                end={{ x: 1, y: 1 }}
+                                                style={styles.logoOuter}
+                                            >
+                                                <View style={styles.logoBox}>
+                                                    <Image 
+                                                        source={require('@/assets/images/logo.png')} 
+                                                        style={styles.logoImg}
+                                                        resizeMode="contain"
+                                                    />
+                                                </View>
+                                            </LinearGradient>
+                                            <Text style={styles.logoText}>Giftyy</Text>
                                         </View>
-                                    </>
-                                ) : (
-                                    <>
-                                        <View style={{ position: 'absolute', top: -12, right: -12, width: 120, height: 120, borderRadius: 60, backgroundColor: c.accent + '33' }} />
-                                        <Text style={{ color: c.fg, fontWeight: '900', fontSize: 18 }}>{c.label} Card</Text>
-                                        <Text style={{ color: c.fg, marginTop: 4, opacity: 0.8 }}>Elegant, memorable keepsake</Text>
-                                    </>
-                                )}
-                                {/* Side knob accent inspired by reference */}
-                                <View style={[styles.sideKnob, { borderColor: c.accent, backgroundColor: 'white' }, isActive && { transform: [{ scale: 1.15 }] }]} />
+                                    </View>
+                                    
+                                    {/* Card Body with Giftyy Image */}
+                                    <View style={styles.cardBody}>
+                                        <Image 
+                                            source={require('@/assets/images/giftyy.png')} 
+                                            style={styles.giftyyImage}
+                                            resizeMode="contain"
+                                        />
+                                        <Text style={styles.cardFooter}>Something special is waiting for you.</Text>
+                                    </View>
+                                </Animated.View>
+
+                                {/* Giftyy Card Design - Back */}
+                                <Animated.View
+                                    style={[
+                                        styles.giftyyCardBack,
+                                        styles.cardSide,
+                                        backAnimatedStyle,
+                                        {
+                                            backgroundColor: c.bg,
+                                            shadowOpacity: isActive ? 0.18 : 0.08,
+                                        },
+                                    ]}
+                                >
+                                    {/* Back Header with Card Number */}
+                                    <View style={styles.backHeader}>
+                                        <Text style={styles.cardNumber}>GFT-XXXXXXXX</Text>
+                                    </View>
+                                    
+                                    {/* QR Code Section */}
+                                    <View style={styles.backQRSection}>
+                                        <View style={styles.qrCodeContainer}>
+                                            <Image 
+                                                source={{ 
+                                                    uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent('https://giftyy.store')}&bgcolor=ffffff&color=000000&margin=1`
+                                                }} 
+                                                style={styles.qrCodeImage}
+                                                resizeMode="contain"
+                                            />
+                                        </View>
+                                        <Text style={styles.qrInstruction}>Scan to unlock your message</Text>
+                                        <Text style={styles.qrInstructionSupport}>A personal video and surprise were made just for you.</Text>
+                                    </View>
+                                </Animated.View>
                             </View>
-                            {/* Show features only for the centered active card to reduce clutter */}
-                            {isActive && (
-                                <View style={{ paddingTop: 10, gap: 6 }}>
-                                    {c.features.slice(0, 4).map((f) => (
-                                        <View key={f} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                                            <IconSymbol name="checkmark.circle.fill" size={14} color={c.accent} />
-                                            <Text style={{ color: '#374151', fontWeight: '700', fontSize: 12 }}>{f}</Text>
-                                        </View>
-                                    ))}
-                                </View>
-                            )}
                         </Pressable>
                         </Animated.View>
                     );
@@ -346,7 +396,7 @@ export default function DesignScreen() {
                         return <Animated.View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#f75507', opacity: dotOpacity, transform: [{ scale: dotScale }] }} />;
                     })}
                 </View>
-                <View style={{ paddingHorizontal: sidePadding, marginTop: 12, marginBottom: 14 + bottom + BOTTOM_BAR_TOTAL_SPACE }}>
+                <View style={{ paddingHorizontal: sidePadding, marginTop: 12, marginBottom: 14 + bottom + BOTTOM_BAR_TOTAL_SPACE, gap: 12 }}>
                     <Pressable
                         onPress={() => {
                             if (disabled) {
@@ -359,8 +409,80 @@ export default function DesignScreen() {
                     >
                         <Text style={{ color: 'white', fontWeight: '800' }}>{`Continue with ${String(cardType || '').trim() || 'selection'}`}</Text>
                     </Pressable>
+                    <Pressable 
+                        style={{ alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 20 }}
+                        onPress={() => router.back()}
+                    >
+                        <Text style={{ color: '#6b7280', fontWeight: '700', fontSize: 15 }}>Back to cart</Text>
+                    </Pressable>
                 </View>
             </ScrollView>
+
+            {/* Info Modal */}
+            <Modal
+                visible={showInfoModal}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowInfoModal(false)}
+            >
+                <Pressable 
+                    style={styles.modalOverlay}
+                    onPress={() => setShowInfoModal(false)}
+                >
+                    <Pressable 
+                        style={styles.modalContent}
+                        onPress={(e) => e.stopPropagation()}
+                    >
+                        <View style={styles.modalHeader}>
+                            <View style={styles.modalIconContainer}>
+                                <IconSymbol name="info.circle.fill" size={32} color={BRAND_COLOR} />
+                            </View>
+                            <Text style={styles.modalTitle}>What is a Giftyy Card?</Text>
+                            <Pressable 
+                                onPress={() => setShowInfoModal(false)}
+                                style={styles.modalCloseButton}
+                            >
+                                <IconSymbol name="xmark.circle.fill" size={24} color="#9ca3af" />
+                            </Pressable>
+                        </View>
+                        
+                        <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                            <Text style={styles.modalText}>
+                                A Giftyy Card is a physical QR code card that comes with your gift order. When your recipient receives the gift, they can scan the QR code on the card to unlock your recorded video message and view their special surprise.
+                            </Text>
+                            
+                            <View style={styles.modalSection}>
+                                <Text style={styles.modalSectionTitle}>What's included:</Text>
+                                <View style={styles.modalList}>
+                                    <View style={styles.modalListItem}>
+                                        <IconSymbol name="checkmark.circle.fill" size={18} color={BRAND_COLOR} />
+                                        <Text style={styles.modalListItemText}>Physical QR code card</Text>
+                                    </View>
+                                    <View style={styles.modalListItem}>
+                                        <IconSymbol name="checkmark.circle.fill" size={18} color={BRAND_COLOR} />
+                                        <Text style={styles.modalListItemText}>Personal video message</Text>
+                                    </View>
+                                    <View style={styles.modalListItem}>
+                                        <IconSymbol name="checkmark.circle.fill" size={18} color={BRAND_COLOR} />
+                                        <Text style={styles.modalListItemText}>Shared memories and surprises</Text>
+                                    </View>
+                                </View>
+                            </View>
+
+                            <Text style={styles.modalText}>
+                                You will be able view the recipient's reaction to your gift and special message if they choose to share it.
+                            </Text>
+                        </ScrollView>
+
+                        <Pressable 
+                            style={styles.modalButton}
+                            onPress={() => setShowInfoModal(false)}
+                        >
+                            <Text style={styles.modalButtonText}>Got it</Text>
+                        </Pressable>
+                    </Pressable>
+                </Pressable>
+            </Modal>
         </View>
     );
 }
@@ -375,28 +497,257 @@ const styles = StyleSheet.create({
         shadowRadius: 16,
         elevation: 6,
     },
-    cardVisual: {
-        height: 120,
+    cardContainer: {
+        width: '100%',
+    },
+    cardSide: {
+        position: 'absolute',
+        width: '100%',
+        height: '100%',
+        backfaceVisibility: 'hidden',
+    },
+    giftyyCardFront: {
         borderRadius: 14,
-        alignItems: 'center',
-        justifyContent: 'center',
+        padding: 12,
         shadowColor: '#000',
         shadowRadius: 18,
         elevation: 8,
         overflow: 'hidden',
     },
-    cardImage: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0, width: '100%', height: '100%' },
-    imageOverlay: { position: 'absolute', left: 0, right: 0, top: 0, bottom: 0 },
-    tag: { alignSelf: 'flex-start', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 999 },
-    tagText: { fontWeight: '900', fontSize: 12 },
+    giftyyCardBack: {
+        borderRadius: 14,
+        padding: 12,
+        shadowColor: '#000',
+        shadowRadius: 18,
+        elevation: 8,
+        overflow: 'hidden',
+    },
+    cardHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 8,
+    },
+    logoContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    logoOuter: {
+        width: 32,
+        height: 32,
+        borderRadius: 10,
+        borderWidth: 2,
+        borderColor: '#f75507',
+        padding: 2,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
+    },
+    logoBox: {
+        width: '100%',
+        height: '100%',
+        backgroundColor: 'white',
+        borderRadius: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'hidden',
+    },
+    logoImg: {
+        width: '100%',
+        height: '100%',
+    },
+    logoText: {
+        fontSize: 18,
+        fontWeight: '600',
+        letterSpacing: -0.5,
+        color: 'white',
+    },
+    cardBody: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'flex-start',
+        gap: 4,
+        paddingTop: 5,
+    },
+    giftyyImage: {
+        maxWidth: 160,
+        maxHeight: 100,
+        width: '100%',
+        height: 'auto',
+        aspectRatio: 1.6,
+        marginTop: -5,
+    },
+    cardFooter: {
+        textAlign: 'center',
+        fontSize: 11,
+        color: 'rgba(255, 255, 255, 0.9)',
+        letterSpacing: 0.5,
+        fontWeight: '500',
+        marginTop: 0,
+    },
+    backHeader: {
+        flexDirection: 'row',
+        justifyContent: 'flex-end',
+        alignItems: 'flex-start',
+        position: 'absolute',
+        top: 12,
+        right: 12,
+        zIndex: 1,
+    },
+    cardNumber: {
+        fontFamily: 'Courier New',
+        fontSize: 9,
+        color: 'rgba(255, 255, 255, 0.9)',
+        textAlign: 'right',
+    },
+    backQRSection: {
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        marginTop: 15,
+    },
+    qrCodeContainer: {
+        width: 100,
+        height: 100,
+        backgroundColor: 'white',
+        padding: 6,
+        borderRadius: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 2,
+        elevation: 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    qrCodeImage: {
+        width: '100%',
+        height: '100%',
+    },
+    qrInstruction: {
+        fontSize: 9,
+        color: 'white',
+        fontWeight: '700',
+        textAlign: 'center',
+    },
+    qrInstructionSupport: {
+        fontSize: 7,
+        color: 'rgba(255, 255, 255, 0.9)',
+        fontWeight: '400',
+        textAlign: 'center',
+    },
     ctaBtn: { marginTop: 6, backgroundColor: BRAND_COLOR, paddingVertical: 14, borderRadius: 999, alignItems: 'center' },
-    pricePill: { position: 'absolute', bottom: 10, right: 10, paddingVertical: 4, paddingHorizontal: 10, borderRadius: 999 },
-    sideKnob: { position: 'absolute', left: -10, top: '50%', marginTop: -14, width: 28, height: 28, borderRadius: 14, borderWidth: 3 },
-    activeHalo: { position: 'absolute', left: -20, right: -20, top: -20, bottom: -20, borderRadius: 20, opacity: 0.5 },
     summaryCard: { marginBottom: 12, backgroundColor: 'white', borderWidth: 1, borderColor: '#eee', borderRadius: 14, padding: 12, gap: 6 },
     rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     muted: { color: '#6b7280', fontWeight: '700' },
     bold: { fontWeight: '800' },
+    modalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 20,
+    },
+    modalContent: {
+        backgroundColor: 'white',
+        borderRadius: 20,
+        width: '100%',
+        maxWidth: 400,
+        maxHeight: '80%',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
+    },
+    modalHeader: {
+        padding: 20,
+        paddingBottom: 16,
+        borderBottomWidth: 1,
+        borderBottomColor: '#f3f4f6',
+        alignItems: 'center',
+        position: 'relative',
+    },
+    modalIconContainer: {
+        marginBottom: 12,
+    },
+    modalTitle: {
+        fontSize: 22,
+        fontWeight: '900',
+        color: '#111827',
+        textAlign: 'center',
+    },
+    modalCloseButton: {
+        position: 'absolute',
+        top: 16,
+        right: 16,
+    },
+    modalBody: {
+        padding: 20,
+        maxHeight: 400,
+    },
+    modalText: {
+        fontSize: 15,
+        lineHeight: 22,
+        color: '#374151',
+        marginBottom: 16,
+    },
+    modalSection: {
+        marginTop: 8,
+        marginBottom: 16,
+    },
+    modalSectionTitle: {
+        fontSize: 17,
+        fontWeight: '800',
+        color: '#111827',
+        marginBottom: 12,
+    },
+    modalList: {
+        gap: 10,
+    },
+    modalListItem: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+    },
+    modalListItemText: {
+        fontSize: 15,
+        color: '#374151',
+        flex: 1,
+    },
+    modalButton: {
+        backgroundColor: BRAND_COLOR,
+        paddingVertical: 16,
+        borderBottomLeftRadius: 20,
+        borderBottomRightRadius: 20,
+        alignItems: 'center',
+    },
+    modalButtonText: {
+        color: 'white',
+        fontSize: 16,
+        fontWeight: '800',
+    },
+    infoButton: {
+        borderRadius: 12,
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+    },
+    infoButtonContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        justifyContent: 'center',
+    },
+    infoButtonText: {
+        color: '#374151',
+        fontSize: 13,
+        fontWeight: '400',
+        textDecorationLine: 'underline',
+    },
 });
 
 

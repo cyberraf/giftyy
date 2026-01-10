@@ -1,23 +1,27 @@
-import React, { useMemo, useState, useCallback } from 'react';
-import { View, Text, TextInput, StyleSheet, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, Pressable, RefreshControl } from 'react-native';
-import { useRouter } from 'expo-router';
-import StepBar from '@/components/StepBar';
 import BrandButton from '@/components/BrandButton';
-import { useCheckout } from '@/lib/CheckoutContext';
+import StepBar from '@/components/StepBar';
+import { EstimatedTotalsCard } from '@/components/checkout/EstimatedTotalsCard';
+import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { useCart } from '@/contexts/CartContext';
 import { useOrders } from '@/contexts/OrdersContext';
-import { useVideoMessages } from '@/contexts/VideoMessagesContext';
 import { useProducts } from '@/contexts/ProductsContext';
-import { calculateVendorShippingSync } from '@/lib/shipping-utils';
-import { BRAND_COLOR } from '@/constants/theme';
+import { supabase } from '@/lib/supabase';
+import { useVideoMessages } from '@/contexts/VideoMessagesContext';
+import { useCheckout } from '@/lib/CheckoutContext';
+import { calculateVendorShippingSync, calculateVendorShippingByZone } from '@/lib/shipping-utils';
+import * as FileSystem from 'expo-file-system/legacy';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useMemo, useState, useEffect } from 'react';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 export default function PaymentScreen() {
     const router = useRouter();
     const { items, clear: clearCart } = useCart();
-    const { payment, setPayment, cardType, cardPrice, recipient, notifyRecipient, videoUri, videoTitle, sharedMemoryId } = useCheckout();
+    const { payment, setPayment, cardType, cardPrice, recipient, notifyRecipient, localVideoUri, videoTitle, videoDurationMs, setVideoUri, sharedMemoryId, reset: resetCheckout } = useCheckout();
     const { createOrder, refreshOrders } = useOrders();
-    const { videoMessages } = useVideoMessages();
+    const { addVideoMessage } = useVideoMessages();
     const { refreshProducts, refreshCollections } = useProducts();
+    const [vendorNames, setVendorNames] = useState<Map<string, string>>(new Map());
 
     const [name, setName] = useState(payment.name);
     const [cardNumber, setCardNumber] = useState(payment.cardNumber);
@@ -25,6 +29,8 @@ export default function PaymentScreen() {
     const [cvv, setCvv] = useState(payment.cvv);
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const [shippingBreakdown, setShippingBreakdown] = useState<{ total: number; breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number }> }>({ total: 0, breakdown: [] });
+    const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -37,6 +43,54 @@ export default function PaymentScreen() {
         }
     }, [refreshProducts, refreshCollections, refreshOrders]);
 
+    // Fetch vendor names to display in breakdown
+    useEffect(() => {
+        const loadVendorNames = async () => {
+            const ids = Array.from(new Set(items.map(i => i.vendorId).filter(Boolean) as string[]));
+            const names = new Map<string, string>();
+
+            // Seed with names available on cart items
+            items.forEach(item => {
+                if (item.vendorId) {
+                    const existingName = item.vendorName || item.storeName;
+                    if (existingName) {
+                        names.set(item.vendorId, existingName);
+                    }
+                }
+            });
+
+            const missingIds = ids.filter(id => !names.has(id));
+            if (missingIds.length === 0) {
+                setVendorNames(names);
+                return;
+            }
+
+            try {
+                const { data, error } = await supabase
+                    .from('profiles')
+                    .select('id, store_name')
+                    .in('id', missingIds);
+
+                if (error) {
+                    console.error('[Payment] Error fetching vendor names:', error);
+                } else {
+                    data?.forEach(row => {
+                        if (row.id) {
+                            const storeName = row.store_name?.trim();
+                            if (storeName) names.set(row.id, storeName);
+                        }
+                    });
+                }
+            } catch (err) {
+                console.error('[Payment] Unexpected error fetching vendor names:', err);
+            }
+
+            setVendorNames(names);
+        };
+
+        loadVendorNames();
+    }, [items]);
+
     const parsePrice = (value?: string) => {
         if (!value) return 0;
         const cleaned = value.replace(/[^0-9.]/g, '');
@@ -46,11 +100,6 @@ export default function PaymentScreen() {
 
     const itemsSubtotal = useMemo(() => items.reduce((sum, item) => sum + parsePrice(item.price) * item.quantity, 0), [items]);
     const cardAddOn = cardPrice || 0;
-    const taxable = itemsSubtotal + cardAddOn;
-    // Calculate shipping based on vendors (cumulate shipping costs from all vendors)
-    const shipping = useMemo(() => {
-        return calculateVendorShippingSync(items, 4.99, 50);
-    }, [items]);
     const taxRate = useMemo(() => {
         const code = (recipient?.state || '').toUpperCase();
         switch (code) {
@@ -62,8 +111,130 @@ export default function PaymentScreen() {
             default: return 0.08;
         }
     }, [recipient?.state]);
-    const tax = taxable * taxRate;
-    const total = taxable + shipping + tax;
+
+    // Calculate shipping based on zones when recipient location is available (same as recipient screen)
+    useEffect(() => {
+        const calculateShipping = async () => {
+            const stateCode = recipient?.state;
+            const country = recipient?.country || 'United States';
+            
+            if (!stateCode || !country || items.length === 0) {
+                // Use default calculation if location not available
+                const DEFAULT_SHIPPING = 4.99;
+                const FREE_SHIPPING_THRESHOLD = 50;
+                
+                const itemsByVendor = new Map<string, typeof items>();
+                items.forEach(item => {
+                    const vendorId = item.vendorId || 'default';
+                    if (!itemsByVendor.has(vendorId)) {
+                        itemsByVendor.set(vendorId, []);
+                    }
+                    itemsByVendor.get(vendorId)!.push(item);
+                });
+
+                const breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number }> = [];
+                let totalShipping = 0;
+
+                itemsByVendor.forEach((vendorItems, vendorId) => {
+                    const vendorSubtotal = vendorItems.reduce((sum, item) => {
+                        const price = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
+                        return sum + price * item.quantity;
+                    }, 0);
+                    
+                    const itemCount = vendorItems.reduce((sum, item) => sum + item.quantity, 0);
+                    const shipping = vendorSubtotal >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING;
+                    totalShipping += shipping;
+
+                    let vendorName = 'Giftyy Store';
+                    if (vendorId !== 'default') {
+                        const fetchedName = vendorNames.get(vendorId);
+                        vendorName = fetchedName || `Vendor ${vendorId.slice(0, 8)}`;
+                    }
+
+                    breakdown.push({
+                        vendorId,
+                        vendorName,
+                        subtotal: vendorSubtotal,
+                        shipping,
+                        itemCount,
+                    });
+                });
+
+                setShippingBreakdown({ breakdown, total: totalShipping });
+                return;
+            }
+
+            setIsCalculatingShipping(true);
+            try {
+                const result = await calculateVendorShippingByZone(
+                    items,
+                    stateCode,
+                    country
+                );
+                setShippingBreakdown(result);
+            } catch (error) {
+                console.error('[PaymentScreen] Error calculating shipping:', error);
+                // Fallback to default calculation
+                const DEFAULT_SHIPPING = 4.99;
+                const FREE_SHIPPING_THRESHOLD = 50;
+                
+                const itemsByVendor = new Map<string, typeof items>();
+                items.forEach(item => {
+                    const vendorId = item.vendorId || 'default';
+                    if (!itemsByVendor.has(vendorId)) {
+                        itemsByVendor.set(vendorId, []);
+                    }
+                    itemsByVendor.get(vendorId)!.push(item);
+                });
+
+                const breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number }> = [];
+                let totalShipping = 0;
+
+                itemsByVendor.forEach((vendorItems, vendorId) => {
+                    const vendorSubtotal = vendorItems.reduce((sum, item) => {
+                        const price = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
+                        return sum + price * item.quantity;
+                    }, 0);
+                    
+                    const itemCount = vendorItems.reduce((sum, item) => sum + item.quantity, 0);
+                    const shipping = vendorSubtotal >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING;
+                    totalShipping += shipping;
+
+                    let vendorName = 'Giftyy Store';
+                    if (vendorId !== 'default') {
+                        const fetchedName = vendorNames.get(vendorId);
+                        vendorName = fetchedName || `Vendor ${vendorId.slice(0, 8)}`;
+                    }
+
+                    breakdown.push({
+                        vendorId,
+                        vendorName,
+                        subtotal: vendorSubtotal,
+                        shipping,
+                        itemCount,
+                    });
+                });
+
+                setShippingBreakdown({ breakdown, total: totalShipping });
+            } finally {
+                setIsCalculatingShipping(false);
+            }
+        };
+
+        calculateShipping();
+    }, [items, recipient?.state, recipient?.country, vendorNames]);
+
+    const shipping = shippingBreakdown.total;
+
+    const taxBreakdown = useMemo(() => {
+        const itemsTax = itemsSubtotal * taxRate;
+        const cardTax = cardAddOn * taxRate;
+        const totalTax = itemsTax + cardTax;
+        return { items: itemsTax, card: cardTax, total: totalTax };
+    }, [itemsSubtotal, cardAddOn, taxRate]);
+
+    const tax = taxBreakdown.total;
+    const total = itemsSubtotal + cardAddOn + shipping + tax;
     const totalItems = useMemo(() => items.reduce((sum, item) => sum + item.quantity, 0), [items]);
 
     const formatCurrency = (amount: number) => `$${amount.toFixed(2)}`;
@@ -95,11 +266,50 @@ export default function PaymentScreen() {
             // Extract last 4 digits of card number
             const last4 = cardNumber.replace(/\s/g, '').slice(-4);
             
-            // Find the video message ID if videoUri exists
+            // Upload video if localVideoUri exists (video was recorded but not yet uploaded)
             let videoMessageId: string | undefined;
-            if (videoUri) {
-                const videoMessage = videoMessages.find((vm) => vm.videoUrl === videoUri);
-                videoMessageId = videoMessage?.id;
+            if (localVideoUri && videoTitle) {
+                try {
+                    // Get file size
+                    let fileSizeBytes: number | undefined;
+                    try {
+                        const fileUri = localVideoUri.startsWith('file://') ? localVideoUri : `file://${localVideoUri}`;
+                        const fileInfo = await FileSystem.getInfoAsync(fileUri);
+                        if (fileInfo.exists && 'size' in fileInfo) {
+                            fileSizeBytes = fileInfo.size;
+                        }
+                    } catch (err) {
+                        console.warn('Could not get file size:', err);
+                    }
+
+                    // Convert duration from milliseconds to seconds
+                    const durationSeconds = videoDurationMs && videoDurationMs > 0 
+                        ? Math.round(videoDurationMs / 1000) 
+                        : undefined;
+
+                    // Upload video to Supabase Storage
+                    const { videoMessage, error: uploadError } = await addVideoMessage(
+                        localVideoUri,
+                        videoTitle.trim(),
+                        'sent', // Videos recorded by user are 'sent'
+                        undefined, // orderId - will be updated after order creation
+                        durationSeconds,
+                        fileSizeBytes,
+                    );
+
+                    if (uploadError || !videoMessage) {
+                        console.error('Error uploading video:', uploadError);
+                        // Continue without video if upload fails
+                        // In production, you might want to show an error and retry
+                    } else {
+                        videoMessageId = videoMessage.id;
+                        // Store the uploaded video URL in checkout context
+                        setVideoUri(videoMessage.videoUrl);
+                    }
+                } catch (err) {
+                    console.error('Unexpected error uploading video:', err);
+                    // Continue without video if upload fails
+                }
             }
 
             // Determine primary vendor ID if all items are from the same vendor
@@ -126,17 +336,18 @@ export default function PaymentScreen() {
 
             if (error || !order) {
                 console.error('Error creating order:', error);
-                // Still navigate to confirmation, but order creation failed
-                // In production, you'd want to show an error and retry
-            } else {
-                // Clear cart after successful order creation
-                clearCart();
+                Alert.alert('Payment failed', 'We could not place your order. Please try again.');
+                return;
             }
+
+            // Clear cart and reset checkout context after successful order creation
+            clearCart();
+            resetCheckout();
 
             // Navigate to confirmation with order ID
             router.push({
                 pathname: '/(buyer)/checkout/confirmation',
-                params: { orderId: order?.id || '' },
+                params: { orderId: order.id },
             });
         } catch (err) {
             console.error('Unexpected error during payment:', err);
@@ -157,21 +368,26 @@ export default function PaymentScreen() {
                         <RefreshControl
                             refreshing={refreshing}
                             onRefresh={onRefresh}
-                            tintColor={BRAND_COLOR}
-                            colors={[BRAND_COLOR]}
+                            tintColor={GIFTYY_THEME.colors.primary}
+                            colors={[GIFTYY_THEME.colors.primary]}
                         />
                     }
                 >
-                    <View style={styles.heroCard}>
-                        <Text style={styles.overline}>Secure checkout</Text>
-                        <Text style={styles.title}>Finalize your gift delivery</Text>
-                        <Text style={styles.subtitle}>You’re moments away from sending this surprise. We’ll keep your payment safe and confirm instantly.</Text>
-                    </View>
-
                     <View style={styles.columns}>
+                        <EstimatedTotalsCard
+                            itemsSubtotal={itemsSubtotal}
+                            cardAddOn={cardAddOn}
+                            shippingBreakdown={shippingBreakdown}
+                            taxBreakdown={taxBreakdown}
+                            total={total}
+                            taxRate={taxRate}
+                            formatCurrency={formatCurrency}
+                            isCalculatingShipping={isCalculatingShipping}
+                        />
+
                         <View style={styles.formCard}>
                             <View style={styles.secureBadge}>
-                                <Text style={{ fontSize: 13 }}>🔒</Text>
+                                <Text style={{ fontSize: GIFTYY_THEME.typography.sizes.sm }}>🔒</Text>
                                 <Text style={styles.secureText}>SSL secured • PCI compliant</Text>
                             </View>
                             <InputField
@@ -209,45 +425,20 @@ export default function PaymentScreen() {
                                 />
                             </View>
 
-                            <View style={styles.walletRow}>
-                                <Pressable style={[styles.walletButton, { backgroundColor: 'white', borderColor: '#E2E8F0' }]}>
-                                    <Text style={[styles.walletLabel, { color: '#0F172A' }]}> Pay</Text>
-                                </Pressable>
-                                <Pressable style={[styles.walletButton, { backgroundColor: 'white', borderColor: '#E2E8F0' }]}>
-                                    <Text style={[styles.walletLabel, { color: '#0F172A' }]}>G Pay</Text>
-                                </Pressable>
-                            </View>
-
                             <BrandButton
                                 title={loading ? 'Processing...' : `Pay ${formatCurrency(total)}`}
                                 onPress={onPay}
                                 disabled={loading}
-                                style={{ marginTop: 14 }}
+                                style={{ marginTop: GIFTYY_THEME.spacing.md }}
                             />
-                            {loading && <ActivityIndicator style={{ marginTop: 12 }} color="#f75507" />}
-                            <Text style={styles.finePrint}>By tapping pay you authorize Giftyy to charge this card for the total shown. You’ll receive an email confirmation immediately.</Text>
-                        </View>
-
-                        <View style={styles.summaryCard}>
-                            <Text style={styles.summaryTitle}>Order summary</Text>
-                            <View style={{ gap: 10 }}>
-                                <SummaryRow label="Items" value={`${totalItems} ${totalItems === 1 ? 'item' : 'items'}`} />
-                                <SummaryRow label="Card style" value={cardType || 'Premium'} />
-                                <SummaryRow label="Video greeting" value={videoUri ? 'Attached' : 'Not added'} valueStyle={{ color: videoUri ? '#15803D' : '#94A3B8' }} />
-                            </View>
-                            <View style={styles.divider} />
-                            <SummaryRow label="Items subtotal" value={formatCurrency(itemsSubtotal)} />
-                            <SummaryRow label="Card add-on" value={formatCurrency(cardAddOn)} />
-                            <SummaryRow label="Shipping" value={shipping === 0 ? 'Free' : formatCurrency(shipping)} />
-                            <SummaryRow label={`Estimated tax (${(taxRate * 100).toFixed(1)}%)`} value={formatCurrency(tax)} />
-                            <View style={{ marginTop: 14 }}>
-                                <SummaryRow label="Total due today" value={formatCurrency(total)} emphasize />
-                            </View>
-
-                            <View style={styles.supportBox}>
-                                <Text style={styles.supportTitle}>Need a hand?</Text>
-                                <Text style={styles.supportText}>Our gifting team is online at support@giftyy.com</Text>
-                            </View>
+                            {loading && <ActivityIndicator style={{ marginTop: GIFTYY_THEME.spacing.md }} color={GIFTYY_THEME.colors.primary} />}
+                            <Pressable 
+                                style={{ marginTop: GIFTYY_THEME.spacing.md, alignSelf: 'center', paddingVertical: GIFTYY_THEME.spacing.md, paddingHorizontal: GIFTYY_THEME.spacing.xl }}
+                                onPress={() => router.back()}
+                            >
+                                <Text style={{ color: GIFTYY_THEME.colors.gray500, fontWeight: GIFTYY_THEME.typography.weights.bold, fontSize: GIFTYY_THEME.typography.sizes.base }}>Back to memory</Text>
+                            </Pressable>
+                            <Text style={styles.finePrint}>By tapping pay you authorize Giftyy to charge this card for the total shown. You'll receive an email confirmation immediately.</Text>
                         </View>
                     </View>
                 </ScrollView>
@@ -272,7 +463,7 @@ function InputField({ label, style, ...props }: InputProps) {
                 {...props}
                 style={styles.input}
                 placeholderTextColor="rgba(148,163,184,0.7)"
-                selectionColor="#f75507"
+                selectionColor={GIFTYY_THEME.colors.primary}
             />
         </View>
     );
@@ -281,181 +472,128 @@ function InputField({ label, style, ...props }: InputProps) {
 function SummaryRow({ label, value, emphasize, valueStyle }: { label: string; value: string; emphasize?: boolean; valueStyle?: object }) {
     return (
         <View style={styles.summaryRow}>
-            <Text style={[styles.summaryLabel, emphasize && { fontSize: 16 }]}>{label}</Text>
-            <Text style={[styles.summaryValue, emphasize && { color: '#f75507', fontSize: 18 }, valueStyle]}>{value}</Text>
+            <Text style={[styles.summaryLabel, emphasize && { fontSize: GIFTYY_THEME.typography.sizes.md }]}>{label}</Text>
+            <Text style={[styles.summaryValue, emphasize && { color: GIFTYY_THEME.colors.primary, fontSize: GIFTYY_THEME.typography.sizes.lg }, valueStyle]}>{value}</Text>
         </View>
     );
 }
 
 const styles = StyleSheet.create({
     content: {
-        padding: 20,
-        paddingBottom: 34,
-        gap: 18,
-        backgroundColor: '#fff',
-    },
-    heroCard: {
-        backgroundColor: 'white',
-        padding: 18,
-        borderRadius: 18,
-        gap: 6,
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        shadowColor: '#0F172A',
-        shadowOpacity: 0.05,
-        shadowRadius: 18,
-        elevation: 2,
-    },
-    overline: {
-        color: '#64748B',
-        fontSize: 12,
-        letterSpacing: 1.2,
-        textTransform: 'uppercase',
-        fontWeight: '700',
-    },
-    title: {
-        color: '#0F172A',
-        fontSize: 26,
-        fontWeight: '900',
-    },
-    subtitle: {
-        color: '#475569',
-        fontSize: 15,
-        lineHeight: 22,
+        padding: GIFTYY_THEME.spacing.xl,
+        paddingBottom: 140,
+        gap: GIFTYY_THEME.spacing.lg,
+        backgroundColor: GIFTYY_THEME.colors.background,
     },
     columns: {
         flexDirection: 'column',
-        gap: 18,
+        gap: GIFTYY_THEME.spacing.lg,
     },
     formCard: {
-        backgroundColor: 'white',
-        borderRadius: 20,
-        padding: 20,
-        gap: 14,
+        backgroundColor: GIFTYY_THEME.colors.white,
+        borderRadius: GIFTYY_THEME.radius.xl,
+        padding: GIFTYY_THEME.spacing.xl,
+        gap: GIFTYY_THEME.spacing.md,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
-        shadowColor: '#0F172A',
-        shadowOpacity: 0.05,
-        shadowRadius: 18,
-        elevation: 2,
+        borderColor: GIFTYY_THEME.colors.gray200,
+        ...GIFTYY_THEME.shadows.sm,
     },
     secureBadge: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
+        gap: GIFTYY_THEME.spacing.sm,
         alignSelf: 'flex-start',
-        paddingHorizontal: 12,
+        paddingHorizontal: GIFTYY_THEME.spacing.md,
         paddingVertical: 6,
-        borderRadius: 999,
+        borderRadius: GIFTYY_THEME.radius.full,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
-        backgroundColor: '#F8FAFC',
+        borderColor: GIFTYY_THEME.colors.gray200,
+        backgroundColor: GIFTYY_THEME.colors.gray50,
     },
     secureText: {
-        color: '#0F172A',
-        fontWeight: '700',
-        fontSize: 12,
+        color: GIFTYY_THEME.colors.gray900,
+        fontWeight: GIFTYY_THEME.typography.weights.bold,
+        fontSize: GIFTYY_THEME.typography.sizes.sm,
         letterSpacing: 0.4,
     },
-    walletRow: {
-        flexDirection: 'row',
-        gap: 12,
-        marginTop: 4,
-    },
-    walletButton: {
-        flex: 1,
-        borderRadius: 14,
-        paddingVertical: 14,
-        alignItems: 'center',
-        borderWidth: 1,
-        borderColor: '#E2E8F0',
-        shadowColor: '#0F172A',
-        shadowOpacity: 0.02,
-        shadowRadius: 8,
-        elevation: 1,
-    },
-    walletLabel: {
-        color: '#0F172A',
-        fontWeight: '800',
-        fontSize: 15,
-        letterSpacing: 0.6,
-    },
     finePrint: {
-        color: '#64748B',
-        fontSize: 12,
+        color: GIFTYY_THEME.colors.gray500,
+        fontSize: GIFTYY_THEME.typography.sizes.sm,
         lineHeight: 18,
     },
     summaryCard: {
-        backgroundColor: 'white',
-        borderRadius: 20,
-        padding: 20,
+        backgroundColor: GIFTYY_THEME.colors.white,
+        borderRadius: GIFTYY_THEME.radius.xl,
+        padding: GIFTYY_THEME.spacing.xl,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
-        gap: 12,
-        shadowColor: '#0F172A',
-        shadowOpacity: 0.04,
-        shadowRadius: 16,
-        elevation: 2,
+        borderColor: GIFTYY_THEME.colors.gray200,
+        gap: GIFTYY_THEME.spacing.md,
+        ...GIFTYY_THEME.shadows.sm,
     },
     summaryTitle: {
-        color: '#0F172A',
-        fontWeight: '800',
-        fontSize: 16,
+        color: GIFTYY_THEME.colors.gray900,
+        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+        fontSize: GIFTYY_THEME.typography.sizes.md,
     },
     summaryRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
     },
+    summaryRowBetween: {
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+    },
     summaryLabel: {
-        color: '#475569',
-        fontWeight: '600',
+        color: GIFTYY_THEME.colors.gray600,
+        fontWeight: GIFTYY_THEME.typography.weights.semibold,
     },
     summaryValue: {
-        color: '#0F172A',
-        fontWeight: '800',
+        color: GIFTYY_THEME.colors.gray900,
+        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
     },
     divider: {
         height: 1,
-        backgroundColor: '#E2E8F0',
-        marginVertical: 8,
+        backgroundColor: GIFTYY_THEME.colors.gray200,
+        marginVertical: GIFTYY_THEME.spacing.sm,
     },
     supportBox: {
-        marginTop: 12,
-        padding: 14,
-        borderRadius: 14,
-        backgroundColor: '#F8FAFC',
+        marginTop: GIFTYY_THEME.spacing.md,
+        padding: GIFTYY_THEME.spacing.md,
+        borderRadius: GIFTYY_THEME.radius.lg,
+        backgroundColor: GIFTYY_THEME.colors.gray50,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
-        gap: 4,
+        borderColor: GIFTYY_THEME.colors.gray200,
+        gap: GIFTYY_THEME.spacing.xs,
     },
     supportTitle: {
-        color: '#0F172A',
-        fontWeight: '800',
-        fontSize: 14,
+        color: GIFTYY_THEME.colors.gray900,
+        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+        fontSize: GIFTYY_THEME.typography.sizes.base,
     },
     supportText: {
-        color: '#64748B',
-        fontSize: 13,
+        color: GIFTYY_THEME.colors.gray500,
+        fontSize: GIFTYY_THEME.typography.sizes.sm,
         lineHeight: 18,
     },
     inputGroup: {
         gap: 6,
     },
     inputLabel: {
-        color: '#0F172A',
-        fontWeight: '700',
+        color: GIFTYY_THEME.colors.gray900,
+        fontWeight: GIFTYY_THEME.typography.weights.bold,
     },
     input: {
-        borderRadius: 14,
+        borderRadius: GIFTYY_THEME.radius.lg,
         borderWidth: 1,
-        borderColor: '#E2E8F0',
-        backgroundColor: '#FFFFFF',
-        paddingHorizontal: 14,
-        paddingVertical: Platform.OS === 'ios' ? 14 : 10,
-        color: '#0F172A',
-        fontWeight: '600',
-        fontSize: 16,
+        borderColor: GIFTYY_THEME.colors.gray200,
+        backgroundColor: GIFTYY_THEME.colors.white,
+        paddingHorizontal: GIFTYY_THEME.spacing.md,
+        paddingVertical: Platform.OS === 'ios' ? GIFTYY_THEME.spacing.md : GIFTYY_THEME.spacing.sm,
+        color: GIFTYY_THEME.colors.gray900,
+        fontWeight: GIFTYY_THEME.typography.weights.semibold,
+        fontSize: GIFTYY_THEME.typography.sizes.md,
     },
 });
 

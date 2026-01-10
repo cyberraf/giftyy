@@ -66,29 +66,66 @@ if (typeof __DEV__ !== 'undefined' && __DEV__) {
 	console.log('  Platform:', Platform.OS);
 }
 
-if (!supabaseUrl || !supabaseAnonKey) {
-	console.warn('[Supabase] ⚠️ Environment variables not set!');
-	console.warn('[Supabase] Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to .env.local');
-	console.warn('[Supabase] Make sure to restart your Expo server after adding them.');
-}
+// Validate environment variables
+const hasValidConfig = !!(supabaseUrl && supabaseAnonKey && supabaseUrl.length > 10 && supabaseAnonKey.length > 10);
 
-// Create client with fallback empty strings (will fail gracefully if env vars are missing)
-export const supabase: SupabaseClient = createClient(
-	supabaseUrl ?? '', 
-	supabaseAnonKey ?? '', 
-	{
+let supabase: SupabaseClient;
+
+if (!hasValidConfig) {
+	const errorMessage = 
+		'\n' +
+		'═══════════════════════════════════════════════════════════════\n' +
+		'⚠️  SUPABASE ENVIRONMENT VARIABLES NOT CONFIGURED  ⚠️\n' +
+		'═══════════════════════════════════════════════════════════════\n' +
+		'\n' +
+		'Please create a .env.local file in the root directory with:\n' +
+		'\n' +
+		'  EXPO_PUBLIC_SUPABASE_URL=your_supabase_url\n' +
+		'  EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key\n' +
+		'\n' +
+		'After adding these variables:\n' +
+		'  1. Stop your Expo server (Ctrl+C)\n' +
+		'  2. Clear the cache: npx expo start --clear\n' +
+		'  3. Restart the server\n' +
+		'\n' +
+		'═══════════════════════════════════════════════════════════════\n';
+	
+	console.error(errorMessage);
+	
+	// Use placeholder values that have valid format but won't work
+	// This prevents the app from crashing at startup
+	const placeholderUrl = supabaseUrl || 'https://placeholder.supabase.co';
+	const placeholderKey = supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxOTIwMDAsImV4cCI6MTk2MDc2ODAwMH0.placeholder';
+	
+	supabase = createClient(placeholderUrl, placeholderKey, {
 		auth: {
 			storage: storage,
-			autoRefreshToken: true,
-			persistSession: true,
-			detectSessionInUrl: Platform.OS === 'web',
-			// For React Native, we handle URL detection manually
-			// For web, enable URL detection for OAuth flows
-			// Note: PKCE flow requires WebCrypto API which React Native doesn't support
-			// So we let it default to implicit flow for React Native
+			autoRefreshToken: false,
+			persistSession: false,
+			detectSessionInUrl: false,
 		},
-	}
-);
+	});
+} else {
+	// Create client with actual credentials
+	supabase = createClient(
+		supabaseUrl, 
+		supabaseAnonKey, 
+		{
+			auth: {
+				storage: storage,
+				autoRefreshToken: true,
+				persistSession: true,
+				detectSessionInUrl: Platform.OS === 'web',
+				// For React Native, we handle URL detection manually
+				// For web, enable URL detection for OAuth flows
+				// Note: PKCE flow requires WebCrypto API which React Native doesn't support
+				// So we let it default to implicit flow for React Native
+			},
+		}
+	);
+}
+
+export { supabase };
 
 // Export a function to verify the client is properly configured
 export function isSupabaseConfigured(): boolean {

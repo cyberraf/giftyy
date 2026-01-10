@@ -41,6 +41,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 	const [profile, setProfile] = useState<Profile | null>(null);
 	const [loading, setLoading] = useState(true);
 
+	const isEmailVerified = useCallback((u?: User | null) => {
+		const anyUser = u as any;
+		// Supabase returns `email_confirmed_at` (commonly) and/or `confirmed_at` depending on provider/version.
+		return !!(anyUser?.email_confirmed_at || anyUser?.confirmed_at);
+	}, []);
+
 	const fetchProfile = useCallback(async (userId: string) => {
 		try {
 			const { data, error } = await supabase
@@ -112,20 +118,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 	}, []);
 
 	useEffect(() => {
+		let cancelled = false;
+
 		// Get initial session
-		supabase.auth.getSession().then(({ data: { session } }) => {
+		(async () => {
+			const { data: { session } } = await supabase.auth.getSession();
+			if (cancelled) return;
+
+			// Never treat unverified users as authenticated; also clear any tokens if they exist.
+			if (session?.user && !isEmailVerified(session.user)) {
+				await supabase.auth.signOut();
+				if (cancelled) return;
+				setSession(null);
+				setUser(null);
+				setProfile(null);
+				setLoading(false);
+				return;
+			}
+
 			setSession(session);
 			setUser(session?.user ?? null);
 			if (session?.user) {
 				fetchProfile(session.user.id);
 			}
 			setLoading(false);
-		});
+		})();
 
 		// Listen for auth changes
 		const {
 			data: { subscription },
 		} = supabase.auth.onAuthStateChange(async (_event, session) => {
+			// Never treat unverified users as authenticated; also clear any tokens if they exist.
+			if (session?.user && !isEmailVerified(session.user)) {
+				await supabase.auth.signOut();
+				setSession(null);
+				setUser(null);
+				setProfile(null);
+				// If we know the email, route them to the verify screen.
+				if (session.user.email) {
+					router.replace(`/(auth)/verify-email?email=${encodeURIComponent(session.user.email)}`);
+				}
+				setLoading(false);
+				return;
+			}
+
 			setSession(session);
 			setUser(session?.user ?? null);
 			if (session?.user) {
@@ -136,8 +172,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			setLoading(false);
 		});
 
-		return () => subscription.unsubscribe();
-	}, [fetchProfile]);
+		return () => {
+			cancelled = true;
+			subscription.unsubscribe();
+		};
+	}, [fetchProfile, isEmailVerified]);
 
 	const signIn = useCallback(async (email: string, password: string) => {
 		try {
@@ -158,6 +197,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			}
 
 			if (data?.user) {
+				// Block unverified users from being authenticated in-app.
+				if (!isEmailVerified(data.user)) {
+					await supabase.auth.signOut();
+					const targetEmail = data.user.email ?? email;
+					router.replace(`/(auth)/verify-email?email=${encodeURIComponent(targetEmail)}`);
+					return {
+						error: {
+							name: 'EmailNotVerified',
+							message: 'Please verify your email before signing in.',
+						} as AuthError,
+					};
+				}
+
 				await fetchProfile(data.user.id);
 				router.replace('/(buyer)/(tabs)/home');
 			}
@@ -174,7 +226,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				} as AuthError,
 			};
 		}
-	}, [fetchProfile]);
+	}, [fetchProfile, isEmailVerified]);
 
 	const signInWithGoogle = useCallback(async () => {
 		try {
@@ -410,10 +462,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				};
 			}
 
+			// Supabase may not error for existing emails (to prevent account enumeration).
+			// In that case, it commonly returns a user with an empty `identities` array.
 			if (data?.user) {
-				// Profile is created automatically by trigger, but we can fetch it
-				await fetchProfile(data.user.id);
-				router.replace('/(buyer)/(tabs)/home');
+				const anyUser = data.user as any;
+				const identities = Array.isArray(anyUser?.identities) ? anyUser.identities : null;
+				if (identities && identities.length === 0) {
+					return {
+						error: {
+							name: 'UserAlreadyExists',
+							message: 'An account with this email already exists. Please sign in instead.',
+						} as AuthError,
+					};
+				}
+			}
+
+			if (data?.user) {
+				// Never auto-login after signup. If Supabase returned a session, clear it.
+				await supabase.auth.signOut();
 			}
 
 			return { error: null };
@@ -429,7 +495,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				} as AuthError,
 			};
 		}
-	}, [fetchProfile]);
+	}, []);
 
 	const resetPasswordForEmail = useCallback(async (email: string) => {
 		try {

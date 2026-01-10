@@ -1,28 +1,52 @@
--- Supabase migration: Allow buyers to read vendor store_name from profiles table
--- This allows buyers to see vendor store names in checkout and order details
+-- Supabase migration: Allow buyers and public users to read vendor profiles
+-- This allows buyers to see vendor store information on product details and vendor profile pages
+-- Public (unauthenticated) users can also view vendor profiles for public store browsing
 
 -- Enable RLS on profiles if not already enabled
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
 
--- Policy: Buyers can read vendor store information (id, store_name) for vendors
--- This is needed for displaying vendor store names in checkout, cart, and order details
--- Note: We allow any authenticated user to read vendor profiles since we're only exposing
--- vendor information (role = 'vendor'), not other buyers' private information
+-- Drop existing policies if they exist (for idempotency)
 DROP POLICY IF EXISTS "Buyers can read vendor store information" ON public.profiles;
+DROP POLICY IF EXISTS "Public can read vendor profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Users can read their own profile" ON public.profiles;
+
+-- Policy: Authenticated users (buyers) can read vendor profiles
+-- Fields accessible: id, store_name, profile_image_url, created_at, role
+-- This is needed for displaying vendor information in checkout, cart, order details, and product pages
 CREATE POLICY "Buyers can read vendor store information"
     ON public.profiles
     FOR SELECT
     USING (
         -- Allow if the profile is a vendor and user is authenticated
-        -- This is safe because we're only exposing vendor store information, not buyer data
+        -- This is safe because we're only exposing vendor public information, not buyer data
         role = 'vendor'
         AND auth.uid() IS NOT NULL
     );
 
--- Note: Users can always read their own profile (this should already exist, but we ensure it)
-DROP POLICY IF EXISTS "Users can read their own profile" ON public.profiles;
+-- Policy: Public (unauthenticated) users can read vendor profiles
+-- This allows visitors to view vendor store pages without logging in
+CREATE POLICY "Public can read vendor profiles"
+    ON public.profiles
+    FOR SELECT
+    USING (
+        -- Allow public access to vendor profiles only
+        role = 'vendor'
+    );
+
+-- Policy: Users can always read their own profile
+-- This ensures users can view their own profile regardless of role
 CREATE POLICY "Users can read their own profile"
     ON public.profiles
     FOR SELECT
     USING (id = auth.uid());
+
+-- Add comments for documentation
+COMMENT ON POLICY "Buyers can read vendor store information" ON public.profiles IS 
+'Allows authenticated users (buyers) to read vendor profile information including store name and profile image.';
+
+COMMENT ON POLICY "Public can read vendor profiles" ON public.profiles IS 
+'Allows unauthenticated users to read vendor profiles for public store pages.';
+
+COMMENT ON POLICY "Users can read their own profile" ON public.profiles IS 
+'Allows users to read their own profile regardless of role.';
 

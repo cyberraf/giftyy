@@ -1,21 +1,68 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, Pressable, Dimensions, Modal, ActivityIndicator, Share } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useCart } from '@/contexts/CartContext';
-import { useProducts } from '@/contexts/ProductsContext';
-import { supabase } from '@/lib/supabase';
-import BrandButton from '@/components/BrandButton';
-import { BRAND_COLOR } from '@/constants/theme';
+/**
+ * Premium Product Detail Page (PDP) Redesign
+ * Marketplace-quality shopping experience with Giftyy's emotional branding
+ */
+
 import AddedToCartDialog from '@/components/AddedToCartDialog';
+import { AccordionSection } from '@/components/pdp/AccordionSection';
+import { AddPersonalMessageButton } from '@/components/pdp/AddPersonalMessageButton';
+import { ProductMediaCarousel } from '@/components/pdp/ProductMediaCarousel';
+import { ProductVariantsSelector } from '@/components/pdp/ProductVariantsSelector';
+import { RecommendationsCarousel } from '@/components/pdp/RecommendationsCarousel';
+import { StickyBottomBar } from '@/components/pdp/StickyBottomBar';
+import { VendorInfoCard } from '@/components/pdp/VendorInfoCard';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { GIFTYY_THEME } from '@/constants/giftyy-theme';
+import { useCart } from '@/contexts/CartContext';
+import { useCategories } from '@/contexts/CategoriesContext';
+import { useProducts } from '@/contexts/ProductsContext';
 import { useWishlist } from '@/contexts/WishlistContext';
+import { useCheckout } from '@/lib/CheckoutContext';
 import { logProductAnalyticsEvent } from '@/lib/product-analytics';
+import { supabase } from '@/lib/supabase';
+import { getVendorsInfo } from '@/lib/vendor-utils';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+	ActivityIndicator,
+	Dimensions,
+	Pressable,
+	RefreshControl,
+	ScrollView,
+	Share,
+	StyleSheet,
+	Text,
+	View,
+} from 'react-native';
+import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-const BRAND = '#f75507';
-const { width } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// Tab bar height: 68px base + safe area bottom (8-34px)
+// StickyBottomBar will sit above the tab bar (reduced height)
+const TAB_BAR_HEIGHT = 68;
+const STICKY_BAR_HEIGHT = 70; // Reduced from 80px
+const TOTAL_BOTTOM_HEIGHT = TAB_BAR_HEIGHT + STICKY_BAR_HEIGHT; // Combined height of both bars
 
-type ProductOption = { name: string; values: string[] };
+// Types (preserved from original)
+type ProductVariation = {
+	id: string;
+	productId: string;
+	name?: string; // Attribute name (e.g., "Color", "Size")
+	price?: number;
+	priceModifier?: number; // Price modifier from database
+	sku?: string;
+	stockQuantity: number;
+	imageUrl?: string;
+	images?: string[]; // Images array from database
+	attributes: Record<string, string> | { options?: any[] }; // JSONB: {"options": [{"value": "Red", ...}]}
+	parsedOptions?: {
+		attributeName: string;
+		options: any[];
+	};
+	attrMap?: Record<string, string>; // Normalized attribute map
+};
+
 type VariationOption = {
 	value: string;
 	images?: string[];
@@ -23,226 +70,165 @@ type VariationOption = {
 	stockQuantity?: number;
 	sku?: string | null;
 };
-type ProductVariation = {
-	id: string;
-	productId: string;
-	name?: string;
-	price?: number;
-	sku?: string;
-	stockQuantity: number;
-	imageUrl?: string;
-	attributes: Record<string, string> | { options?: VariationOption[] };
-	// For nested options structure, we'll also store the parsed options
-	parsedOptions?: {
-		attributeName: string;
-		options: VariationOption[];
-	};
-};
 
 export default function ProductDetailsScreen() {
 	const router = useRouter();
 	const params = useLocalSearchParams<{ id?: string }>();
 	const productId = params.id;
 	const { top, bottom } = useSafeAreaInsets();
-	const headerPaddingTop = top + 6;
-	const headerTotalHeight = headerPaddingTop + 56;
-	// Add extra padding for bottom tab bar (typically ~60-80px) + safe area bottom + extra space
-	const bottomPadding = bottom + 100;
+	const { videoUri, setVideoUri } = useCheckout();
 
-	const { getProductById, products, loading: productsLoading } = useProducts();
+	const { getProductById, products, loading: productsLoading, refreshProducts } = useProducts();
+	const { categories, refreshCategories } = useCategories();
 	const product = productId ? getProductById(productId) : undefined;
 	const { isWishlisted, toggleWishlist } = useWishlist();
+	const { addItem } = useCart();
 	const viewLoggedRef = useRef<string | null>(null);
+	const [refreshing, setRefreshing] = useState(false);
+	const [showAdded, setShowAdded] = useState(false);
 
-	const [activeImage, setActiveImage] = useState(0);
+	// Vendor state
+	const [vendor, setVendor] = useState<{ id: string; storeName?: string; profileImageUrl?: string } | null>(null);
+	const [vendorLoading, setVendorLoading] = useState(false);
+
+	// Variation state
 	const [variations, setVariations] = useState<ProductVariation[]>([]);
 	const [variationsLoading, setVariationsLoading] = useState(false);
 	const [selectedVariation, setSelectedVariation] = useState<ProductVariation | null>(null);
+	const [selected, setSelected] = useState<Record<string, string>>({});
+
 	const isInWishlist = product ? isWishlisted(product.id) : false;
 
-	const getFirstImageUri = (raw?: string) => {
-		if (!raw) return null;
+	// Refresh handler
+	const onRefresh = useCallback(async () => {
+		setRefreshing(true);
 		try {
-			const parsed = JSON.parse(raw);
-			if (Array.isArray(parsed) && parsed.length > 0) {
-				return parsed[0];
-			}
-		} catch {
-			// not JSON array, treat as direct uri
+			await Promise.all([refreshProducts(), refreshCategories()]);
+		} catch (error) {
+			console.error('Error refreshing product data:', error);
+		} finally {
+			setRefreshing(false);
 		}
-		return raw;
-	};
+	}, [refreshProducts, refreshCategories]);
 
-	const sharePreviewImage = useMemo(() => {
-		if (selectedVariation?.imageUrl) {
-			const uri = getFirstImageUri(selectedVariation.imageUrl);
-			if (uri) {
-				return uri;
-			}
-		}
-		if (product?.imageUrl) {
-			return getFirstImageUri(product.imageUrl);
-		}
-		return imageUris[0] ?? null;
-	}, [product, selectedVariation, imageUris]);
-
+	// Log product view
 	useEffect(() => {
 		if (!product?.id) return;
 		if (viewLoggedRef.current === product.id) return;
 		viewLoggedRef.current = product.id;
-
 		logProductAnalyticsEvent({
 			productId: product.id,
 			eventType: 'view',
 		});
 	}, [product?.id]);
 
-	const handleShare = async () => {
-		if (!product) {
-			return;
+	// Fetch vendor information
+	useEffect(() => {
+		const fetchVendor = async () => {
+			if (!product?.vendorId) {
+				setVendor(null);
+				return;
+			}
+
+			try {
+				setVendorLoading(true);
+				const vendors = await getVendorsInfo([product.vendorId]);
+				const vendorData = vendors.get(product.vendorId);
+				if (vendorData) {
+					setVendor({
+						id: vendorData.id,
+						storeName: vendorData.storeName,
+						profileImageUrl: vendorData.profileImageUrl,
+					});
+				}
+			} catch (err) {
+				console.error('[ProductDetails] Error fetching vendor:', err);
+				setVendor(null);
+			} finally {
+				setVendorLoading(false);
+			}
+		};
+
+		fetchVendor();
+	}, [product?.vendorId]);
+
+	// Helpers to normalize variation attributes coming from different shapes
+	// The attributes field is JSONB with structure: {"options": [{"value": "Red", "sku": null, "image": "..."}]}
+	// The variation's "name" field (e.g., "Color") is the attribute name
+	const normalizeAttributes = useCallback((raw: any, variationName?: string): Record<string, string> => {
+		const attrs: Record<string, string> = {};
+
+		if (!raw) return attrs;
+
+		// If stored as JSON string, parse it
+		let value = raw;
+		if (typeof value === 'string') {
+			try {
+				value = JSON.parse(value);
+			} catch {
+				value = raw;
+			}
 		}
 
-		try {
-			const shareUrl = `https://giftyy.com/products/${product.id}`;
-			const result = await Share.share({
-				title: product.name,
-				message: `Check out "${product.name}" on Giftyy: ${shareUrl}`,
-				url: sharePreviewImage || shareUrl,
-			});
+			// Case 1: { format: "combination", attributes: [...], combinations: [...] }
+		// This is the combination format with attribute definitions and their combinations
+		if (typeof value === 'object' && !Array.isArray(value) && value.format === 'combination') {
+			// For combination format, we don't normalize to a simple key-value map
+			// Instead, we return the full structure for later processing
+			// The normalization will happen when building variantAttributes
+			return value as any;
+		}
 
-			if (result.action === Share.sharedAction) {
-				logProductAnalyticsEvent({
-					productId: product.id,
-					eventType: 'share',
-					metadata: {
-						shareUrl,
-					},
+		// Case 2: { options: [...] } - This is the structure from product_variations table
+		// Each option has {value, sku, image} and the attribute name comes from variation.name
+		if (typeof value === 'object' && !Array.isArray(value) && 'options' in value && Array.isArray((value as any).options)) {
+			const options = (value as any).options;
+			// If there's only one option and we have a variation name, use it
+			if (options.length > 0 && variationName) {
+				// For single-option variations, use the variation name as the key
+				const firstOption = options[0];
+				if (firstOption?.value !== undefined && firstOption?.value !== null) {
+					attrs[variationName] = String(firstOption.value);
+				}
+			} else {
+				// Multiple options - each should have an attribute name
+				options.forEach((opt: any) => {
+					const key = opt?.attribute || opt?.attributeName || opt?.name || variationName;
+					const val = opt?.value;
+					if (key && val !== undefined && val !== null) {
+						attrs[key] = String(val);
+					}
 				});
 			}
-		} catch (error) {
-			console.warn('[Product] Share failed', error);
+			return attrs;
 		}
-	};
 
-	const handleWishlistToggle = () => {
-		if (!product) {
-			return;
-		}
-		toggleWishlist(product.id);
-	};
-
-
-	// Image handling - collect ALL images from product and ALL variations
-	const imageUris: string[] = useMemo(() => {
-		if (!product) return [];
-		
-		let images: string[] = [];
-		
-		// Get product images from imageUrl (can be JSON string or single URL)
-		if (product.imageUrl) {
-			try {
-				const parsed = JSON.parse(product.imageUrl);
-				if (Array.isArray(parsed)) {
-					images = parsed.filter(Boolean); // Show ALL images, no limit
-				} else if (typeof parsed === 'string') {
-					images = [parsed];
-				} else {
-					images = [product.imageUrl];
+		// Case 3: simple key/value object
+		if (typeof value === 'object' && !Array.isArray(value) && !('options' in value) && value.format !== 'combination') {
+			Object.entries(value).forEach(([k, v]) => {
+				if (k && v !== undefined && v !== null) {
+					attrs[k] = String(v);
 				}
-			} catch {
-				// Not JSON, treat as single image URL
-				images = [product.imageUrl];
-			}
-		}
-		
-		// Collect images from ALL variations (not just selected one)
-		variations.forEach(variation => {
-			if (variation.imageUrl) {
-				let variationImages: string[] = [];
-				try {
-					// Check if variation imageUrl is a JSON array
-					const parsed = JSON.parse(variation.imageUrl);
-					if (Array.isArray(parsed)) {
-						variationImages = parsed.filter(Boolean);
-					} else {
-						variationImages = [variation.imageUrl];
-					}
-				} catch {
-					// Single image URL
-					variationImages = [variation.imageUrl];
-				}
-				images.push(...variationImages);
-			}
-		});
-		
-		// If a variation is selected and has images, prioritize them at the beginning
-		if (selectedVariation?.imageUrl) {
-			let selectedVariationImages: string[] = [];
-			try {
-				const parsed = JSON.parse(selectedVariation.imageUrl);
-				if (Array.isArray(parsed)) {
-					selectedVariationImages = parsed.filter(Boolean);
-				} else {
-					selectedVariationImages = [selectedVariation.imageUrl];
-				}
-			} catch {
-				selectedVariationImages = [selectedVariation.imageUrl];
-			}
-			
-			// Move selected variation images to the front
-			const otherImages = images.filter(img => !selectedVariationImages.includes(img));
-			images = [...selectedVariationImages, ...otherImages];
-		}
-		
-		// Remove any duplicates and empty strings
-		images = Array.from(new Set(images.filter(Boolean)));
-		
-		return images;
-	}, [product, variations, selectedVariation]);
-
-	// Calculate pricing (use variation price if selected, otherwise product price)
-	const basePrice = useMemo(() => {
-		// If a variation is selected and has a price, use that
-		if (selectedVariation?.price !== undefined && selectedVariation.price !== null) {
-			console.log('[Product] Using variation price:', selectedVariation.price);
-			return selectedVariation.price;
-		}
-		// Otherwise use product price
-		const productPrice = product?.price || 0;
-		console.log('[Product] Using product price:', productPrice);
-		return productPrice;
-	}, [selectedVariation, product]);
-
-	const discountedPrice = useMemo(() => {
-		if (!product || basePrice === 0) return 0;
-		
-		// Apply product discount percentage to the base price
-		if (product.discountPercentage > 0) {
-			const discounted = basePrice * (1 - product.discountPercentage / 100);
-			console.log('[Product] Price calculation:', {
-				basePrice,
-				discountPercentage: product.discountPercentage,
-				discountedPrice: discounted,
-				variationSelected: !!selectedVariation
 			});
-			return discounted;
+			return attrs;
 		}
-		
-		return basePrice;
-	}, [product, basePrice, selectedVariation]);
 
-	const formattedPrice = useMemo(() => {
-		return `$${discountedPrice.toFixed(2)}`;
-	}, [discountedPrice]);
+		// Case 4: array of attribute objects
+		if (Array.isArray(value)) {
+			value.forEach((opt: any) => {
+				const key = opt?.attribute || opt?.attributeName || opt?.name || variationName;
+				const val = opt?.value;
+				if (key && val !== undefined && val !== null) {
+					attrs[key] = String(val);
+				}
+			});
+			return attrs;
+		}
 
-	const formattedOriginalPrice = useMemo(() => {
-		if (!product || product.discountPercentage === 0) return null;
-		
-		// Show the original base price before discount (this is the price used for calculation)
-		return `$${basePrice.toFixed(2)}`;
-	}, [product, basePrice]);
+		return attrs;
+	}, []);
 
-	// Fetch product variations from separate table
+	// Fetch product variations (preserve original logic)
 	useEffect(() => {
 		if (!productId) {
 			setVariations([]);
@@ -253,208 +239,97 @@ export default function ProductDetailsScreen() {
 		const fetchVariations = async () => {
 			setVariationsLoading(true);
 			try {
-				// Check if Supabase is configured
-				const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
-				const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-				
-				if (!supabaseUrl || !supabaseKey) {
-					console.warn('[Product] Supabase not configured. Skipping variations fetch.');
-					setVariations([]);
-					setVariationsLoading(false);
-					return;
-				}
-
-				console.log('[Product] Fetching variations for product_id:', productId);
-
-				const { data, error } = await supabase
+				// Try fetching variations - first without is_active filter in case that column doesn't exist
+				let { data, error } = await supabase
 					.from('product_variations')
 					.select('*')
 					.eq('product_id', productId)
-					.eq('is_active', true)
 					.order('display_order', { ascending: true })
 					.order('created_at', { ascending: true });
 
-				console.log('[Product] Variations query result:', { 
-					dataLength: data?.length || 0, 
-					error: error ? { code: error.code, message: error.message } : null,
-					rawData: data 
-				});
+				// If error, try without is_active filter
+				if (error && error.code !== 'PGRST205') {
+					console.warn('[Product] Error with is_active filter, trying without:', error);
+					const retry = await supabase
+						.from('product_variations')
+						.select('*')
+						.eq('product_id', productId)
+						.order('created_at', { ascending: true });
+					
+					if (!retry.error) {
+						data = retry.data;
+						error = null;
+					} else {
+						error = retry.error;
+					}
+				}
+
+				// Filter by is_active if the column exists and data was fetched
+				if (data && data.length > 0 && data[0].hasOwnProperty('is_active')) {
+					data = data.filter((row: any) => row.is_active !== false);
+				}
 
 				if (error) {
-					// If table doesn't exist (PGRST205), just log and continue without variations
-					if (error.code === 'PGRST205' || error.message?.includes('Could not find the table') || error.message?.includes('product_variations')) {
-						console.log('[Product] ❌ Product variations table not found. Please run the migration: supabase-migrations-product-variations.sql');
-						console.log('[Product] Error details:', { code: error.code, message: error.message });
-						setVariations([]);
-					} else if (error.code === '42501' || error.message?.includes('permission') || error.message?.includes('policy')) {
-						console.error('[Product] ❌ RLS Policy Error: You may not have permission to read product_variations. Check RLS policies.');
-						console.error('[Product] Error details:', { code: error.code, message: error.message });
-						setVariations([]);
-					} else {
-						console.error('[Product] ❌ Error fetching product variations:', error);
-						setVariations([]);
+					console.error('[Product] Error fetching variations:', error);
+					if (error.code === 'PGRST205') {
+						console.log('[Product] Product variations table not found.');
 					}
+					setVariations([]);
 				} else {
+					console.log('[Product] Fetched variations:', data?.length || 0, 'variations');
+					console.log('[Product] Raw variation data:', JSON.stringify(data, null, 2));
+					
 					const mappedVariations: ProductVariation[] = (data || []).map((row: any) => {
-						// Parse attributes - handle both flat structure and nested options structure
-						let attributes: Record<string, string> | { options?: VariationOption[] } = {};
-						let parsedOptions: { attributeName: string; options: VariationOption[] } | undefined = undefined;
-						
-						console.log('[Product] Raw row.attributes:', {
-							value: row.attributes,
-							type: typeof row.attributes,
-							hasOptions: row.attributes && typeof row.attributes === 'object' && 'options' in row.attributes,
-							isArray: Array.isArray(row.attributes),
-						});
-						
-						if (row.attributes) {
-							let parsed: any = null;
-							
-							if (typeof row.attributes === 'string') {
-								try {
-									parsed = JSON.parse(row.attributes);
-									console.log('[Product] Parsed from string:', parsed);
-								} catch (e) {
-									console.warn('[Product] Failed to parse attributes as JSON:', row.attributes, e);
-									attributes = {};
-								}
-							} else if (typeof row.attributes === 'object' && !Array.isArray(row.attributes)) {
-								parsed = row.attributes;
-								console.log('[Product] Using attributes as-is (already object):', parsed);
+						// Parse attributes if it's a JSON string
+						let attributes = row.attributes ?? {};
+						if (typeof attributes === 'string') {
+							try {
+								attributes = JSON.parse(attributes);
+							} catch {
+								console.warn('[Product] Failed to parse attributes JSON:', row.attributes);
+								attributes = {};
 							}
-							
-							if (parsed) {
-								console.log('[Product] Checking parsed structure:', {
-									hasOptions: 'options' in parsed,
-									optionsIsArray: parsed.options && Array.isArray(parsed.options),
-									optionsLength: parsed.options ? parsed.options.length : 0,
-									parsedType: typeof parsed,
-									parsedKeys: Object.keys(parsed),
-								});
-								
-								// Check if it's the nested options structure: { "options": [...] }
-								// Handle both direct options array and nested structure
-								const hasOptionsArray = parsed.options && Array.isArray(parsed.options) && parsed.options.length > 0;
-								if (hasOptionsArray) {
-									console.log('[Product] ✅ Found nested options structure with', parsed.options.length, 'options');
-									attributes = parsed;
-									
-									// Extract attribute name from variation name (e.g., "Color: Red" -> "Color")
-									// or use a default like "Option" or try to infer from context
-									let attributeName = 'Option';
-									if (row.name) {
-										const nameParts = row.name.split(':');
-										if (nameParts.length > 0 && nameParts[0].trim()) {
-											attributeName = nameParts[0].trim();
-										}
-									}
-									
-									// If we still don't have a good name, try to infer from the first option's context
-									// or use a generic name like "Color" if all options look like colors
-									if (attributeName === 'Option' && parsed.options.length > 0) {
-										// Could add logic here to detect common attribute types
-										attributeName = 'Color'; // Default to Color for now
-									}
-									
-									parsedOptions = {
-										attributeName,
-										options: parsed.options.map((opt: any) => ({
-											value: opt.value || '',
-											images: opt.images || [],
-											priceModifier: opt.priceModifier,
-											stockQuantity: opt.stockQuantity,
-											sku: opt.sku,
-										})),
-									};
-									
-									console.log('[Product] ✅ Created parsedOptions:', {
-										attributeName: parsedOptions.attributeName,
-										optionsCount: parsedOptions.options.length,
-										optionValues: parsedOptions.options.map(o => o.value),
-									});
-								} else if (typeof parsed === 'object' && !Array.isArray(parsed) && !parsed.options) {
-									// Flat structure: { "Color": "Red", "Size": "Large" }
-									console.log('[Product] Using flat structure');
-									attributes = parsed;
-								} else {
-									console.warn('[Product] Parsed structure does not match expected formats:', parsed);
-								}
-							}
-						} else {
-							console.log('[Product] No attributes found in row');
 						}
 						
-						console.log('[Product] Parsed attributes for variation:', {
-							variationId: row.id,
-							rawAttributes: row.attributes,
-							parsedAttributes: attributes,
+						// Parse parsed_options if it's a JSON string
+						let parsedOptions = row.parsed_options ?? undefined;
+						if (parsedOptions && typeof parsedOptions === 'string') {
+							try {
+								parsedOptions = JSON.parse(parsedOptions);
+							} catch {
+								console.warn('[Product] Failed to parse parsed_options JSON:', row.parsed_options);
+								parsedOptions = undefined;
+							}
+						}
+						
+						console.log('[Product] Mapped variation:', {
+							id: row.id,
+							attributes,
 							parsedOptions,
-							attributeKeys: parsedOptions ? [parsedOptions.attributeName] : Object.keys(attributes)
+							rawAttributes: row.attributes,
+							rawParsedOptions: row.parsed_options,
 						});
-						
-						// Handle variation image - support both single URL and JSON array
-						let imageUrl: string | undefined = undefined;
-						if (row.image_url) {
-							if (typeof row.image_url === 'string') {
-								// Check if it's a JSON string
-								try {
-									const parsed = JSON.parse(row.image_url);
-									if (Array.isArray(parsed) && parsed.length > 0) {
-										// If it's an array, use the first image or stringify for the component to handle
-										imageUrl = JSON.stringify(parsed);
-									} else {
-										imageUrl = row.image_url;
-									}
-								} catch {
-									// Not JSON, treat as single URL
-									imageUrl = row.image_url;
-								}
-							} else if (Array.isArray(row.image_url) && row.image_url.length > 0) {
-								// If it's already an array (from JSONB), stringify it
-								imageUrl = JSON.stringify(row.image_url);
-							}
-						}
 						
 						return {
 							id: row.id,
 							productId: row.product_id,
-							name: row.name || undefined,
+							name: row.name || undefined, // Attribute name (e.g., "Color")
 							price: row.price ? parseFloat(String(row.price)) : undefined,
+							priceModifier: row.price_modifier ? parseFloat(String(row.price_modifier)) : undefined,
 							sku: row.sku || undefined,
 							stockQuantity: row.stock_quantity || 0,
-							imageUrl,
+							imageUrl: row.image_url,
+							images: row.images || undefined, // Array of image URLs
 							attributes,
 							parsedOptions,
 						};
 					});
-					
-					console.log('[Product] ✅ Successfully fetched variations:', mappedVariations.length);
-					console.log('[Product] Mapped variations:', JSON.stringify(mappedVariations, null, 2));
 					setVariations(mappedVariations);
-					
-					// Don't auto-select a variation - let user choose Default (base product) or a variation
-					if (mappedVariations.length > 0) {
-						console.log('[Product] Variations loaded. User can select Default (base product) or a variation.');
-						// Start with Default selected (base product, no variation)
-						setSelectedVariation(null);
-						// Set Default for the first attribute if we have options
-						if (mappedVariations[0].parsedOptions) {
-							setSelected({ [mappedVariations[0].parsedOptions.attributeName]: 'Default' });
-						} else {
-							setSelected({});
-						}
-					} else {
-						console.log('[Product] ⚠️ No variations found for this product');
-						setSelectedVariation(null);
-						setSelected({});
-					}
+					setSelectedVariation(null);
+					setSelected({});
 				}
-			} catch (err: any) {
-				console.error('[Product] Unexpected error fetching variations:', err);
-				// Handle network errors gracefully
-				if (err?.message?.includes('Network request failed') || err?.message?.includes('fetch')) {
-					console.warn('[Product] Network error. Check your internet connection and Supabase configuration.');
-				}
+			} catch (err) {
+				console.error('[Product] Error fetching variations:', err);
 				setVariations([]);
 			} finally {
 				setVariationsLoading(false);
@@ -464,675 +339,819 @@ export default function ProductDetailsScreen() {
 		fetchVariations();
 	}, [productId]);
 
-	// Build options from variations
-	const options: ProductOption[] = useMemo(() => {
-		if (variations.length === 0) {
-			console.log('[Product] ⚠️ No variations available - cannot build options');
+	// Normalize all variations with attribute maps
+	// Each variation has a "name" field (e.g., "Color") which is the attribute name
+	// The attributes field contains {"options": [{"value": "Red", ...}]}
+	const normalizedVariations = useMemo(() => {
+		const normalized = variations.map((v) => {
+			// Pass the variation name to help normalizeAttributes understand the structure
+			const attrMap = normalizeAttributes(v.attributes || v.parsedOptions || {}, v.name);
+			console.log('[Product] Normalizing variation:', {
+				id: v.id,
+				name: v.name,
+				attributes: v.attributes,
+				parsedOptions: v.parsedOptions,
+				attrMap,
+			});
+			return { ...v, attrMap };
+		});
+		console.log('[Product] Normalized variations:', normalized.length, 'variations');
+		return normalized;
+	}, [variations, normalizeAttributes]);
+
+	// Build variant attributes for ProductVariantsSelector
+	// Database structure: Each variation row represents ONE attribute (e.g., "Color")
+	// with MULTIPLE options in attributes.options array:
+	// {"options": [{"value": "Red", "priceModifier": 29, "stockQuantity": 20, "images": [...]}, ...]}
+	const variantAttributes = useMemo(() => {
+		if (normalizedVariations.length === 0) {
+			console.log('[Product] No normalized variations, returning empty variantAttributes');
 			return [];
 		}
 
-		console.log('[Product] Building options from', variations.length, 'variations');
-		console.log('[Product] Variations:', variations.map(v => ({ 
-			id: v.id, 
-			attributes: v.attributes,
-			parsedOptions: v.parsedOptions 
-		})));
-
-		// Extract unique attribute names and their values from variations
-		const attributeMap = new Map<string, Set<string>>();
+		console.log('[Product] Building variantAttributes from', normalizedVariations.length, 'variations');
 		
-		variations.forEach((variation, index) => {
-			console.log(`[Product] Processing variation ${index + 1}:`, {
-				id: variation.id,
-				attributes: variation.attributes,
-				parsedOptions: variation.parsedOptions,
+		const baseProductPrice = product?.price || 0;
+		
+		// Handle combination format variations
+		// Check if any variation uses the combination format
+		const hasCombinationFormat = normalizedVariations.some((v) => {
+			const attrs = v.attributes;
+			return attrs && typeof attrs === 'object' && attrs.format === 'combination';
+		});
+
+		if (hasCombinationFormat) {
+			// Process combination format
+			// Find the variation with combination format
+			const combinationVariation = normalizedVariations.find((v) => {
+				const attrs = v.attributes;
+				return attrs && typeof attrs === 'object' && attrs.format === 'combination';
 			});
-			
-			// Handle nested options structure: { "options": [...] }
-			if (variation.parsedOptions) {
-				const { attributeName, options: opts } = variation.parsedOptions;
-				if (!attributeMap.has(attributeName)) {
-					attributeMap.set(attributeName, new Set());
-				}
-				opts.forEach(opt => {
-					if (opt.value) {
-						attributeMap.get(attributeName)!.add(opt.value);
-						console.log(`[Product] Added option from nested structure: ${attributeName} = ${opt.value}`);
-					}
-				});
-			} 
-			// Check if attributes has nested options structure but parsedOptions wasn't set (fallback)
-			else if (variation.attributes && typeof variation.attributes === 'object' && 'options' in variation.attributes && Array.isArray((variation.attributes as any).options)) {
-				console.warn(`[Product] Variation ${index + 1} has nested options but parsedOptions is missing. Attempting to parse...`);
-				const attrs = variation.attributes as { options?: any[] };
-				if (attrs.options && attrs.options.length > 0) {
-					// Try to extract attribute name
-					let attributeName = 'Color'; // Default
-					if (variation.name) {
-						const nameParts = variation.name.split(':');
-						if (nameParts.length > 0 && nameParts[0].trim()) {
-							attributeName = nameParts[0].trim();
+
+			if (combinationVariation && combinationVariation.attributes) {
+				const attrs = combinationVariation.attributes as any;
+				const attributeDefinitions = attrs.attributes || [];
+				const combinations = attrs.combinations || [];
+
+				// Build variant attributes from attribute definitions
+				// Each attribute definition has a name and possible values
+				const result = attributeDefinitions.map((attrDef: any, attrIndex: number) => {
+					const attributeName = attrDef.name || 'Option';
+					const values = attrDef.values || [];
+
+					// Build options from the values defined in the attribute definition
+					// For each value, check if any combination has it and if it's available
+					const options = values.map((value: string) => {
+						// Find combinations that have this specific attribute value
+						let matchingCombinations = combinations.filter((combo: any) => {
+							return combo.attributes && combo.attributes[attributeName] === value;
+						});
+
+						// If this is not the first attribute, filter combinations based on previous selections
+						// Only show options that are compatible with already selected attributes
+						if (attrIndex > 0 && Object.keys(selected).length > 0) {
+							matchingCombinations = matchingCombinations.filter((combo: any) => {
+								// Check if this combination matches all previously selected attributes
+								return Object.entries(selected).every(([key, val]) => {
+									// Skip checking this attribute itself
+									if (key === attributeName) return true;
+									return combo.attributes && combo.attributes[key] === val;
+								});
+							});
 						}
+
+						// Check if at least one combination with this value is available
+						// (has stock > 0)
+						const isAvailable = matchingCombinations.length > 0 && matchingCombinations.some((combo: any) => {
+							return (combo.stockQuantity || 0) > 0;
+						});
+
+						// Don't set price here - price is determined by the full combination
+						// when all attributes are selected
+						return {
+							value: String(value),
+							price: undefined, // Price comes from the selected combination, not individual options
+							isAvailable,
+						};
+					});
+
+					return {
+						name: attributeName,
+						options,
+					};
+				}).filter(attr => attr.options.length > 0);
+
+				console.log('[Product] Processed combination format:', {
+					variationId: combinationVariation.id,
+					attributesCount: result.length,
+					combinationsCount: combinations.length,
+					attributes: result.map(a => ({ name: a.name, optionsCount: a.options.length })),
+				});
+
+				return result;
+			}
+		}
+
+		// Process standard format (options array)
+		// Each variation row contains one attribute with multiple options
+		const result = normalizedVariations.map((variation) => {
+			const attributeName = variation.name || 'Option';
+			const attrs = variation.attributes;
+			
+			let options: Array<{ value: string; price?: number; isAvailable: boolean }> = [];
+			
+			// Extract options from attributes.options array
+			if (attrs && typeof attrs === 'object' && 'options' in attrs && Array.isArray((attrs as any).options)) {
+				const optionsArray = (attrs as any).options;
+				
+				options = optionsArray.map((opt: any) => {
+					const optionValue = String(opt?.value || '');
+					const optionStockQuantity = opt?.stockQuantity ?? opt?.stock_quantity ?? variation.stockQuantity ?? 0;
+					const optionPriceModifier = opt?.priceModifier ?? opt?.price_modifier;
+					
+					// Calculate price modifier
+					let priceModifier: number | undefined = undefined;
+					if (optionPriceModifier !== undefined && optionPriceModifier !== null) {
+						priceModifier = parseFloat(String(optionPriceModifier));
+					} else if (variation.priceModifier !== undefined && variation.priceModifier !== null) {
+						priceModifier = parseFloat(String(variation.priceModifier));
 					}
 					
-					if (!attributeMap.has(attributeName)) {
-						attributeMap.set(attributeName, new Set());
-					}
-					attrs.options.forEach((opt: any) => {
-						if (opt && opt.value) {
-							attributeMap.get(attributeName)!.add(String(opt.value));
-							console.log(`[Product] Added option from fallback parsing: ${attributeName} = ${opt.value}`);
-						}
-					});
-				}
-			}
-			// Handle flat structure: { "Color": "Red", "Size": "Large" }
-			else if (variation.attributes && typeof variation.attributes === 'object' && !('options' in variation.attributes)) {
-				Object.entries(variation.attributes).forEach(([key, value]) => {
-					if (key && value && key !== 'options') {
-						if (!attributeMap.has(key)) {
-							attributeMap.set(key, new Set());
-						}
-						attributeMap.get(key)!.add(String(value));
-						console.log(`[Product] Added option from flat structure: ${key} = ${value}`);
-					}
+					return {
+						value: optionValue,
+						price: priceModifier,
+						isAvailable: optionStockQuantity > 0,
+					};
+				});
+				
+				console.log('[Product] Processed attribute:', {
+					attributeName,
+					variationId: variation.id,
+					optionsCount: options.length,
+					options: options.map(o => ({ value: o.value, price: o.price, available: o.isAvailable })),
 				});
 			} else {
-				console.warn(`[Product] Variation ${index + 1} has invalid attributes:`, variation.attributes);
-			}
-		});
-
-		const opts = Array.from(attributeMap.entries()).map(([name, values]) => {
-			// Add "Default" option at the beginning of each attribute's values to represent base product
-			return {
-				name,
-				values: ['Default', ...Array.from(values)],
-			};
-		});
-		
-		console.log('[Product] ✅ Built options from variations (with Default option):', opts);
-		console.log('[Product] Options count:', opts.length);
-		return opts;
-	}, [variations]);
-
-	const [selected, setSelected] = useState<Record<string, string>>({});
-
-	// Update selected variation when options change
-	useEffect(() => {
-		if (variations.length === 0) {
-			setSelectedVariation(null);
-			return;
-		}
-
-		// Check if "Default" is selected (base product, no variation)
-		const isDefaultSelected = Object.values(selected).some(value => value === 'Default') || Object.keys(selected).length === 0;
-		
-		if (isDefaultSelected) {
-			// Use base product (no variation selected)
-			setSelectedVariation(null);
-			setActiveImage(0);
-			return;
-		}
-
-		// Find variation that matches all selected attributes
-		const matchingVariation = variations.find(variation => {
-			// Handle nested options structure
-			if (variation.parsedOptions) {
-				const { attributeName, options: opts } = variation.parsedOptions;
-				// Check if the selected value matches any option in this variation
-				return Object.entries(selected).every(([key, value]) => {
-					if (key === attributeName) {
-						return opts.some(opt => opt.value === value);
-					}
-					return false; // For nested structure, we only have one attribute per variation
+				console.warn('[Product] Variation missing options array:', {
+					variationId: variation.id,
+					attributeName,
+					attributes: attrs,
 				});
 			}
-			// Handle flat structure
-			return Object.entries(selected).every(([key, value]) => {
-				if (typeof variation.attributes === 'object' && !('options' in variation.attributes)) {
-					return variation.attributes[key] === value;
-				}
-				return false;
-			});
+			
+			return {
+				name: attributeName,
+				options,
+			};
+		}).filter(attr => attr.options.length > 0); // Only include attributes with options
+		
+		console.log('[Product] Final variantAttributes:', result.length, 'attributes');
+		result.forEach(attr => {
+			console.log('[Product] Attribute:', attr.name, 'with', attr.options.length, 'options');
 		});
+		
+		return result;
+	}, [normalizedVariations, product, selected]);
 
-		if (matchingVariation) {
-			// For nested structure, find the selected option to get its price and images
-			let finalVariation = matchingVariation;
-			if (matchingVariation.parsedOptions) {
-				const { attributeName, options: opts } = matchingVariation.parsedOptions;
-				const selectedValue = selected[attributeName];
-				const selectedOption = opts.find(opt => opt.value === selectedValue);
+	// Handle variant selection
+	// When an option is selected, find the matching combination or option
+	// When value is null, unselect the variation and revert to original product
+	const handleVariantSelect = useCallback((attributeName: string, value: string | null) => {
+		setSelected((prev) => {
+			const newSelected = { ...prev };
+			
+			if (value === null) {
+				// Unselect: remove this attribute from selection
+				delete newSelected[attributeName];
+				// If no selections remain, clear the selected variation
+				if (Object.keys(newSelected).length === 0) {
+					setSelectedVariation(null);
+				} else {
+					// Update selected variation based on remaining selections
+					// Check if we're using combination format
+					const combinationVariation = normalizedVariations.find((v) => {
+						const attrs = v.attributes;
+						return attrs && typeof attrs === 'object' && attrs.format === 'combination';
+					});
+
+					if (combinationVariation && combinationVariation.attributes) {
+						// Find matching combination
+						const attrs = combinationVariation.attributes as any;
+						const combinations = attrs.combinations || [];
+						const matchingCombination = combinations.find((combo: any) => {
+							return combo.attributes && Object.entries(newSelected).every(
+								([key, val]) => combo.attributes[key] === val
+							);
+						});
+
+						if (matchingCombination) {
+							// Create a variation object from the combination
+							setSelectedVariation({
+								...combinationVariation,
+								stockQuantity: matchingCombination.stockQuantity || 0,
+								priceModifier: matchingCombination.priceModifier ?? matchingCombination.price_modifier,
+								discountPercentage: matchingCombination.discountPercentage ?? matchingCombination.discount_percentage,
+								images: matchingCombination.images || [],
+								imageUrl: matchingCombination.images?.[0],
+								sku: matchingCombination.sku,
+								attrMap: newSelected,
+							});
+						} else {
+							setSelectedVariation(null);
+						}
+					} else {
+						// Standard format: Find the first remaining selected attribute's variation
+						const remainingAttribute = Object.keys(newSelected)[0];
+						const variationRow = normalizedVariations.find((v) => v.name === remainingAttribute);
+						if (variationRow) {
+							const optionsArray = (variationRow.attributes as any)?.options || [];
+							const selectedOption = optionsArray.find((opt: any) => String(opt?.value) === newSelected[remainingAttribute]);
+							if (selectedOption) {
+								setSelectedVariation({
+									...variationRow,
+									priceModifier: selectedOption.priceModifier ?? selectedOption.price_modifier,
+									stockQuantity: selectedOption.stockQuantity ?? selectedOption.stock_quantity ?? variationRow.stockQuantity,
+									images: selectedOption.images || variationRow.images,
+								});
+							} else {
+								setSelectedVariation(variationRow);
+							}
+						}
+					}
+				}
+				return newSelected;
+			}
+
+			// Select: add or update the selection
+			newSelected[attributeName] = value;
+
+			// Check if we're using combination format
+			const combinationVariation = normalizedVariations.find((v) => {
+				const attrs = v.attributes;
+				return attrs && typeof attrs === 'object' && attrs.format === 'combination';
+			});
+
+			if (combinationVariation && combinationVariation.attributes) {
+				// Find matching combination based on all selected attributes
+				const attrs = combinationVariation.attributes as any;
+				const attributeDefinitions = attrs.attributes || [];
+				const combinations = attrs.combinations || [];
 				
-				if (selectedOption) {
-					// Create a modified variation with the selected option's price and images
-					const basePrice = product?.price || 0;
-					const optionPrice = selectedOption.priceModifier !== undefined 
-						? basePrice + selectedOption.priceModifier 
-						: matchingVariation.price;
+				// Check if all required attributes are selected
+				const allAttributesSelected = attributeDefinitions.every((attrDef: any) => {
+					return newSelected[attrDef.name] !== undefined && newSelected[attrDef.name] !== null;
+				});
+
+				if (allAttributesSelected) {
+					// All attributes selected - find the matching combination
+					const matchingCombination = combinations.find((combo: any) => {
+						if (!combo.attributes) return false;
+						return Object.entries(newSelected).every(
+							([key, val]) => combo.attributes[key] === val
+						);
+					});
+
+					if (matchingCombination) {
+						console.log('[Product] Found matching combination:', {
+							selected: newSelected,
+							combination: matchingCombination.attributes,
+							priceModifier: matchingCombination.priceModifier ?? matchingCombination.price_modifier,
+							discountPercentage: matchingCombination.discountPercentage ?? matchingCombination.discount_percentage,
+							stock: matchingCombination.stockQuantity,
+						});
+						
+						// Create a variation object from the combination
+						setSelectedVariation({
+							...combinationVariation,
+							stockQuantity: matchingCombination.stockQuantity || 0,
+							priceModifier: matchingCombination.priceModifier ?? matchingCombination.price_modifier,
+							discountPercentage: matchingCombination.discountPercentage ?? matchingCombination.discount_percentage,
+							images: matchingCombination.images || [],
+							imageUrl: matchingCombination.images?.[0],
+							sku: matchingCombination.sku,
+							attrMap: newSelected,
+						});
+					} else {
+						console.log('[Product] No matching combination found for:', newSelected);
+						// All attributes selected but no matching combination - invalid selection
+						setSelectedVariation(null);
+					}
+				} else {
+					// Partial selection - not all attributes selected yet
+					console.log('[Product] Partial selection, waiting for all attributes:', {
+						selected: newSelected,
+						required: attributeDefinitions.map((a: any) => a.name),
+					});
+					setSelectedVariation(null);
+				}
+			} else {
+				// Standard format: Find the variation row that contains this attribute
+				const variationRow = normalizedVariations.find((v) => v.name === attributeName);
+				
+				if (variationRow && variationRow.attributes && typeof variationRow.attributes === 'object' && 'options' in variationRow.attributes) {
+					// Find the specific option object that matches the selected value
+					const optionsArray = (variationRow.attributes as any).options;
+					const selectedOption = optionsArray.find((opt: any) => String(opt?.value) === value);
 					
-					// Use option images if available, otherwise use variation image
-					const optionImages = selectedOption.images && selectedOption.images.length > 0
-						? selectedOption.images
-						: matchingVariation.imageUrl ? [matchingVariation.imageUrl] : undefined;
-					
-					finalVariation = {
-						...matchingVariation,
-						price: optionPrice,
-						stockQuantity: selectedOption.stockQuantity ?? matchingVariation.stockQuantity,
-						imageUrl: optionImages ? JSON.stringify(optionImages) : matchingVariation.imageUrl,
-					};
+					if (selectedOption) {
+						// Create a variation-like object with the selected option's data
+						const matchingVariation: ProductVariation = {
+							...variationRow,
+							// Override with option-specific data
+							priceModifier: selectedOption.priceModifier ?? selectedOption.price_modifier,
+							stockQuantity: selectedOption.stockQuantity ?? selectedOption.stock_quantity ?? variationRow.stockQuantity,
+							images: selectedOption.images || variationRow.images,
+						};
+						setSelectedVariation(matchingVariation);
+					} else {
+						setSelectedVariation(variationRow);
+					}
+				} else {
+					setSelectedVariation(variationRow || null);
 				}
 			}
+
+			return newSelected;
+		});
+	}, [normalizedVariations]);
+
+	// Image handling - properly handle product and variation images
+	// When a variation option is selected, use its images from attributes.options[].images
+	const imageUris: string[] = useMemo(() => {
+		if (!product) return [];
+
+		let images: string[] = [];
+		
+		// If a variation option is selected, use its images
+		if (selectedVariation?.images && Array.isArray(selectedVariation.images) && selectedVariation.images.length > 0) {
+			images = selectedVariation.images.filter(Boolean);
+		} else if (selectedVariation?.imageUrl) {
+			// Fallback to imageUrl if images array is not available
+			try {
+				const parsed = JSON.parse(selectedVariation.imageUrl);
+				if (Array.isArray(parsed)) {
+					images = parsed.filter(Boolean);
+				} else if (typeof parsed === 'string') {
+					images = [parsed];
+				}
+			} catch {
+				// Not JSON, treat as single image URL
+				if (selectedVariation.imageUrl) {
+					images = [selectedVariation.imageUrl];
+				}
+			}
+		}
+		
+		// If no variation images, use product images
+		if (images.length === 0 && product.imageUrl) {
+			try {
+				const parsed = JSON.parse(product.imageUrl);
+				const productImages = Array.isArray(parsed) ? parsed.filter(Boolean) : [product.imageUrl];
+				images = productImages;
+			} catch {
+				// Not JSON, treat as single image URL
+				images = [product.imageUrl];
+			}
+		}
+
+		// Ensure we have at least one image
+		if (images.length === 0 && product.imageUrl) {
+			images = [product.imageUrl];
+		}
+
+		return Array.from(new Set(images.filter(Boolean)));
+	}, [product, selectedVariation]);
+
+	// Calculate lowest price from all variations (for display when no variation is selected)
+	const lowestPrice = useMemo(() => {
+		if (!product || !normalizedVariations || normalizedVariations.length === 0) {
+			return product?.price || 0;
+		}
+
+		// Use original price for calculations if available (for variable products), otherwise use current price
+		const productBasePrice = (product.originalPrice ?? product.price) || 0;
+		let lowest = productBasePrice;
+
+		// Check all variations for the lowest price
+		for (const variation of normalizedVariations) {
+			const attrs = variation.attributes || {};
 			
-			console.log('[Product] Variation changed:', {
-				variationId: finalVariation.id,
-				variationPrice: finalVariation.price,
-				attributes: finalVariation.attributes,
-				selectedAttributes: selected
-			});
-			setSelectedVariation(finalVariation);
-			// Reset active image to 0 when variation changes to show variation image first
-			setActiveImage(0);
-		} else if (variations.length > 0 && Object.keys(selected).length === 0) {
-			// If no selection yet, use base product (Default)
-			console.log('[Product] No selection - using base product (Default)');
-			setSelectedVariation(null);
-			setActiveImage(0);
+			// Check if this is a combination format
+			if (typeof attrs === 'object' && !Array.isArray(attrs) && attrs.format === 'combination') {
+				const combinations = attrs.combinations || [];
+				
+				// Check each combination
+				for (const combo of combinations) {
+					// Calculate price for this combination
+					const priceModifier = combo.priceModifier ?? combo.price_modifier ?? 0;
+					const comboPrice = productBasePrice + parseFloat(String(priceModifier));
+					
+					// Apply discount if available
+					const discount = combo.discountPercentage ?? combo.discount_percentage ?? 0;
+					const finalPrice = discount > 0 
+						? comboPrice * (1 - discount / 100)
+						: comboPrice;
+					
+					// Check stock availability
+					const stock = combo.stockQuantity ?? combo.stock_quantity ?? 0;
+					if (stock > 0 && finalPrice < lowest) {
+						lowest = finalPrice;
+					}
+				}
+			} else {
+				// Standard format - check variation price
+				if (variation.price !== null && variation.price !== undefined) {
+					const variationPrice = parseFloat(String(variation.price));
+					if (variationPrice < lowest) {
+						lowest = variationPrice;
+					}
+				}
+			}
 		}
-	}, [selected, variations]);
 
-	const { addItem } = useCart();
-	const [showAdded, setShowAdded] = useState(false);
+		return lowest;
+	}, [product, normalizedVariations]);
 
-	// Stock status (use variation stock if selected, otherwise product stock)
+	// Pricing - calculate price based on selected variation option's priceModifier
+	const basePrice = useMemo(() => {
+		// Use original price for calculations if available (for variable products), otherwise use current price
+		const productBasePrice = (product?.originalPrice ?? product?.price) || 0;
+		
+		// If a variation option is selected, add its priceModifier
+		if (selectedVariation?.priceModifier !== undefined && selectedVariation.priceModifier !== null) {
+			return productBasePrice + parseFloat(String(selectedVariation.priceModifier));
+		}
+		
+		// Fallback to variation price if available
+		if (selectedVariation?.price !== undefined && selectedVariation.price !== null) {
+			return selectedVariation.price;
+		}
+		
+		// If no variation selected, use the lowest price from all variations
+		return lowestPrice;
+	}, [selectedVariation, product, lowestPrice]);
+
+	const discountedPrice = useMemo(() => {
+		if (!product || basePrice === 0) return 0;
+		
+		// Use combination's discount percentage if available, otherwise use product's discount
+		const discount = selectedVariation?.discountPercentage ?? product.discountPercentage ?? 0;
+		
+		if (discount > 0) {
+			return basePrice * (1 - discount / 100);
+		}
+		return basePrice;
+	}, [product, basePrice, selectedVariation]);
+
+	// Calculate discount percentage (from combination or product)
+	const discountPercentage = useMemo(() => {
+		return selectedVariation?.discountPercentage ?? product?.discountPercentage ?? 0;
+	}, [selectedVariation, product]);
+
+	const formattedPrice = `$${discountedPrice.toFixed(2)}`;
+	const formattedOriginalPrice = discountPercentage > 0 ? `$${basePrice.toFixed(2)}` : undefined;
+
+	// Stock status
 	const currentStock = useMemo(() => {
-		if (selectedVariation) {
-			return selectedVariation.stockQuantity;
-		}
+		if (selectedVariation) return selectedVariation.stockQuantity;
 		return product?.stockQuantity || 0;
 	}, [selectedVariation, product]);
 
-	const stockStatus = useMemo(() => {
-		if (currentStock === 0) {
-			return { text: 'Out of stock', color: '#BE123C', show: true };
-		}
-		if (currentStock <= 5) {
-			return { text: `Only ${currentStock} left!`, color: '#BE123C', show: true };
-		}
-		if (currentStock <= 10) {
-			return { text: `Selling fast! Only ${currentStock} left`, color: '#F59E0B', show: true };
-		}
-		return { text: '', color: '', show: false };
+	const stockStatus: 'in_stock' | 'low_stock' | 'out_of_stock' = useMemo(() => {
+		if (currentStock === 0) return 'out_of_stock';
+		if (currentStock <= 5) return 'low_stock';
+		return 'in_stock';
 	}, [currentStock]);
 
-	// Get related products from the same collections or with similar tags
+	// Reset image index when variation changes
+	const [imageKey, setImageKey] = useState(0);
+	useEffect(() => {
+		setImageKey((prev) => prev + 1);
+	}, [selectedVariation?.id]);
+
+	// Related products
 	const relatedProducts = useMemo(() => {
 		if (!product) return [];
-		// Get products with similar tags or from same target audience
-		return products
-			.filter(p => p.id !== product.id && p.isActive)
-			.filter(p => {
-				// Match by tags, target audience, or occasion
-				const hasCommonTag = product.tags.some(tag => p.tags.includes(tag));
-				const hasCommonTarget = product.targetAudience?.some(aud => p.targetAudience?.includes(aud));
-				const hasCommonOccasion = product.occasionTags?.some(occ => p.occasionTags?.includes(occ));
-				return hasCommonTag || hasCommonTarget || hasCommonOccasion;
-			})
-			.slice(0, 6);
+
+		const productCategoryIds = product.categoryIds || [];
+		if (productCategoryIds.length === 0) return [];
+
+		const related: typeof products = [];
+		const seenProductIds = new Set<string>([product.id]);
+
+		for (const p of products) {
+			if (!p.isActive || p.id === product.id || seenProductIds.has(p.id)) continue;
+			if (!p.categoryIds || p.categoryIds.length === 0) continue;
+
+			const sharedCategories = productCategoryIds.filter((catId) => p.categoryIds?.includes(catId));
+			if (sharedCategories.length > 0) {
+				related.push(p);
+				seenProductIds.add(p.id);
+				if (related.length >= 10) break;
+			}
+		}
+
+		return related.slice(0, 10);
 	}, [product, products]);
 
+	// Convert related products for RecommendationsCarousel
+	const recommendationProducts = useMemo(() => {
+		return relatedProducts.map((p) => {
+			const imageUrl = p.imageUrl
+				? (() => {
+						try {
+							const parsed = JSON.parse(p.imageUrl);
+							return Array.isArray(parsed) ? parsed[0] : p.imageUrl;
+						} catch {
+							return p.imageUrl;
+						}
+					})()
+				: undefined;
+
+			return {
+				id: p.id,
+				name: p.name || '',
+				price: p.price || 0,
+				originalPrice: p.discountPercentage > 0 ? p.price : undefined,
+				discountPercentage: p.discountPercentage,
+				image: imageUrl,
+			};
+		});
+	}, [relatedProducts]);
+
+	// Handlers
+	const handleShare = async () => {
+		if (!product) return;
+		try {
+			const shareUrl = `https://giftyy.com/products/${product.id}`;
+			await Share.share({
+				title: product.name,
+				message: `Check out "${product.name}" on Giftyy: ${shareUrl}`,
+			});
+			logProductAnalyticsEvent({
+				productId: product.id,
+				eventType: 'share',
+			});
+		} catch (error) {
+			console.warn('[Product] Share failed', error);
+		}
+	};
+
+	const handleWishlistToggle = () => {
+		if (!product) return;
+		toggleWishlist(product.id);
+	};
+
+	// Check if all required attributes are selected
+	// If no variations exist, allow adding original product
+	// If variations exist, allow adding even without selection (user can add base product)
+	const allAttributesSelected = useMemo(() => {
+		if (variantAttributes.length === 0) return true; // No variations, no selection needed
+		return variantAttributes.every(attr => selected[attr.name]);
+	}, [variantAttributes, selected]);
+
+	// Check if we can add to cart
+	// Allow if: no variations exist OR all variations selected OR user wants to add base product
+	const canAddToCart = useMemo(() => {
+		if (variantAttributes.length === 0) return true; // No variations, always allow
+		// If variations exist, allow adding base product even without selection
+		return true; // Always allow - user can add base product or selected variation
+	}, [variantAttributes.length]);
+
+	const handleAddToCart = () => {
+		if (!product || currentStock === 0) return;
+
+		const itemName = selectedVariation 
+			? `${product.name}${Object.keys(selected).length > 0 ? ` (${Object.values(selected).join(', ')})` : ''}`
+			: product.name;
+		
+		addItem({
+			id: selectedVariation?.id || product.id,
+			name: itemName,
+			price: formattedPrice,
+			image: imageUris[0],
+			selectedOptions: selected,
+			vendorId: product.vendorId,
+		});
+		setShowAdded(true);
+	};
+
+	const handleBuyNow = () => {
+		handleAddToCart();
+		router.push('/(buyer)/checkout/cart');
+	};
+
+	const handleAddVideoMessage = () => {
+		// Add product to cart first if not already added
+		if (product && currentStock > 0) {
+			const itemName = selectedVariation 
+				? `${product.name}${Object.keys(selected).length > 0 ? ` (${Object.values(selected).join(', ')})` : ''}`
+				: product.name;
+			
+			addItem({
+				id: selectedVariation?.id || product.id,
+				name: itemName,
+				price: formattedPrice,
+				image: imageUris[0],
+				selectedOptions: selected,
+				vendorId: product.vendorId,
+			});
+		}
+		// Navigate directly to checkout cart instead of video recording
+		router.push('/(buyer)/checkout/cart');
+	};
+
+	// Loading state
 	if (productsLoading) {
 		return (
-			<View style={{ flex: 1, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center' }}>
-				<ActivityIndicator size="large" color={BRAND_COLOR} />
-				<Text style={{ marginTop: 12, color: '#6b7280' }}>Loading product...</Text>
+			<View style={styles.loadingContainer}>
+				<ActivityIndicator size="large" color={GIFTYY_THEME.colors.primary} />
+				<Text style={styles.loadingText}>Loading product...</Text>
 			</View>
 		);
 	}
 
+	// Error state
 	if (!product) {
 		return (
-			<View style={{ flex: 1, backgroundColor: 'white', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-				<IconSymbol name="exclamationmark.triangle" size={48} color="#9ca3af" />
-				<Text style={{ marginTop: 16, fontSize: 18, fontWeight: '800', color: '#111827' }}>Product not found</Text>
-				<Text style={{ marginTop: 8, color: '#6b7280', textAlign: 'center' }}>
-					The product you're looking for doesn't exist or has been removed.
-				</Text>
-				<Pressable
-					onPress={() => router.back()}
-					style={{ marginTop: 24, paddingVertical: 12, paddingHorizontal: 24, backgroundColor: BRAND_COLOR, borderRadius: 12 }}
-				>
-					<Text style={{ color: 'white', fontWeight: '700' }}>Go Back</Text>
+			<View style={styles.errorContainer}>
+				<IconSymbol name="exclamationmark.triangle" size={48} color={GIFTYY_THEME.colors.gray400} />
+				<Text style={styles.errorTitle}>Product not found</Text>
+				<Text style={styles.errorText}>The product you're looking for doesn't exist or has been removed.</Text>
+				<Pressable onPress={() => router.back()} style={styles.errorButton}>
+					<Text style={styles.errorButtonText}>Go Back</Text>
 				</Pressable>
 			</View>
 		);
 	}
 
+	// Accordion items - only show if product has description
+	const accordionItems = [
+		{
+			id: 'details',
+			title: 'Item Details',
+			icon: 'info.circle.fill',
+			content: product.description || 'No description available.',
+		},
+	];
+
 	return (
-		<View style={{ flex: 1, backgroundColor: 'white' }}>
-			{/* Custom header */}
-			<View style={[styles.header, { paddingTop: headerPaddingTop, height: headerTotalHeight }]}>
-				<Pressable onPress={() => router.back()} style={styles.headerBtn}>
-					<IconSymbol size={20} name="chevron.left" color="#111" />
-				</Pressable>
-				<View style={{ flexDirection: 'row', gap: 12 }}>
-					<Pressable style={styles.headerBtn} onPress={handleShare}>
-						<IconSymbol size={18} name="square.and.arrow.up" color="#111" />
-					</Pressable>
-					<Pressable
-						style={[styles.headerBtn, isInWishlist && styles.headerBtnActive]}
-						onPress={handleWishlistToggle}
-						accessibilityRole="button"
-						accessibilityLabel={isInWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
+		<View style={styles.container}>
+			{/* Scrollable Content */}
+			<ScrollView
+				style={styles.scrollView}
+				contentContainerStyle={{ paddingBottom: TOTAL_BOTTOM_HEIGHT + bottom + 32 }}
+				showsVerticalScrollIndicator={false}
+				refreshControl={
+					<RefreshControl
+						refreshing={refreshing}
+						onRefresh={onRefresh}
+						tintColor={GIFTYY_THEME.colors.primary}
+						colors={[GIFTYY_THEME.colors.primary]}
+					/>
+				}
+			>
+				{/* A - Product Media Carousel (Edge-to-edge, fully visible) */}
+				<View style={styles.carouselWrapper}>
+					<ProductMediaCarousel key={imageKey} images={imageUris} />
+					{/* Header Overlay */}
+					<Animated.View 
+						entering={FadeInDown.duration(300)} 
+						style={[styles.headerOverlay, { paddingTop: top + 6 }]}
+						pointerEvents="box-none"
 					>
-						<IconSymbol size={18} name={isInWishlist ? 'heart.fill' : 'heart'} color={isInWishlist ? BRAND_COLOR : '#111'} />
-					</Pressable>
-				</View>
-			</View>
-
-			<ScrollView contentContainerStyle={{ paddingBottom: bottomPadding, backgroundColor: 'white' }} showsVerticalScrollIndicator={false}>
-				{/* Images gallery */}
-				<View>
-					{imageUris.length > 0 ? (
-						<View>
-							<ScrollView
-								horizontal
-								pagingEnabled
-								showsHorizontalScrollIndicator={false}
-								scrollEventThrottle={16}
-								decelerationRate="fast"
-								snapToInterval={width}
-								snapToAlignment="start"
-								onScroll={(e) => {
-									const x = e.nativeEvent.contentOffset.x;
-									const newIndex = Math.round(x / width);
-									if (newIndex !== activeImage) {
-										setActiveImage(newIndex);
-									}
-								}}
-								contentContainerStyle={{ width: width * imageUris.length }}
+						<Pressable onPress={() => router.back()} style={styles.headerButton}>
+							<IconSymbol name="chevron.left" size={24} color={GIFTYY_THEME.colors.white} />
+						</Pressable>
+						<View style={styles.headerRight}>
+							<Pressable style={styles.headerButton} onPress={handleShare}>
+								<IconSymbol name="square.and.arrow.up" size={20} color={GIFTYY_THEME.colors.white} />
+							</Pressable>
+							<Pressable
+								style={[styles.headerButton, isInWishlist && styles.headerButtonActive]}
+								onPress={handleWishlistToggle}
 							>
-								{imageUris.map((uri, idx) => (
-									<Image 
-										key={uri + idx} 
-										source={{ uri }} 
-										style={{ width, height: width }} 
-										resizeMode="cover" 
-									/>
-								))}
-							</ScrollView>
-							{/* Dots */}
-							{imageUris.length > 1 && (
-								<View style={styles.dotsWrap}>
-									{imageUris.map((_, i) => (
-										<View key={i} style={[styles.dot, i === activeImage && styles.dotActive]} />
-									))}
-								</View>
-							)}
-						</View>
-					) : (
-						<View style={{ width, height: width, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' }}>
-							<IconSymbol name="photo" size={64} color="#d1d5db" />
-						</View>
-					)}
-				</View>
-
-				{/* Title & price */}
-				<View style={{ padding: 16, gap: 12 }}>
-					<Text style={styles.title}>{product.name}</Text>
-					{/* Show variation name if a specific variation is selected and has a name */}
-					{selectedVariation?.name && Object.keys(selected).length > 0 && (
-						<Text style={{ fontSize: 14, color: '#6b7280', fontStyle: 'italic' }}>
-							{selectedVariation.name}
-						</Text>
-					)}
-					
-					{/* Price and discount */}
-					<View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-						<Text style={styles.price}>{formattedPrice}</Text>
-						{formattedOriginalPrice && (
-							<Text style={styles.originalPrice}>{formattedOriginalPrice}</Text>
-						)}
-						{product.discountPercentage > 0 && (
-							<View style={styles.discountBadge}>
-								<Text style={styles.discountBadgeText}>{product.discountPercentage}% OFF</Text>
-							</View>
-						)}
-						{product.tags.includes('bestseller') && (
-							<Text style={styles.badge}>Bestseller</Text>
-						)}
-					</View>
-
-
-					{/* Stock status */}
-					{stockStatus.show && (
-						<View style={[styles.notice, { backgroundColor: stockStatus.color === '#BE123C' ? '#FFF1F2' : '#FEF3C7' }]}>
-							<Text style={[styles.noticeText, { color: stockStatus.color }]}>{stockStatus.text}</Text>
-						</View>
-					)}
-
-					{/* Options (variable products) */}
-					<View style={{ marginTop: 8 }}>
-						<Text style={{ fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 8 }}>Options</Text>
-						
-						{variationsLoading && (
-							<View style={{ paddingVertical: 12 }}>
-								<ActivityIndicator size="small" color={BRAND_COLOR} />
-								<Text style={{ marginTop: 8, fontSize: 12, color: '#6b7280', textAlign: 'center' }}>Loading variations...</Text>
-							</View>
-						)}
-						
-						{!variationsLoading && variations.length > 0 && options.length === 0 && (
-							<View style={{ paddingVertical: 8, paddingHorizontal: 12, backgroundColor: '#FEF3C7', borderRadius: 8 }}>
-								<Text style={{ fontSize: 12, color: '#92400E', fontWeight: '600' }}>
-									⚠️ Variations found ({variations.length}) but no attributes detected.
-								</Text>
-								<Text style={{ fontSize: 11, color: '#92400E', marginTop: 4 }}>
-									Check that variations have attributes in JSONB format: {"{"}"Size": "Large", "Color": "Red"{"}"}
-								</Text>
-								<Text style={{ fontSize: 10, color: '#92400E', marginTop: 4, fontFamily: 'monospace' }}>
-									Debug: {JSON.stringify(variations.map(v => ({ id: v.id, attrs: v.attributes })))}
-								</Text>
-							</View>
-						)}
-						
-						{!variationsLoading && variations.length === 0 && (
-							<View style={{ paddingVertical: 8, paddingHorizontal: 12, backgroundColor: '#E5E7EB', borderRadius: 8 }}>
-								<Text style={{ fontSize: 12, color: '#374151', textAlign: 'center' }}>
-									No variations available for this product
-								</Text>
-							</View>
-						)}
-						
-						{!variationsLoading && options.length > 0 && (
-						<View style={{ gap: 12, marginTop: 8 }}>
-							{options.map((opt) => (
-								<View key={opt.name} style={{ gap: 8 }}>
-									<Text style={{ fontSize: 15, fontWeight: '700', color: '#111827' }}>{opt.name}</Text>
-									<ScrollView 
-										horizontal 
-										showsHorizontalScrollIndicator={false}
-										contentContainerStyle={{ paddingRight: 16 }}
-										style={{ flexGrow: 0 }}
-									>
-										{opt.values.map((value) => {
-											const isSelected = selected[opt.name] === value;
-											
-											// Handle "Default" option (base product, no variation)
-											if (value === 'Default') {
-												const isAvailable = (product?.stockQuantity ?? 0) > 0;
-												const valuePrice = product?.price || null;
-												const displayPrice = valuePrice !== null && product?.discountPercentage > 0
-													? valuePrice * (1 - product.discountPercentage / 100)
-													: valuePrice;
-												
-												return (
-													<Pressable
-														key={value}
-														onPress={() => {
-															setSelected((s) => ({ ...s, [opt.name]: value }));
-														}}
-														style={[
-															styles.variationOption,
-															isSelected && styles.variationOptionSelected,
-															!isAvailable && styles.variationOptionDisabled,
-														]}
-														disabled={!isAvailable}
-													>
-														<View style={{ alignItems: 'center', gap: 2 }}>
-															<Text
-																style={[
-																	styles.variationOptionText,
-																	isSelected && styles.variationOptionTextSelected,
-																	!isAvailable && styles.variationOptionTextDisabled,
-																]}
-															>
-																{value}
-															</Text>
-															{displayPrice !== null && (
-																<Text
-																	style={[
-																		{
-																			fontSize: 11,
-																			fontWeight: '600',
-																			color: isSelected ? BRAND_COLOR : '#6b7280',
-																		},
-																		!isAvailable && { color: '#d1d5db' },
-																	]}
-																>
-																	${displayPrice.toFixed(2)}
-																</Text>
-															)}
-														</View>
-													</Pressable>
-												);
-											}
-											
-											// Handle variation options
-											// Find the matching option within variations
-											let matchingOption: VariationOption | null = null;
-											let isAvailable = false;
-											
-											// Handle nested options structure
-											for (const v of variations) {
-												if (v.parsedOptions && v.parsedOptions.attributeName === opt.name) {
-													const option = v.parsedOptions.options.find(opt => opt.value === value);
-													if (option) {
-														matchingOption = option;
-														isAvailable = (option.stockQuantity ?? 0) > 0;
-														break; // Found the matching option
-													}
-												}
-											}
-											
-											// Handle flat structure (fallback)
-											if (!matchingOption) {
-												const matchingVariations = variations.filter(v => {
-													if (typeof v.attributes === 'object' && !('options' in v.attributes)) {
-														if (v.attributes[opt.name] !== value) return false;
-														
-														// Check if it matches other selected attributes
-														const otherSelections = Object.entries(selected).filter(([k]) => k !== opt.name);
-														if (otherSelections.length > 0) {
-															const matchesOtherSelections = otherSelections.every(([k, selectedValue]) => 
-																v.attributes[k] === selectedValue
-															);
-															if (!matchesOtherSelections) return false;
-														}
-														
-														return true;
-													}
-													return false;
-												});
-												
-												isAvailable = matchingVariations.some(v => v.stockQuantity > 0);
-											}
-											
-											// Get price for this value
-											// For nested structure: use priceModifier + base product price
-											// For flat structure: use variation price or product price
-											let valuePrice: number | null = null;
-											if (matchingOption && matchingOption.priceModifier !== undefined) {
-												// priceModifier is added to base product price
-												valuePrice = (product?.price || 0) + matchingOption.priceModifier;
-											} else if (!matchingOption) {
-												// Fallback to flat structure logic
-												const matchingVariations = variations.filter(v => {
-													if (typeof v.attributes === 'object' && !('options' in v.attributes)) {
-														return v.attributes[opt.name] === value;
-													}
-													return false;
-												});
-												if (matchingVariations.length > 0 && matchingVariations[0].price !== undefined && matchingVariations[0].price !== null) {
-													valuePrice = matchingVariations[0].price;
-												}
-											}
-											
-											// Calculate displayed price (with discount if applicable)
-											const displayPrice = valuePrice !== null
-												? product.discountPercentage > 0
-													? valuePrice * (1 - product.discountPercentage / 100)
-													: valuePrice
-												: null;
-											
-											return (
-												<Pressable
-													key={value}
-													onPress={() => {
-														if (isAvailable) {
-															setSelected((s) => ({ ...s, [opt.name]: value }));
-														}
-													}}
-													style={[
-														styles.variationOption,
-														isSelected && styles.variationOptionSelected,
-														!isAvailable && styles.variationOptionDisabled,
-													]}
-													disabled={!isAvailable}
-												>
-													<View style={{ alignItems: 'center', gap: 2 }}>
-														<Text
-															style={[
-																styles.variationOptionText,
-																isSelected && styles.variationOptionTextSelected,
-																!isAvailable && styles.variationOptionTextDisabled,
-															]}
-														>
-															{value}
-														</Text>
-														{displayPrice !== null && (
-															<Text
-																style={[
-																	{
-																		fontSize: 11,
-																		fontWeight: '600',
-																		color: isSelected ? BRAND_COLOR : '#6b7280',
-																	},
-																	!isAvailable && { color: '#d1d5db' },
-																]}
-															>
-																${displayPrice.toFixed(2)}
-															</Text>
-														)}
-													</View>
-												</Pressable>
-											);
-										})}
-									</ScrollView>
-								</View>
-							))}
-						</View>
-						)}
-					</View>
-
-					{/* Quick purchase row */}
-					<View style={{ flexDirection: 'row', gap: 10, marginTop: 8 }}>
-						<BrandButton
-							title={currentStock === 0 ? "Out of stock" : "Add to cart"}
-							style={{ flex: 1 }}
-							disabled={currentStock === 0}
-							onPress={() => {
-								if (currentStock > 0) {
-									const itemName = selectedVariation 
-										? `${product.name}${Object.keys(selected).length > 0 ? ` (${Object.values(selected).join(', ')})` : ''}`
-										: product.name;
-									
-									addItem({
-										id: selectedVariation?.id || product.id,
-										name: itemName,
-										price: formattedPrice,
-										image: imageUris[0],
-										selectedOptions: selected,
-										vendorId: product.vendorId,
-									});
-									setShowAdded(true);
-								}
-							}}
-						/>
-						<Pressable
-							style={[styles.appleBtn, { backgroundColor: currentStock === 0 ? '#9ca3af' : BRAND_COLOR }]}
-							disabled={currentStock === 0}
-							onPress={() => {
-								if (currentStock > 0) {
-									// Add to cart first, then navigate directly to checkout
-									const itemName = selectedVariation 
-										? `${product.name}${Object.keys(selected).length > 0 ? ` (${Object.values(selected).join(', ')})` : ''}`
-										: product.name;
-									
-									addItem({
-										id: selectedVariation?.id || product.id,
-										name: itemName,
-										price: formattedPrice,
-										image: imageUris[0],
-										selectedOptions: selected,
-										vendorId: product.vendorId,
-									});
-									
-									// Navigate directly to checkout (first step: cart)
-									router.push('/(buyer)/checkout/cart');
-								}
-							}}
-						>
-							<Text style={styles.appleBtnText}>Buy now</Text>
+								<IconSymbol
+									name={isInWishlist ? 'heart.fill' : 'heart'}
+									size={20}
+									color={isInWishlist ? GIFTYY_THEME.colors.primary : GIFTYY_THEME.colors.white}
+								/>
 						</Pressable>
 					</View>
+					</Animated.View>
 				</View>
 
-				{/* Tags and SEO info */}
-				{(product.tags.length > 0 || product.occasionTags?.length || product.targetAudience?.length) && (
-					<View style={styles.section}>
-						<Text style={styles.sectionTitle}>Product tags</Text>
-						<View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-							{product.tags.map((tag, idx) => (
-								<View key={idx} style={styles.tag}>
-									<Text style={styles.tagText}>{tag}</Text>
+				{/* B - Product Title & Price Block */}
+				<Animated.View entering={FadeInUp.duration(400).delay(100)} style={styles.titleSection}>
+					<View style={styles.titleRow}>
+						<Text style={styles.productTitle}>{product.name}</Text>
+						{discountPercentage > 0 && (
+							<View style={styles.discountBadge}>
+								<Text style={styles.discountText}>{discountPercentage}% OFF</Text>
+							</View>
+						)}
+					</View>
+					<View style={styles.priceRow}>
+						<Text style={styles.price}>{formattedPrice}</Text>
+						{formattedOriginalPrice && <Text style={styles.originalPrice}>{formattedOriginalPrice}</Text>}
 								</View>
-							))}
-							{product.occasionTags?.map((tag, idx) => (
-								<View key={`occasion-${idx}`} style={[styles.tag, { backgroundColor: '#FEF3C7' }]}>
-									<Text style={[styles.tagText, { color: '#92400E' }]}>{tag}</Text>
-								</View>
-							))}
-							{product.targetAudience?.map((aud, idx) => (
-								<View key={`audience-${idx}`} style={[styles.tag, { backgroundColor: '#DBEAFE' }]}>
-									<Text style={[styles.tagText, { color: '#1E40AF' }]}>{aud}</Text>
-								</View>
-							))}
+					{stockStatus === 'low_stock' && (
+						<View style={styles.stockWarning}>
+							<Text style={styles.stockWarningText}>Only {currentStock} left in stock!</Text>
 						</View>
+					)}
+					{stockStatus === 'out_of_stock' && (
+						<View style={styles.stockError}>
+							<Text style={styles.stockErrorText}>Out of stock</Text>
 					</View>
 				)}
+				</Animated.View>
 
-				{/* Description */}
-				{product.description && (
-					<View style={styles.section}>
-						<Text style={styles.sectionTitle}>Item details</Text>
-						<Text style={styles.sectionText}>{product.description}</Text>
-					</View>
+				{/* C - Product Options / Variants (moved above vendor section) */}
+				{variationsLoading ? (
+					<Animated.View entering={FadeInUp.duration(400).delay(150)} style={styles.variationsLoadingContainer}>
+						<ActivityIndicator size="small" color={GIFTYY_THEME.colors.primary} />
+						<Text style={styles.variationsLoadingText}>Loading options...</Text>
+					</Animated.View>
+				) : variations.length > 0 ? (
+					variantAttributes.length > 0 ? (
+						<Animated.View entering={FadeInUp.duration(400).delay(150)}>
+							<ProductVariantsSelector
+								attributes={variantAttributes}
+								selected={selected}
+								onSelect={handleVariantSelect}
+								disabled={stockStatus === 'out_of_stock'}
+							/>
+						</Animated.View>
+					) : (
+						<Animated.View entering={FadeInUp.duration(400).delay(150)} style={styles.variationsErrorContainer}>
+							<Text style={styles.variationsErrorText}>
+								{variations.length} variation{variations.length !== 1 ? 's' : ''} available
+							</Text>
+							<Text style={styles.variationsErrorSubtext}>
+								Please select from available options
+							</Text>
+						</Animated.View>
+					)
+				) : null}
+
+				{/* D - Product Specifications / Item Details (moved above vendor section) */}
+				{accordionItems.length > 0 && (
+					<Animated.View entering={FadeInUp.duration(400).delay(200)}>
+						<AccordionSection items={accordionItems} defaultOpenId="details" />
+					</Animated.View>
 				)}
 
-				{/* Meta description (SEO) */}
-				{product.metaDescription && (
-					<View style={styles.section}>
-						<Text style={styles.sectionTitle}>About this product</Text>
-						<Text style={styles.sectionText}>{product.metaDescription}</Text>
-					</View>
+				{/* E - Vendor Section */}
+				{vendor && (
+					<Animated.View entering={FadeInUp.duration(400).delay(250)}>
+						<VendorInfoCard
+							vendorId={vendor.id}
+							vendorName={vendor.storeName}
+							profileImageUrl={vendor.profileImageUrl}
+							onPress={() => router.push(`/(buyer)/vendor/${vendor.id}`)}
+							loading={vendorLoading}
+						/>
+					</Animated.View>
 				)}
 
-				{/* Related products */}
-				{relatedProducts.length > 0 && (
-					<View style={styles.section}>
-						<Text style={styles.sectionTitle}>You might also like</Text>
-						<View style={{ paddingHorizontal: 16, marginTop: 12 }}>
-							<RelatedProductsGrid products={relatedProducts} />
-						</View>
-					</View>
+				{/* F - Personalization Block (Giftyy's Magic) */}
+				<Animated.View entering={FadeInUp.duration(400).delay(300)}>
+					<AddPersonalMessageButton
+						onPress={handleAddVideoMessage}
+						hasMessage={!!videoUri}
+					/>
+				</Animated.View>
+
+				{/* H - Recommended Products */}
+				{recommendationProducts.length > 0 && (
+					<Animated.View entering={FadeInUp.duration(400).delay(400)}>
+						<RecommendationsCarousel
+							title="You might also like"
+							products={recommendationProducts}
+						/>
+					</Animated.View>
 				)}
 			</ScrollView>
+
+			{/* I - Sticky Bottom Bar (positioned above tab bar) */}
+			<StickyBottomBar
+				price={formattedPrice}
+				originalPrice={formattedOriginalPrice}
+				onAddToCart={handleAddToCart}
+				onBuyNow={handleBuyNow}
+				disabled={variationsLoading || currentStock === 0}
+				stockStatus={stockStatus}
+				bottomOffset={TAB_BAR_HEIGHT + bottom}
+			/>
+
+			{/* Added to Cart Dialog */}
 			<AddedToCartDialog
 				visible={showAdded}
 				onClose={() => setShowAdded(false)}
-				onViewCart={() => { setShowAdded(false); router.push('/(buyer)/(tabs)/cart'); }}
+				onViewCart={() => {
+					setShowAdded(false);
+					router.push('/(buyer)/(tabs)/cart');
+				}}
 				title="Added to cart"
 				imageUri={imageUris[0]}
 			/>
@@ -1141,146 +1160,196 @@ export default function ProductDetailsScreen() {
 }
 
 const styles = StyleSheet.create({
-	header: { position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20, height: 56, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-	headerBtn: { width: 36, height: 36, borderRadius: 18, backgroundColor: 'rgba(255,255,255,0.9)', alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: '#eee' },
-	headerBtnActive: { backgroundColor: '#FFF4ED', borderColor: BRAND_COLOR },
-	title: { fontSize: 22, fontWeight: '800', color: '#111827' },
-	price: { fontSize: 24, color: '#16a34a', fontWeight: '900' },
-	originalPrice: { fontSize: 18, color: '#9ca3af', textDecorationLine: 'line-through', fontWeight: '600' },
-	discountBadge: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6, backgroundColor: '#FEE2E2' },
-	discountBadgeText: { color: '#BE123C', fontWeight: '800', fontSize: 12 },
-	badge: { paddingVertical: 4, paddingHorizontal: 8, borderRadius: 999, backgroundColor: '#FEF3C7', color: '#92400E', fontWeight: '700', overflow: 'hidden', fontSize: 12 },
-	sku: { fontSize: 13, color: '#6b7280', fontWeight: '600' },
-	optionRow: { marginTop: 6, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#eee', backgroundColor: '#fafafa', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-	optionBtn: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-	notice: { marginTop: 10, backgroundColor: '#FFF1F2', paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10 },
-	noticeText: { color: '#BE123C', fontWeight: '700' },
-	section: { paddingHorizontal: 16, paddingVertical: 12, gap: 6, borderTopWidth: 1, borderTopColor: '#f3f4f6' },
-	sectionTitle: { fontSize: 18, fontWeight: '800', color: '#111827' },
-	sectionText: { color: '#6b7280', lineHeight: 22, fontSize: 15 },
-	tag: { paddingVertical: 6, paddingHorizontal: 12, borderRadius: 16, backgroundColor: '#f3f4f6' },
-	tagText: { fontSize: 13, fontWeight: '600', color: '#4b5563' },
-	sellerCard: { marginHorizontal: 16, padding: 12, borderRadius: 12, borderWidth: 1, borderColor: '#eee', backgroundColor: 'white', flexDirection: 'row', alignItems: 'center', gap: 12 },
-	outlineBtn: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, borderWidth: 1, borderColor: '#ddd' },
-	outlineBtnText: { fontWeight: '700' },
-	appleBtn: { flex: 1, backgroundColor: '#111827', borderRadius: 999, alignItems: 'center', justifyContent: 'center', paddingVertical: 14 },
-	appleBtnText: { color: 'white', fontWeight: '800' },
-	linkBtn: { marginTop: 8 },
-	linkText: { color: BRAND, fontWeight: '700' },
-	dotsWrap: { position: 'absolute', bottom: 10, alignSelf: 'center', flexDirection: 'row', gap: 6, backgroundColor: 'rgba(255,255,255,0.7)', paddingHorizontal: 8, paddingVertical: 6, borderRadius: 999 },
-	dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: '#d1d5db' },
-	dotActive: { backgroundColor: '#111827' },
-	variationOption: { 
+	container: {
+		flex: 1,
+		backgroundColor: GIFTYY_THEME.colors.white,
+	},
+	loadingContainer: {
+		flex: 1,
+		justifyContent: 'center',
+		alignItems: 'center',
+		backgroundColor: GIFTYY_THEME.colors.white,
+	},
+	loadingText: {
+		marginTop: 12,
+		color: GIFTYY_THEME.colors.gray500,
+		fontSize: GIFTYY_THEME.typography.sizes.base,
+	},
+	errorContainer: {
+		flex: 1,
+		justifyContent: 'center',
+		alignItems: 'center',
+		backgroundColor: GIFTYY_THEME.colors.white,
+		padding: 20,
+	},
+	errorTitle: {
+		marginTop: 16,
+		fontSize: GIFTYY_THEME.typography.sizes['2xl'],
+		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+		color: GIFTYY_THEME.colors.gray900,
+	},
+	errorText: {
+		marginTop: 8,
+		color: GIFTYY_THEME.colors.gray500,
+		textAlign: 'center',
+		fontSize: GIFTYY_THEME.typography.sizes.base,
+	},
+	errorButton: {
+		marginTop: 24,
 		paddingVertical: 12, 
-		paddingHorizontal: 16, 
-		borderRadius: 8, 
-		borderWidth: 2, 
-		borderColor: '#e5e7eb', 
-		backgroundColor: 'white',
-		minWidth: 80,
+		paddingHorizontal: 24,
+		backgroundColor: GIFTYY_THEME.colors.primary,
+		borderRadius: GIFTYY_THEME.radius.full,
+	},
+	errorButtonText: {
+		color: GIFTYY_THEME.colors.white,
+		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+		fontSize: GIFTYY_THEME.typography.sizes.base,
+	},
+	carouselWrapper: {
+		position: 'relative',
+		width: SCREEN_WIDTH,
+		overflow: 'hidden',
+	},
+	headerOverlay: {
+		position: 'absolute',
+		top: 0,
+		left: 0,
+		right: 0,
+		zIndex: 100,
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
+		paddingBottom: 12,
+	},
+	headerButton: {
+		width: 40,
+		height: 40,
+		borderRadius: 20,
+		backgroundColor: 'rgba(0, 0, 0, 0.4)',
+		justifyContent: 'center',
+		alignItems: 'center',
+		...GIFTYY_THEME.shadows.md,
+	},
+	headerButtonActive: {
+		backgroundColor: 'rgba(247, 85, 7, 0.9)',
+	},
+	headerRight: {
+		flexDirection: 'row',
+		gap: 8,
+	},
+	scrollView: {
+		flex: 1,
+	},
+	titleSection: {
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
+		paddingVertical: GIFTYY_THEME.spacing.xl,
+		backgroundColor: GIFTYY_THEME.colors.white,
+	},
+	titleRow: {
+		flexDirection: 'row',
+		alignItems: 'flex-start',
+		justifyContent: 'space-between',
+		marginBottom: GIFTYY_THEME.spacing.md,
+	},
+	productTitle: {
+		fontSize: GIFTYY_THEME.typography.sizes['3xl'],
+		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+		color: GIFTYY_THEME.colors.gray900,
+		flex: 1,
+		lineHeight: 36,
+	},
+	discountBadge: {
+		backgroundColor: GIFTYY_THEME.colors.error,
+		paddingVertical: 6,
+		paddingHorizontal: 12,
+		borderRadius: GIFTYY_THEME.radius.full,
+		marginLeft: GIFTYY_THEME.spacing.md,
+	},
+	discountText: {
+		color: GIFTYY_THEME.colors.white,
+		fontSize: GIFTYY_THEME.typography.sizes.sm,
+		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+	},
+	priceRow: {
+		flexDirection: 'row',
+		alignItems: 'baseline',
+		gap: GIFTYY_THEME.spacing.md,
+		marginBottom: GIFTYY_THEME.spacing.sm,
+	},
+	price: {
+		fontSize: GIFTYY_THEME.typography.sizes['3xl'],
+		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+		color: GIFTYY_THEME.colors.success,
+	},
+	originalPrice: {
+		fontSize: GIFTYY_THEME.typography.sizes.lg,
+		color: GIFTYY_THEME.colors.gray400,
+		textDecorationLine: 'line-through',
+		fontWeight: GIFTYY_THEME.typography.weights.semibold,
+	},
+	subtitle: {
+		fontSize: GIFTYY_THEME.typography.sizes.base,
+		color: GIFTYY_THEME.colors.gray600,
+		lineHeight: 22,
+		marginTop: GIFTYY_THEME.spacing.sm,
+	},
+	stockWarning: {
+		backgroundColor: GIFTYY_THEME.colors.warning + '20',
+		paddingVertical: 10,
+		paddingHorizontal: 12,
+		borderRadius: GIFTYY_THEME.radius.md,
+		marginTop: GIFTYY_THEME.spacing.md,
+	},
+	stockWarningText: {
+		color: GIFTYY_THEME.colors.warning,
+		fontSize: GIFTYY_THEME.typography.sizes.sm,
+		fontWeight: GIFTYY_THEME.typography.weights.semibold,
+	},
+	stockError: {
+		backgroundColor: GIFTYY_THEME.colors.error + '20',
+		paddingVertical: 10,
+		paddingHorizontal: 12,
+		borderRadius: GIFTYY_THEME.radius.md,
+		marginTop: GIFTYY_THEME.spacing.md,
+	},
+	stockErrorText: {
+		color: GIFTYY_THEME.colors.error,
+		fontSize: GIFTYY_THEME.typography.sizes.sm,
+		fontWeight: GIFTYY_THEME.typography.weights.semibold,
+	},
+	variationsLoadingContainer: {
+		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'center',
-		marginRight: 8,
+		paddingVertical: GIFTYY_THEME.spacing.xl,
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
+		gap: GIFTYY_THEME.spacing.md,
 	},
-	variationOptionSelected: { borderColor: BRAND_COLOR, backgroundColor: '#FFF0E8' },
-	variationOptionDisabled: { opacity: 0.5, borderColor: '#d1d5db' },
-	variationOptionText: { fontSize: 14, fontWeight: '600', color: '#111827', textAlign: 'center' },
-	variationOptionTextSelected: { color: BRAND_COLOR, fontWeight: '700' },
-	variationOptionTextDisabled: { color: '#9ca3af' },
+	variationsLoadingText: {
+		fontSize: GIFTYY_THEME.typography.sizes.base,
+		color: GIFTYY_THEME.colors.gray600,
+		fontWeight: GIFTYY_THEME.typography.weights.medium,
+	},
+	variationsErrorContainer: {
+		paddingVertical: GIFTYY_THEME.spacing.lg,
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
+		backgroundColor: GIFTYY_THEME.colors.gray50,
+		borderRadius: GIFTYY_THEME.radius.lg,
+		marginHorizontal: GIFTYY_THEME.spacing.lg,
+		borderWidth: 1,
+		borderColor: GIFTYY_THEME.colors.gray200,
+	},
+	variationsErrorText: {
+		fontSize: GIFTYY_THEME.typography.sizes.base,
+		fontWeight: GIFTYY_THEME.typography.weights.semibold,
+		color: GIFTYY_THEME.colors.gray900,
+		marginBottom: GIFTYY_THEME.spacing.xs,
+	},
+	variationsErrorSubtext: {
+		fontSize: GIFTYY_THEME.typography.sizes.sm,
+		color: GIFTYY_THEME.colors.gray600,
+	},
 });
-
-function OptionSelector({ name, values, value, onChange }: { name: string; values: string[]; value?: string; onChange: (v: string) => void }) {
-	const [visible, setVisible] = useState(false);
-	return (
-		<View>
-			<View style={styles.optionRow}>
-				<Text style={{ color: '#6b7280', fontWeight: '600' }}>{name}</Text>
-				<Pressable style={styles.optionBtn} onPress={() => setVisible(true)}>
-					<Text style={{ fontWeight: '700' }}>{value || 'Select an option'}</Text>
-					<IconSymbol size={16} name="chevron.down" color="#111" />
-				</Pressable>
-			</View>
-
-			<Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
-				<Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }} onPress={() => setVisible(false)} />
-				<View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'white', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16, gap: 8 }}>
-					<Text style={{ fontWeight: '800', fontSize: 16, marginBottom: 4 }}>{name}</Text>
-					{values.map((v) => (
-						<Pressable key={v} onPress={() => { onChange(v); setVisible(false); }} style={{ paddingVertical: 12, borderRadius: 10, borderWidth: 1, borderColor: '#eee', paddingHorizontal: 12 }}>
-							<Text style={{ fontWeight: '700' }}>{v}</Text>
-						</Pressable>
-					))}
-					<Pressable onPress={() => setVisible(false)} style={{ paddingVertical: 12, alignItems: 'center' }}>
-						<Text style={{ color: BRAND, fontWeight: '800' }}>Close</Text>
-					</Pressable>
-				</View>
-			</Modal>
-		</View>
-	);
-}
-
-function RelatedProductsGrid({ products }: { products: any[] }) {
-	const gap = 12;
-	const cardWidth = (width - 32 - gap) / 2; // 32 for padding, gap for spacing
-	const router = useRouter();
-
-	return (
-		<View style={{ flexDirection: 'row', flexWrap: 'wrap', gap }}>
-			{products.map((product) => {
-				const discountedPrice = product.discountPercentage > 0
-					? product.price * (1 - product.discountPercentage / 100)
-					: product.price;
-				const imageUrl = product.imageUrl ? (() => {
-					try {
-						const parsed = JSON.parse(product.imageUrl);
-						return Array.isArray(parsed) ? parsed[0] : product.imageUrl;
-					} catch {
-						return product.imageUrl;
-					}
-				})() : undefined;
-				
-				return (
-					<View key={product.id} style={{ width: cardWidth }}>
-						<Pressable
-							onPress={() => router.push({ pathname: '/(buyer)/(tabs)/product/[id]', params: { id: product.id } })}
-							style={{ borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: '#eee' }}
-						>
-							<View>
-								{imageUrl ? (
-									<Image
-										source={{ uri: imageUrl }}
-										style={{ width: '100%', height: cardWidth }}
-										resizeMode="cover"
-									/>
-								) : (
-									<View style={{ width: '100%', height: cardWidth, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' }}>
-										<IconSymbol name="photo" size={32} color="#d1d5db" />
-									</View>
-								)}
-								{product.discountPercentage > 0 && (
-									<View style={{ position: 'absolute', top: 8, left: 8, backgroundColor: '#BE123C', paddingVertical: 4, paddingHorizontal: 8, borderRadius: 6 }}>
-										<Text style={{ color: 'white', fontWeight: '800', fontSize: 11 }}>{product.discountPercentage}% OFF</Text>
-									</View>
-								)}
-							</View>
-							<View style={{ padding: 10, gap: 4 }}>
-								<Text style={{ fontSize: 13, fontWeight: '700', color: '#111827' }} numberOfLines={2}>
-									{product.name}
-								</Text>
-								<View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
-									<Text style={{ color: '#16a34a', fontWeight: '800', fontSize: 14 }}>${discountedPrice.toFixed(2)}</Text>
-									{product.discountPercentage > 0 && (
-										<Text style={{ color: '#9ba1a6', textDecorationLine: 'line-through', fontSize: 12 }}>
-											${product.price.toFixed(2)}
-										</Text>
-									)}
-								</View>
-							</View>
-						</Pressable>
-					</View>
-				);
-			})}
-		</View>
-	);
-}
 

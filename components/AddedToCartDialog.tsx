@@ -1,8 +1,7 @@
-import React, { useEffect } from 'react';
-import { Modal, View, Text, Image, Pressable, StyleSheet } from 'react-native';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import BrandButton from '@/components/BrandButton';
-import { BRAND_COLOR } from '@/constants/theme';
+import { GIFTYY_THEME } from '@/constants/giftyy-theme';
+import React, { useEffect } from 'react';
+import { Animated, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 
 type Props = {
 	visible: boolean;
@@ -19,41 +18,96 @@ export default function AddedToCartDialog({
 	onViewCart,
 	title = 'Added to cart',
 	imageUri,
-	autoDismissMs = 1600,
+	autoDismissMs = 2500,
 }: Props) {
+	const scaleAnim = React.useRef(new Animated.Value(0.8)).current;
+	const fadeAnim = React.useRef(new Animated.Value(0)).current;
+
 	useEffect(() => {
-		if (!visible) return;
-		const t = setTimeout(onClose, autoDismissMs);
-		return () => clearTimeout(t);
-	}, [visible, autoDismissMs, onClose]);
+		if (visible) {
+			Animated.parallel([
+				Animated.spring(scaleAnim, {
+					toValue: 1,
+					useNativeDriver: true,
+					damping: 12,
+					stiffness: 300,
+				}),
+				Animated.timing(fadeAnim, {
+					toValue: 1,
+					duration: 200,
+					useNativeDriver: true,
+				}),
+			]).start();
+
+			const t = setTimeout(onClose, autoDismissMs);
+			return () => clearTimeout(t);
+		} else {
+			Animated.parallel([
+				Animated.timing(scaleAnim, {
+					toValue: 0.8,
+					duration: 200,
+					useNativeDriver: true,
+				}),
+				Animated.timing(fadeAnim, {
+					toValue: 0,
+					duration: 200,
+					useNativeDriver: true,
+				}),
+			]).start();
+		}
+	}, [visible, autoDismissMs, onClose, scaleAnim, fadeAnim]);
 
 	return (
-		<Modal transparent visible={visible} animationType="fade" onRequestClose={onClose}>
-			<View style={styles.overlay}>
-				<View style={styles.card}>
-					<View style={styles.row}>
-						<View style={styles.iconCircle}>
-							<IconSymbol name="gift.fill" size={18} color={BRAND_COLOR} />
+		<Modal 
+			transparent 
+			visible={visible} 
+			animationType="none" 
+			onRequestClose={onClose}
+			presentationStyle="overFullScreen"
+		>
+			<Pressable style={styles.overlay} onPress={onClose} activeOpacity={1}>
+				<Animated.View
+					style={[
+						styles.container,
+						{
+							opacity: fadeAnim,
+							transform: [{ scale: scaleAnim }],
+						},
+				 ]}
+				>
+					<Pressable onPress={(e) => e.stopPropagation()} style={styles.card}>
+						{/* Success Icon with Animation */}
+						<View style={styles.iconContainer}>
+							<View style={styles.iconCircle}>
+								<IconSymbol name="checkmark.circle.fill" size={32} color={GIFTYY_THEME.colors.success} />
+							</View>
 						</View>
-						<Text style={styles.title}>{title}</Text>
-					</View>
-					<View style={[styles.row, { alignItems: 'center', marginTop: 8 }]}>
-						{imageUri ? (
-							<Image source={{ uri: imageUri }} style={styles.thumb} />
-						) : (
-							<View style={[styles.thumb, { backgroundColor: '#f3f4f6' }]} />
+
+						{/* Product Image */}
+						{imageUri && (
+							<View style={styles.imageContainer}>
+								<Image source={{ uri: imageUri }} style={styles.productImage} resizeMode="cover" />
+							</View>
 						)}
-						<Text numberOfLines={2} style={styles.subtitle}>Item added successfully. You can continue shopping or view your cart.</Text>
-					</View>
-					<View style={{ height: 10 }} />
-					<View style={{ flexDirection: 'row', gap: 10 }}>
-						<BrandButton title="View cart" onPress={onViewCart} style={{ flex: 1 }} />
-						<Pressable onPress={onClose} style={styles.secondaryBtn}>
-							<Text style={styles.secondaryBtnText}>Continue</Text>
-						</Pressable>
-					</View>
-				</View>
-			</View>
+
+						{/* Title */}
+						<Text style={styles.title}>{title}!</Text>
+
+						{/* Subtitle */}
+						<Text style={styles.subtitle}>Item added successfully to your cart</Text>
+
+						{/* Action Buttons */}
+						<View style={styles.buttonsContainer}>
+							<Pressable onPress={onClose} style={styles.continueButton}>
+								<Text style={styles.continueButtonText}>Continue Shopping</Text>
+							</Pressable>
+							<Pressable onPress={onViewCart} style={styles.viewCartButton}>
+								<Text style={styles.viewCartButtonText}>View Cart</Text>
+							</Pressable>
+						</View>
+					</Pressable>
+				</Animated.View>
+			</Pressable>
 		</Modal>
 	);
 }
@@ -61,40 +115,106 @@ export default function AddedToCartDialog({
 const styles = StyleSheet.create({
 	overlay: {
 		flex: 1,
-		backgroundColor: 'rgba(0,0,0,0.25)',
+		backgroundColor: 'rgba(0, 0, 0, 0.5)',
+		justifyContent: 'center',
 		alignItems: 'center',
-		justifyContent: 'flex-end',
+		zIndex: 1000,
+		elevation: 1000,
+	},
+	container: {
+		width: '100%',
+		maxWidth: 400,
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
+		zIndex: 1001,
+		elevation: 1001,
 	},
 	card: {
-		backgroundColor: 'white',
-		borderTopLeftRadius: 16,
-		borderTopRightRadius: 16,
-		padding: 16,
-		width: '100%',
-		gap: 6,
+		backgroundColor: GIFTYY_THEME.colors.white,
+		borderRadius: GIFTYY_THEME.radius['2xl'],
+		paddingTop: GIFTYY_THEME.spacing['2xl'],
+		paddingBottom: GIFTYY_THEME.spacing.xl,
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
+		alignItems: 'center',
+		...GIFTYY_THEME.shadows.xl,
+		zIndex: 1002,
+		elevation: 1002,
 	},
-	row: { flexDirection: 'row', gap: 10 },
+	iconContainer: {
+		marginBottom: GIFTYY_THEME.spacing.md,
+	},
 	iconCircle: {
-		width: 28,
-		height: 28,
-		borderRadius: 14,
-		backgroundColor: '#FFF2EA',
+		width: 64,
+		height: 64,
+		borderRadius: 32,
+		backgroundColor: GIFTYY_THEME.colors.cream,
+		alignItems: 'center',
+		justifyContent: 'center',
+		borderWidth: 3,
+		borderColor: GIFTYY_THEME.colors.success + '20',
+	},
+	imageContainer: {
+		marginBottom: GIFTYY_THEME.spacing.md,
+		width: 80,
+		height: 80,
+		borderRadius: GIFTYY_THEME.radius.lg,
+		overflow: 'hidden',
+		borderWidth: 2,
+		borderColor: GIFTYY_THEME.colors.gray200,
+		...GIFTYY_THEME.shadows.sm,
+	},
+	productImage: {
+		width: '100%',
+		height: '100%',
+	},
+	title: {
+		fontSize: GIFTYY_THEME.typography.sizes.xl,
+		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+		color: GIFTYY_THEME.colors.gray900,
+		marginBottom: GIFTYY_THEME.spacing.xs,
+		textAlign: 'center',
+	},
+	subtitle: {
+		fontSize: GIFTYY_THEME.typography.sizes.base,
+		color: GIFTYY_THEME.colors.gray600,
+		fontWeight: GIFTYY_THEME.typography.weights.medium,
+		textAlign: 'center',
+		marginBottom: GIFTYY_THEME.spacing.xl,
+	},
+	buttonsContainer: {
+		width: '100%',
+		gap: GIFTYY_THEME.spacing.md,
+	},
+	continueButton: {
+		width: '100%',
+		paddingVertical: GIFTYY_THEME.spacing.md,
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
+		borderRadius: GIFTYY_THEME.radius.full,
+		borderWidth: 1.5,
+		borderColor: GIFTYY_THEME.colors.gray300,
+		backgroundColor: GIFTYY_THEME.colors.white,
 		alignItems: 'center',
 		justifyContent: 'center',
 	},
-	title: { fontSize: 16, fontWeight: '900' },
-	subtitle: { flex: 1, color: '#6b7280', fontWeight: '600' },
-	thumb: { width: 48, height: 48, borderRadius: 10, backgroundColor: '#eee' },
-	secondaryBtn: {
-		paddingHorizontal: 16,
-		paddingVertical: 12,
-		borderRadius: 12,
-		borderWidth: 1,
-		borderColor: '#E5E7EB',
+	continueButtonText: {
+		fontSize: GIFTYY_THEME.typography.sizes.base,
+		fontWeight: GIFTYY_THEME.typography.weights.bold,
+		color: GIFTYY_THEME.colors.gray900,
+	},
+	viewCartButton: {
+		width: '100%',
+		paddingVertical: GIFTYY_THEME.spacing.md,
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
+		borderRadius: GIFTYY_THEME.radius.full,
+		backgroundColor: GIFTYY_THEME.colors.primary,
 		alignItems: 'center',
 		justifyContent: 'center',
+		...GIFTYY_THEME.shadows.md,
 	},
-	secondaryBtnText: { fontWeight: '800', color: '#111827' },
+	viewCartButtonText: {
+		fontSize: GIFTYY_THEME.typography.sizes.base,
+		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+		color: GIFTYY_THEME.colors.white,
+	},
 });
 
 

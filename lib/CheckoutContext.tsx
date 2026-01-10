@@ -12,7 +12,7 @@ export type Recipient = {
     phone?: string;
     email?: string;
 };
-export type CardType = 'Standard' | 'Premium' | 'Luxury' | '';
+export type CardType = 'Standard' | 'Premium' | 'Luxury' | 'Giftyy Card' | '';
 export type Payment = { name: string; cardNumber: string; expiry: string; cvv: string };
 
 type CheckoutState = {
@@ -24,12 +24,25 @@ type CheckoutState = {
     setNotifyRecipient: (v: boolean) => void;
     cardType: CardType;
     setCardType: (t: CardType) => void;
-    videoUri?: string;
+    videoUri?: string; // Uploaded video URL (after successful upload)
     setVideoUri: (u?: string) => void;
     videoTitle?: string;
     setVideoTitle: (t?: string) => void;
+    localVideoUri?: string; // Local file URI (before upload)
+    setLocalVideoUri: (u?: string) => void;
+    videoDurationMs?: number; // Duration in milliseconds
+    setVideoDurationMs: (d?: number) => void;
     sharedMemoryId?: string;
     setSharedMemoryId: (id?: string) => void;
+    // Temporary memory data (before saving to database)
+    localMemoryPhotoUri?: string;
+    setLocalMemoryPhotoUri: (uri?: string) => void;
+    memoryCaption?: string;
+    setMemoryCaption: (caption?: string) => void;
+    memoryText?: string;
+    setMemoryText: (text?: string) => void;
+    memoryType?: 'photo' | 'text' | null;
+    setMemoryType: (type?: 'photo' | 'text' | null) => void;
     payment: Payment;
     setPayment: (p: Payment) => void;
     reset: () => void;
@@ -58,7 +71,13 @@ export function CheckoutProvider({ children }: { children: React.ReactNode }) {
     const [cardType, setCardType] = useState<CardType>('');
     const [videoUri, setVideoUri] = useState<string | undefined>(undefined);
     const [videoTitle, setVideoTitle] = useState<string | undefined>(undefined);
+    const [localVideoUri, setLocalVideoUri] = useState<string | undefined>(undefined);
+    const [videoDurationMs, setVideoDurationMs] = useState<number | undefined>(undefined);
     const [sharedMemoryId, setSharedMemoryId] = useState<string | undefined>(undefined);
+    const [localMemoryPhotoUri, setLocalMemoryPhotoUri] = useState<string | undefined>(undefined);
+    const [memoryCaption, setMemoryCaption] = useState<string | undefined>(undefined);
+    const [memoryText, setMemoryText] = useState<string | undefined>(undefined);
+    const [memoryType, setMemoryType] = useState<'photo' | 'text' | null | undefined>(undefined);
     const [payment, setPayment] = useState<Payment>(initialPayment);
 
     const reset = () => {
@@ -68,13 +87,35 @@ export function CheckoutProvider({ children }: { children: React.ReactNode }) {
         setCardType('');
         setVideoUri(undefined);
         setVideoTitle(undefined);
+        setLocalVideoUri(undefined);
+        setVideoDurationMs(undefined);
         setSharedMemoryId(undefined);
+        setLocalMemoryPhotoUri(undefined);
+        setMemoryCaption(undefined);
+        setMemoryText(undefined);
+        setMemoryType(undefined);
         setPayment(initialPayment);
     };
 
     const value = useMemo(
-        () => ({ recipient, setRecipient, cardPrice, setCardPrice, notifyRecipient, setNotifyRecipient, cardType, setCardType, videoUri, setVideoUri, videoTitle, setVideoTitle, sharedMemoryId, setSharedMemoryId, payment, setPayment, reset }),
-        [recipient, cardPrice, notifyRecipient, cardType, videoUri, videoTitle, sharedMemoryId, payment]
+        () => ({ 
+            recipient, setRecipient, 
+            cardPrice, setCardPrice, 
+            notifyRecipient, setNotifyRecipient, 
+            cardType, setCardType, 
+            videoUri, setVideoUri, 
+            videoTitle, setVideoTitle,
+            localVideoUri, setLocalVideoUri,
+            videoDurationMs, setVideoDurationMs,
+            sharedMemoryId, setSharedMemoryId,
+            localMemoryPhotoUri, setLocalMemoryPhotoUri,
+            memoryCaption, setMemoryCaption,
+            memoryText, setMemoryText,
+            memoryType, setMemoryType,
+            payment, setPayment, 
+            reset 
+        }),
+        [recipient, cardPrice, notifyRecipient, cardType, videoUri, videoTitle, localVideoUri, videoDurationMs, sharedMemoryId, localMemoryPhotoUri, memoryCaption, memoryText, memoryType, payment]
     );
     return <CheckoutContext.Provider value={value}>{children}</CheckoutContext.Provider>;
 }

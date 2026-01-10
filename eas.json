@@ -11,11 +11,37 @@
     "preview": {
       "distribution": "internal"
     },
+    "internal": {
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "NODE_ENV": "production"
+      }
+    },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
+      "env": {
+        "NODE_ENV": "production"
+      }
     }
   },
   "submit": {
-    "production": {}
+    "internal": {
+      "android": {
+        "serviceAccountKeyPath": "./store-loc-293307-6aa00c54fd9b.json",
+        "track": "internal"
+      }
+    },
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./store-loc-293307-6aa00c54fd9b.json",
+        "track": "production"
+      }
+    }
   }
 }
