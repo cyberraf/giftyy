@@ -141,12 +141,6 @@ function AccountPanel() {
                     icon="person.circle.fill"
                     subtitle="Update your personal information"
                 />
-                <LinkRow 
-                    onPress={() => router.push('/(buyer)/subscription')}
-                    label="Subscription"
-                    icon="creditcard.fill"
-                    subtitle="Manage your subscription plan"
-                />
             </View>
 
             

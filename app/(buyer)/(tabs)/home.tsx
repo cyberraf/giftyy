@@ -796,7 +796,7 @@ export default function MarketplaceHomeScreen() {
 		if (bundlesWithProducts.length > 0) {
 			bannerItems.push({
 				id: 'collections',
-				title: 'Shop Giftyy Bundles',
+				title: 'Giftyy Bundles',
 				subtitle: 'Curated gifts for every occasion',
 				backgroundColor: GIFTYY_THEME.colors.success,
 				onPress: () => router.push('/(buyer)/bundles'),
@@ -807,6 +807,8 @@ export default function MarketplaceHomeScreen() {
 	}, [saleProducts, bundlesWithProducts]);
 	
 	const headerPaddingTop = top + 6;
+	// Calculate responsive header height: safe area top + padding + search box height + bottom padding
+	const headerHeight = headerPaddingTop + 44 + 12; // 44 = searchBox height, 12 = paddingBottom
 
 	return (
 		<View style={styles.container}>
@@ -861,7 +863,10 @@ export default function MarketplaceHomeScreen() {
 				style={styles.scrollView}
 				contentContainerStyle={[
 					styles.scrollContent,
-					{ paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 24 },
+					{ 
+						paddingTop: headerHeight + GIFTYY_THEME.spacing.sm, // Responsive padding based on header height
+						paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 24 
+					},
 				]}
 				showsVerticalScrollIndicator={false}
 				refreshControl={
@@ -910,6 +915,8 @@ export default function MarketplaceHomeScreen() {
 									
 									// Ensure 3-column layout - remove marginRight from last item in each row
 									const isLastInRow = (index + 1) % 3 === 0;
+									// Use 3-column width from theme
+									const threeColumnWidth = GIFTYY_THEME.layout.cardWidth3Col;
 									
 									return (
 										<Animated.View
@@ -928,6 +935,7 @@ export default function MarketplaceHomeScreen() {
 												discountPercentage={typeof product.discountPercentage === 'number' && !isNaN(product.discountPercentage) ? product.discountPercentage : undefined}
 												image={imageUrl}
 												vendorName={vendor?.storeName || undefined}
+												width={threeColumnWidth}
 												onPress={() => router.push({
 													pathname: '/(buyer)/(tabs)/product/[id]',
 													params: { id: product.id },
@@ -1306,6 +1314,8 @@ export default function MarketplaceHomeScreen() {
 										
 										// Ensure 3-column layout - remove marginRight from last item in each row
 										const isLastInRow = (index + 1) % 3 === 0;
+										// Use 3-column width from theme
+										const threeColumnWidth = GIFTYY_THEME.layout.cardWidth3Col;
 										
 							return (
 											<Animated.View
@@ -1324,6 +1334,7 @@ export default function MarketplaceHomeScreen() {
 													discountPercentage={typeof product.discountPercentage === 'number' && !isNaN(product.discountPercentage) ? product.discountPercentage : undefined}
 													image={imageUrl}
 													vendorName={vendor?.storeName || undefined}
+													width={threeColumnWidth}
 													onPress={() => router.push({
 														pathname: '/(buyer)/(tabs)/product/[id]',
 														params: { id: product.id },
@@ -1510,7 +1521,7 @@ const styles = StyleSheet.create({
 		flex: 1,
 	},
 	scrollContent: {
-		paddingTop: 100, // Header height + padding
+		// paddingTop is now calculated dynamically in contentContainerStyle based on header height
 	},
 	categoriesContainer: {
 		paddingHorizontal: GIFTYY_THEME.spacing.lg,

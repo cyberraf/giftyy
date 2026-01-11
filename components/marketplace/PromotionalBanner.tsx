@@ -5,6 +5,7 @@
 
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
+import { verticalScale, responsiveFontSize } from '@/utils/responsive';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
 import { Dimensions, Image, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -16,11 +17,15 @@ import Animated, {
 	withTiming,
 } from 'react-native-reanimated';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const BANNER_HEIGHT = SCREEN_WIDTH * 0.5;
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+// Use responsive height: scale between min and max based on screen height
+// Smaller phones get smaller banners, larger phones get proportionally larger
+const MIN_BANNER_HEIGHT = verticalScale(140);
+const MAX_BANNER_HEIGHT = verticalScale(200);
+const BANNER_HEIGHT = Math.min(Math.max(SCREEN_WIDTH * 0.42, MIN_BANNER_HEIGHT), MAX_BANNER_HEIGHT);
 const BANNER_WIDTH = SCREEN_WIDTH - (GIFTYY_THEME.spacing.lg * 2);
-const CARD_SPACING = 12;
-const CARD_PEEK = 24; // amount of next card visible
+const CARD_SPACING = GIFTYY_THEME.spacing.md; // Use responsive spacing
+const CARD_PEEK = GIFTYY_THEME.spacing['2xl']; // Use responsive spacing
 const CARD_WIDTH = BANNER_WIDTH - CARD_PEEK;
 const SNAP_INTERVAL = CARD_WIDTH + CARD_SPACING;
 
@@ -93,7 +98,7 @@ function BannerSlide({ banner }: { banner: BannerItem }) {
 					/>
 				)}
 				<View style={styles.content}>
-					<Text style={styles.title}>{banner.title}</Text>
+					<Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{banner.title}</Text>
 					{banner.subtitle && (
 						<Text style={styles.subtitle}>{banner.subtitle}</Text>
 					)}
@@ -222,6 +227,7 @@ export function PromotionalBanner({
 const styles = StyleSheet.create({
 	gestureContainer: {
 		marginHorizontal: GIFTYY_THEME.spacing.lg,
+		marginTop: GIFTYY_THEME.spacing.md,
 		marginBottom: GIFTYY_THEME.spacing.xl,
 	},
 	carouselContent: {
@@ -259,7 +265,8 @@ const styles = StyleSheet.create({
 		maxWidth: '70%',
 	},
 	title: {
-		fontSize: GIFTYY_THEME.typography.sizes['3xl'],
+		// Use smaller font size on smaller screens (< 375px)
+		fontSize: SCREEN_WIDTH < 375 ? GIFTYY_THEME.typography.sizes['2xl'] : GIFTYY_THEME.typography.sizes['3xl'],
 		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
 		color: GIFTYY_THEME.colors.white,
 		marginBottom: GIFTYY_THEME.spacing.sm,
@@ -268,7 +275,8 @@ const styles = StyleSheet.create({
 		textShadowRadius: 4,
 	},
 	subtitle: {
-		fontSize: GIFTYY_THEME.typography.sizes.base,
+		// Use smaller font size on smaller screens (< 375px)
+		fontSize: SCREEN_WIDTH < 375 ? GIFTYY_THEME.typography.sizes.sm : GIFTYY_THEME.typography.sizes.base,
 		color: GIFTYY_THEME.colors.white,
 		opacity: 0.95,
 		marginBottom: GIFTYY_THEME.spacing.lg,
@@ -289,7 +297,8 @@ const styles = StyleSheet.create({
 		transform: [{ scale: 0.98 }],
 	},
 	ctaText: {
-		fontSize: GIFTYY_THEME.typography.sizes.base,
+		// Use smaller font size on smaller screens (< 375px)
+		fontSize: SCREEN_WIDTH < 375 ? GIFTYY_THEME.typography.sizes.sm : GIFTYY_THEME.typography.sizes.base,
 		fontWeight: GIFTYY_THEME.typography.weights.bold,
 		color: GIFTYY_THEME.colors.white,
 	},

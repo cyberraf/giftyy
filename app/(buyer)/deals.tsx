@@ -278,6 +278,9 @@ export default function DealsScreen() {
 	}, [refreshProducts]);
 	
 	const headerPaddingTop = top + 6;
+	// Calculate responsive header height: original base (110) + safe area top
+	// Original was 110px (for devices without notch), now adapts to safe area
+	const headerHeight = 110 + top;
 	
 	return (
 		<View style={styles.container}>
@@ -327,7 +330,10 @@ export default function DealsScreen() {
 				style={styles.scrollView}
 				contentContainerStyle={[
 					styles.scrollContent,
-					{ paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 24 },
+					{ 
+						paddingTop: headerHeight + GIFTYY_THEME.spacing.sm, // Responsive padding based on header height
+						paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 24 
+					},
 				]}
 				showsVerticalScrollIndicator={false}
 				refreshControl={
@@ -824,7 +830,7 @@ const styles = StyleSheet.create({
 		flex: 1,
 	},
 	scrollContent: {
-		paddingTop: 110,
+		// paddingTop is now calculated dynamically in contentContainerStyle based on header height
 		paddingHorizontal: GIFTYY_THEME.spacing.lg,
 	},
 	sectionHeader: {

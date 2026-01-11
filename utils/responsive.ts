@@ -29,6 +29,20 @@ export const normalizeFont = (size: number, factor = 0.5) => {
 	return Math.round(PixelRatio.roundToNearestPixel(newSize));
 };
 
+/**
+ * Get responsive font size that scales down more on smaller screens
+ * Returns a smaller font size for screens narrower than 375px
+ */
+export const responsiveFontSize = (size: number, factor = 0.5) => {
+	const isSmallScreen = SCREEN_WIDTH < 375;
+	if (isSmallScreen) {
+		// Scale down more aggressively on smaller screens (90% of normal size)
+		const adjustedSize = size * 0.9;
+		return normalizeFont(adjustedSize, factor);
+	}
+	return normalizeFont(size, factor);
+};
+
 export const responsive = {
 	screenWidth: SCREEN_WIDTH,
 	screenHeight: SCREEN_HEIGHT,
@@ -36,5 +50,6 @@ export const responsive = {
 	verticalScale,
 	moderateScale,
 	normalizeFont,
+	responsiveFontSize,
 };
 

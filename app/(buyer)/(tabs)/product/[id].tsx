@@ -99,6 +99,36 @@ export default function ProductDetailsScreen() {
 
 	const isInWishlist = product ? isWishlisted(product.id) : false;
 
+	// Calculate adaptive font size for product title to fit within 3 lines
+	const titleStyle = useMemo(() => {
+		if (!product?.name) {
+			return {
+				fontSize: GIFTYY_THEME.typography.sizes['3xl'],
+				lineHeight: GIFTYY_THEME.typography.sizes['3xl'] * 1.3,
+			};
+		}
+		
+		const titleLength = product.name.length;
+		let fontSize: number;
+		
+		// Estimate characters per line for different font sizes (approximate)
+		// Adjust font size based on title length to fit within 3 lines
+		if (titleLength <= 50) {
+			fontSize = GIFTYY_THEME.typography.sizes['3xl']; // 28px
+		} else if (titleLength <= 70) {
+			fontSize = GIFTYY_THEME.typography.sizes['2xl']; // 24px
+		} else if (titleLength <= 90) {
+			fontSize = GIFTYY_THEME.typography.sizes.xl; // 20px
+		} else {
+			fontSize = GIFTYY_THEME.typography.sizes.lg; // 18px
+		}
+		
+		return {
+			fontSize,
+			lineHeight: fontSize * 1.3, // 1.3x for good readability
+		};
+	}, [product?.name]);
+
 	// Refresh handler
 	const onRefresh = useCallback(async () => {
 		setRefreshing(true);
@@ -1043,17 +1073,23 @@ export default function ProductDetailsScreen() {
 				{/* B - Product Title & Price Block */}
 				<Animated.View entering={FadeInUp.duration(400).delay(100)} style={styles.titleSection}>
 					<View style={styles.titleRow}>
-						<Text style={styles.productTitle}>{product.name}</Text>
+						<Text 
+							style={[styles.productTitle, titleStyle]} 
+							numberOfLines={3}
+							ellipsizeMode="tail"
+						>
+							{product.name}
+						</Text>
+					</View>
+					<View style={styles.priceRow}>
+						<Text style={styles.price}>{formattedPrice}</Text>
+						{formattedOriginalPrice && <Text style={styles.originalPrice}>{formattedOriginalPrice}</Text>}
 						{discountPercentage > 0 && (
 							<View style={styles.discountBadge}>
 								<Text style={styles.discountText}>{discountPercentage}% OFF</Text>
 							</View>
 						)}
 					</View>
-					<View style={styles.priceRow}>
-						<Text style={styles.price}>{formattedPrice}</Text>
-						{formattedOriginalPrice && <Text style={styles.originalPrice}>{formattedOriginalPrice}</Text>}
-								</View>
 					{stockStatus === 'low_stock' && (
 						<View style={styles.stockWarning}>
 							<Text style={styles.stockWarningText}>Only {currentStock} left in stock!</Text>
@@ -1254,18 +1290,19 @@ const styles = StyleSheet.create({
 		marginBottom: GIFTYY_THEME.spacing.md,
 	},
 	productTitle: {
-		fontSize: GIFTYY_THEME.typography.sizes['3xl'],
+		// fontSize is now set dynamically based on title length
 		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
 		color: GIFTYY_THEME.colors.gray900,
 		flex: 1,
-		lineHeight: 36,
+		// lineHeight will be calculated based on fontSize (1.3x font size for better readability)
 	},
 	discountBadge: {
 		backgroundColor: GIFTYY_THEME.colors.error,
 		paddingVertical: 6,
 		paddingHorizontal: 12,
 		borderRadius: GIFTYY_THEME.radius.full,
-		marginLeft: GIFTYY_THEME.spacing.md,
+		marginLeft: GIFTYY_THEME.spacing.sm,
+		alignSelf: 'center',
 	},
 	discountText: {
 		color: GIFTYY_THEME.colors.white,

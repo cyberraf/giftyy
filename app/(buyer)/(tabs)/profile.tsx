@@ -799,9 +799,6 @@ function OverviewPanel({ onTabChange }: { onTabChange?: (tab: TabKey) => void })
             case 'memories':
                 router.push('/(buyer)/(tabs)/memory');
                 break;
-            case 'subscription':
-                router.push('/(buyer)/subscription');
-                break;
             case 'order-tracker':
                 router.push('/(buyer)/order-tracker');
                 break;
@@ -831,12 +828,6 @@ function OverviewPanel({ onTabChange }: { onTabChange?: (tab: TabKey) => void })
                         title="Memories"
                         subtitle="Video messages"
                         icon="camera.fill"
-                    />
-                    <QuickActionButton 
-                        onPress={() => handleQuickAction('subscription')}
-                        title="Subscription"
-                        subtitle="Plan & billing"
-                        icon="creditcard.fill"
                     />
                     <QuickActionButton 
                         onPress={() => handleQuickAction('order-tracker')}
@@ -967,12 +958,6 @@ function SettingsPanel() {
                     label="Profile & preferences"
                     icon="person.circle.fill"
                     subtitle="Update your personal information"
-                />
-                <SettingsLinkRow 
-                    onPress={() => router.push('/(buyer)/subscription')}
-                    label="Subscription"
-                    icon="creditcard.fill"
-                    subtitle="Manage your subscription plan"
                 />
             </View>
 

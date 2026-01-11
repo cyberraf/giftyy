@@ -2336,11 +2336,16 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                     onError={(error) => {
                         const errorStr = error?.toString() || '';
                         const isCodecError = errorStr.includes('Decoder') || errorStr.includes('codec') || errorStr.includes('HEVC') || errorStr.includes('hevc');
+                        const isNetworkError = errorStr.includes('NSURLErrorDomain') || errorStr.includes('network') || errorStr.includes('connection');
                         
+                        // Only log non-network errors (network errors are often transient and noisy)
                         if (isCodecError) {
                             console.error('Memory viewer video codec error (HEVC/decoder issue):', error);
+                        } else if (!isNetworkError) {
+                            console.error('Memory viewer video error:', error);
                         } else {
-                        console.error('Memory viewer video error:', error);
+                            // Network errors are common and usually resolve themselves - just warn
+                            console.warn('[ViewerSlide] Video network error (will retry):', errorStr.substring(0, 100));
                         }
                         
                         setVideoError(true);
@@ -2387,7 +2392,16 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                                 
                                 // Handle playback errors
                                 if (status.error) {
-                                    console.error('[ViewerSlide] Video playback status error:', status.error);
+                                    const errorStr = status.error?.toString() || '';
+                                    const isNetworkError = errorStr.includes('NSURLErrorDomain') || errorStr.includes('network') || errorStr.includes('connection');
+                                    
+                                    // Only log non-network errors (network errors are often transient)
+                                    if (!isNetworkError) {
+                                        console.error('[ViewerSlide] Video playback status error:', status.error);
+                                    } else {
+                                        console.warn('[ViewerSlide] Video network error (will retry):', errorStr.substring(0, 100));
+                                    }
+                                    
                                     setVideoError(true);
                                     setVideoReady(false);
                                     // Don't aggressively unload on error to avoid timeout issues
@@ -2398,7 +2412,16 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                                 }
                             } else if (status?.isLoaded === false && status.error) {
                                 // Handle errors even when video is not fully loaded
-                                console.error('[ViewerSlide] Video loading error:', status.error);
+                                const errorStr = status.error?.toString() || '';
+                                const isNetworkError = errorStr.includes('NSURLErrorDomain') || errorStr.includes('network') || errorStr.includes('connection');
+                                
+                                // Only log non-network errors
+                                if (!isNetworkError) {
+                                    console.error('[ViewerSlide] Video loading error:', status.error);
+                                } else {
+                                    console.warn('[ViewerSlide] Video network loading error (will retry):', errorStr.substring(0, 100));
+                                }
+                                
                                 setVideoError(true);
                                 setVideoReady(false);
                             }
