@@ -1,17 +1,14 @@
 import BrandButton from '@/components/BrandButton';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { VideoPreview } from '@/components/VideoPreview';
 import { useCart } from '@/contexts/CartContext';
 import { useProducts } from '@/contexts/ProductsContext';
-import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
 	FlatList,
 	Image,
 	Pressable,
 	RefreshControl,
-	ScrollView,
 	StyleSheet,
 	Text,
 	View
@@ -24,13 +21,6 @@ const PRIMARY = '#f75507';
 const PEACH = '#fff1ea';
 const BLUSH = '#ffe8f1';
 const SOFT = '#f9fafb';
-
-type FeaturedVideo = {
-	id: string;
-	title: string;
-	videoUrl: string;
-	durationSeconds?: number;
-};
 
 const VIDEO_CARD_WIDTH = 80; // Small compact video cards
 
@@ -96,7 +86,6 @@ export default function CartScreen() {
 						}
 						ListFooterComponent={
 							<View style={{ gap: 16, marginTop: 6 }}>
-								<PersonalizedCTA />
 								<SummaryCard
 									subtotal={subtotal}
 									deliveryFee={deliveryFee}
@@ -194,98 +183,6 @@ function CartItemCard({
 				</View>
 			</Animated.View>
 		</Swipeable>
-	);
-}
-
-function PersonalizedCTA() {
-	const [featuredVideos, setFeaturedVideos] = useState<FeaturedVideo[]>([]);
-	const [loading, setLoading] = useState(true);
-
-	useEffect(() => {
-		const fetchFeaturedVideos = async () => {
-			try {
-				setLoading(true);
-				const { data, error } = await supabase
-					.from('video_messages')
-					.select('id, title, video_url, duration_seconds')
-					.eq('is_featured', true)
-					.not('video_url', 'is', null)
-					.order('created_at', { ascending: false })
-					.limit(10);
-
-				if (error) {
-					console.error('Error fetching featured videos:', error);
-					return;
-				}
-
-				// Shuffle and take 4 random videos
-				const videos = (data || []).map((row) => ({
-					id: row.id,
-					title: row.title,
-					videoUrl: row.video_url,
-					durationSeconds: row.duration_seconds || undefined,
-				}));
-
-				// Shuffle array
-				const shuffled = videos.sort(() => Math.random() - 0.5);
-				setFeaturedVideos(shuffled.slice(0, 4));
-			} catch (err) {
-				console.error('Error fetching featured videos:', err);
-			} finally {
-				setLoading(false);
-			}
-		};
-
-		fetchFeaturedVideos();
-	}, []);
-
-	if (loading || featuredVideos.length === 0) {
-		return null;
-	}
-
-	return (
-		<Animated.View entering={FadeInUp.duration(220)} style={styles.ctaCard}>
-			<View style={styles.ctaHeader}>
-				<View style={styles.ctaIcon}>
-					<IconSymbol name="video.fill" size={18} color={PRIMARY} />
-				</View>
-				<View style={{ flex: 1 }}>
-					<Text style={styles.ctaTitle}>Add a personalized video message</Text>
-					<Text style={styles.ctaSubtitle}>Make your gift unforgettable</Text>
-				</View>
-			</View>
-
-			<ScrollView
-				horizontal
-				showsHorizontalScrollIndicator={false}
-				contentContainerStyle={styles.videoAlbum}
-				style={{ marginTop: 12 }}
-			>
-				{featuredVideos.map((video, index) => (
-					<View
-						key={video.id}
-						style={[styles.videoCard, index > 0 && { marginLeft: 8 }]}
-					>
-						<View style={styles.videoThumbnail}>
-							<VideoPreview videoUrl={video.videoUrl} style={StyleSheet.absoluteFill} />
-							<View style={styles.playOverlay}>
-								<View style={styles.playIcon}>
-									<IconSymbol name="play.fill" size={12} color="#fff" />
-								</View>
-							</View>
-							{video.durationSeconds && (
-								<View style={styles.durationBadge}>
-									<Text style={styles.durationText}>
-										{Math.floor(video.durationSeconds / 60)}:
-										{String(Math.floor(video.durationSeconds % 60)).padStart(2, '0')}
-									</Text>
-								</View>
-							)}
-						</View>
-					</View>
-				))}
-			</ScrollView>
-		</Animated.View>
 	);
 }
 

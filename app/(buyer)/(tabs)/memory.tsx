@@ -17,7 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Modal, NativeScrollEvent, NativeSyntheticEvent, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, Dimensions, FlatList, Image, InteractionManager, Modal, NativeScrollEvent, NativeSyntheticEvent, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const baseTabs = ['Overview', 'Messages', 'Reactions', 'Shared memories'] as const;
@@ -299,43 +299,78 @@ export default function MemoryTabScreen() {
 
     const [mediaTypeModalVisible, setMediaTypeModalVisible] = useState(false);
     const { addSharedMemory } = useSharedMemories();
+    const [pendingPickerType, setPendingPickerType] = useState<'video' | 'photo' | null>(null);
 
     const handleUploadMemory = useCallback(() => {
         setMediaTypeModalVisible(true);
     }, []);
 
-    const handleSelectMediaType = useCallback(async (mediaType: 'video' | 'photo') => {
+    const handleSelectMediaType = useCallback((mediaType: 'video' | 'photo') => {
+        // Close the modal first, then launch the picker after the dismissal animation finishes.
+        setPendingPickerType(mediaType);
         setMediaTypeModalVisible(false);
-        
-        const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-        if (!permission.granted) {
-            Alert.alert('Permission required', 'Please allow media library access to upload a memory.');
-            return;
-        }
-
-        const mediaTypes = mediaType === 'video' 
-            ? ImagePicker.MediaTypeOptions.Videos 
-            : ImagePicker.MediaTypeOptions.Images;
-
-        const result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes,
-            allowsMultipleSelection: false,
-            quality: 1,
-        });
-
-        if (result.canceled) {
-            return;
-        }
-
-        const asset = result.assets?.[0];
-        if (!asset) {
-            return;
-        }
-
-        // Open title input modal
-        setSelectedAsset({ uri: asset.uri, mediaType });
-        setTitleModalVisible(true);
     }, []);
+
+    useEffect(() => {
+        if (!pendingPickerType) return;
+        if (mediaTypeModalVisible) return;
+
+        let cancelled = false;
+
+        const run = () => {
+            InteractionManager.runAfterInteractions(async () => {
+                try {
+                    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+                    if (!permission.granted) {
+                        Alert.alert('Permission required', 'Please allow media library access to upload a memory.');
+                        return;
+                    }
+
+                    // Support both newer and older expo-image-picker APIs.
+                    const MediaTypeEnum = (ImagePicker as any).MediaType;
+                    const mediaTypes =
+                        pendingPickerType === 'video'
+                            ? MediaTypeEnum?.Videos
+                                ? [MediaTypeEnum.Videos]
+                                : (['videos'] as const)
+                            : MediaTypeEnum?.Images
+                                ? [MediaTypeEnum.Images]
+                                : (['images'] as const);
+
+                    const result = await ImagePicker.launchImageLibraryAsync({
+                        mediaTypes,
+                        allowsMultipleSelection: false,
+                        quality: 1,
+                    });
+
+                    if (cancelled || result.canceled) {
+                        return;
+                    }
+
+                    const asset = result.assets?.[0];
+                    if (!asset?.uri) {
+                        Alert.alert('No media selected', 'Please try selecting a photo or video again.');
+                        return;
+                    }
+
+                    // Open title input modal
+                    setSelectedAsset({ uri: asset.uri, mediaType: pendingPickerType });
+                    setTitleModalVisible(true);
+                } catch (err: any) {
+                    console.error('[Shared memories] Image picker failed:', err);
+                    Alert.alert('Could not open gallery', err?.message || 'Please try again.');
+                } finally {
+                    !cancelled && setPendingPickerType(null);
+                }
+            });
+        };
+
+        run();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [pendingPickerType, mediaTypeModalVisible]);
 
     const [titleModalVisible, setTitleModalVisible] = useState(false);
     const [selectedAsset, setSelectedAsset] = useState<{ uri: string; mediaType: 'video' | 'photo' } | null>(null);
@@ -1241,8 +1276,26 @@ function VaultsPanel({
                 </View>
             ) : !hasAnyVaultVideos ? (
                 <View style={[styles.vaultEmptyState, { paddingTop: 80, paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 40 }]}>
-                    <Text style={styles.vaultSimpleTitle}>Vault is empty</Text>
-                    <Text style={styles.vaultSimpleText}>Add memories in Shared memories to see them here.</Text>
+                    <View style={styles.vaultEmptyIconContainer}>
+                        <IconSymbol name="square.stack.3d.up.fill" size={34} color={BRAND_COLOR} />
+                    </View>
+                    <Text style={styles.vaultEmptyTitle}>No vaults yet</Text>
+                    <Text style={styles.vaultEmptySubtitle}>
+                        Add memories first, then we’ll automatically group them into vaults so you can relive moments faster.
+                    </Text>
+
+                    {onUploadMemory ? (
+                        <Pressable style={styles.vaultEmptyPrimaryButton} onPress={onUploadMemory}>
+                            <IconSymbol name="plus.circle.fill" size={18} color="#FFFFFF" />
+                            <Text style={styles.vaultEmptyPrimaryButtonText}>Add shared memory</Text>
+                        </Pressable>
+                    ) : null}
+
+                    {onGoToMessages ? (
+                        <Pressable style={styles.vaultEmptySecondaryButton} onPress={onGoToMessages}>
+                            <Text style={styles.vaultEmptySecondaryButtonText}>Go to Messages</Text>
+                        </Pressable>
+                    ) : null}
                 </View>
             ) : (
             <FlatList
@@ -1282,8 +1335,8 @@ function VaultsPanel({
                 ListEmptyComponent={
                     !loading ? (
                         <View style={styles.vaultListEmptyState}>
-                            <Text style={styles.vaultSimpleTitle}>Vault is empty</Text>
-                            <Text style={styles.vaultSimpleText}>Add memories in Shared memories to see them here.</Text>
+                            <Text style={styles.vaultSimpleTitle}>No matches</Text>
+                            <Text style={styles.vaultSimpleText}>Try another filter.</Text>
                         </View>
                     ) : null
                 }
@@ -1503,21 +1556,42 @@ function SharedMemoriesPanel({ sharedMemories, loading, onUpload, refreshing, on
 }
 
 function SharedMemoryCard({ item, onPress, onLongPress }: { item: MemoryVideoItem & { mediaType: 'video' | 'photo' }; onPress: () => void; onLongPress?: () => void }) {
+    const [imageError, setImageError] = useState(false);
+
     return (
         <Pressable style={styles.messageCardWrapper} onPress={onPress} onLongPress={onLongPress}>
             <View style={styles.messageCardContainer}>
-                <MemoryThumbnail
-                    fallbackUrl={item.videoUrl}
-                    style={styles.messageVideoPreview}
-                />
-                {/* Direction indicator */}
-                <View style={[styles.messageDirectionBadge, styles.messageDirectionBadgeSent]}>
-                    <IconSymbol
-                        name="arrow.up.circle.fill"
-                        size={20}
-                        color="#FFFFFF"
+                {item.mediaType === 'photo' ? (
+                    imageError ? (
+                        <View style={[styles.messageVideoPreview, styles.sharedMemoryPhotoPlaceholder]}>
+                            <IconSymbol name="photo" size={22} color="rgba(255,255,255,0.6)" />
+                        </View>
+                    ) : (
+                        <Image
+                            source={{ uri: item.videoUrl }}
+                            style={styles.messageVideoPreview}
+                            resizeMode="cover"
+                            onError={() => setImageError(true)}
+                        />
+                    )
+                ) : (
+                    <MemoryThumbnail
+                        fallbackUrl={item.videoUrl}
+                        style={styles.messageVideoPreview}
+                        showPlay={false}
                     />
-                </View>
+                )}
+
+                {/* Video / Photo indicator */}
+                {item.mediaType === 'video' ? (
+                    <View style={styles.messagePlayButton}>
+                        <IconSymbol name="play.fill" size={26} color="#FFFFFF" />
+                    </View>
+                ) : (
+                    <View style={styles.messagePhotoIndicator}>
+                        <Text style={styles.messagePhotoText}>PHOTO</Text>
+                    </View>
+                )}
             </View>
         </Pressable>
     );
@@ -1651,7 +1725,9 @@ function VaultRow({ collection, onPress }: { collection: VaultCollectionItem; on
 }
 
 function VaultCollectionCard({ collection, onOpen }: { collection: VaultCollectionItem; onOpen: () => void }) {
-    const previewVideos = collection.videos.slice(0, 4);
+    const previewVideos = (collection.videos ?? []).slice(0, 4);
+    const count = collection.videos?.length ?? 0;
+    const secondary = collection.description || collection.categoryType?.replace(/-/g, ' ');
     
     // Debug: Log video URLs to check if they're valid
     useEffect(() => {
@@ -1666,30 +1742,54 @@ function VaultCollectionCard({ collection, onOpen }: { collection: VaultCollecti
     
     return (
         <Pressable style={styles.vaultCollectionCard} onPress={onOpen}>
-            <View style={styles.vaultCollectionBody}>
-                {previewVideos.map((video, index) => (
-                    <View key={video.id || index} style={styles.vaultCollectionThumbWrap}>
-                        <MemoryThumbnail
-                            fallbackUrl={video.videoUrl}
-                            style={styles.vaultCollectionThumb}
-                        />
-                        <View style={[styles.messageDirectionBadge, video.direction === 'received' ? styles.messageDirectionBadgeReceived : styles.messageDirectionBadgeSent]}>
-                            <IconSymbol 
-                                name={video.direction === 'received' ? 'arrow.down.circle.fill' : 'arrow.up.circle.fill'} 
-                                size={18} 
-                                color="#FFFFFF" 
-                            />
-                        </View>
-                        <View style={styles.messagePlayButton}>
-                            <IconSymbol name="play.fill" size={20} color="#FFFFFF" />
-                        </View>
+            <View style={styles.vaultCollectionMedia}>
+                <View style={styles.vaultCollectionBody}>
+                    {Array.from({ length: 4 }).map((_, index) => {
+                        const video = previewVideos[index];
+                        return (
+                            <View key={video?.id || index} style={styles.vaultCollectionThumbWrap}>
+                                {video?.videoUrl ? (
+                                    <>
+                                        <MemoryThumbnail
+                                            fallbackUrl={video.videoUrl}
+                                            style={styles.vaultCollectionThumb}
+                                            showPlay={false}
+                                        />
+                                        <View style={styles.vaultCollectionPlayOverlay} pointerEvents="none">
+                                            <View style={styles.vaultCollectionPlayIcon}>
+                                                <IconSymbol name="play.fill" size={14} color="#FFFFFF" />
+                                            </View>
+                                        </View>
+                                    </>
+                                ) : (
+                                    <View style={styles.vaultCollectionThumbPlaceholder}>
+                                        <IconSymbol name="photo.on.rectangle.angled" size={18} color="rgba(255,255,255,0.55)" />
+                                    </View>
+                                )}
+                            </View>
+                        );
+                    })}
+                </View>
+
+                <View style={styles.vaultCollectionBadges} pointerEvents="none">
+                    <View style={styles.vaultCollectionCountPill}>
+                        <IconSymbol name="video.fill" size={12} color="#FFFFFF" />
+                        <Text style={styles.vaultCollectionCountPillText}>{count}</Text>
                     </View>
-                ))}
+                </View>
             </View>
+
             <View style={styles.vaultCollectionHeader}>
                 <View style={styles.vaultCollectionTitleRow}>
-                    <Text style={styles.vaultCollectionName} numberOfLines={2}>{collection.name}</Text>
+                    <Text style={styles.vaultCollectionName} numberOfLines={2}>
+                        {collection.name}
+                    </Text>
                 </View>
+                {collection.description ? (
+                    <Text style={styles.vaultCollectionDescription} numberOfLines={2}>
+                        {collection.description}
+                    </Text>
+                ) : null}
             </View>
         </Pressable>
     );
@@ -1815,6 +1915,8 @@ export function MessageVideoViewer({ visible, initialIndex, data, onClose }: { v
             // No need to manually hide/show status bar
         } else {
             setBottomBarVisible(true); // Show bottom bar when video viewer closes
+            setQrVisible(false);
+            setQrItem(null);
         }
     }, [visible, initialIndex, dataKey, setBottomBarVisible]);
 
@@ -1883,55 +1985,53 @@ export function MessageVideoViewer({ visible, initialIndex, data, onClose }: { v
                             }, 120);
                         }}
                     />
-                </View>
-            </Modal>
 
-            <Modal
-                visible={qrVisible}
-                transparent
-                animationType="fade"
-                onRequestClose={() => setQrVisible(false)}
-            >
-                <Pressable style={styles.qrBackdrop} onPress={() => setQrVisible(false)}>
-                    <View style={styles.qrCard} onStartShouldSetResponder={() => true}>
-                        {/* Header */}
-                        <View style={styles.qrHeader}>
-                            <Text style={styles.qrTitle}>Share to View</Text>
-                            <Text style={styles.qrDescription}>
-                                Scan this QR code to view the message and shared memory
-                            </Text>
-                        </View>
+                    {/* QR popup overlay (rendered inside the viewer modal for reliable stacking) */}
+                    {qrVisible ? (
+                        <View style={styles.qrOverlay}>
+                            <Pressable style={styles.qrBackdrop} onPress={() => setQrVisible(false)}>
+                                <View style={styles.qrCard} onStartShouldSetResponder={() => true}>
+                                    {/* Header */}
+                                    <View style={styles.qrHeader}>
+                                        <Text style={styles.qrTitle}>Share to View</Text>
+                                        <Text style={styles.qrDescription}>
+                                            Scan this QR code to view the message and shared memory
+                                        </Text>
+                                    </View>
 
-                        {/* QR Code */}
-                        {qrItem && (() => {
-                            // If video has an orderId, link to the gift page; otherwise fallback to video URL
-                            const qrUrl = qrItem.orderId 
-                                ? `https://giftyy.store/gift/${qrItem.orderId}`
-                                : qrItem.videoUrl;
-                            
-                            return (
-                                <View style={styles.qrCodeContainer}>
-                                    <View style={styles.qrCodeWrapper}>
-                            <Image
-                                            source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qrUrl)}` }}
-                                style={styles.qrImage}
-                            />
+                                    {/* QR Code */}
+                                    {qrItem && (() => {
+                                        // If video has an orderId, link to the gift page; otherwise fallback to video URL
+                                        const qrUrl = qrItem.orderId 
+                                            ? `https://giftyy.store/gift/${qrItem.orderId}`
+                                            : qrItem.videoUrl;
+                                        
+                                        return (
+                                            <View style={styles.qrCodeContainer}>
+                                                <View style={styles.qrCodeWrapper}>
+                                                    <Image
+                                                        source={{ uri: `https://api.qrserver.com/v1/create-qr-code/?size=400x400&data=${encodeURIComponent(qrUrl)}` }}
+                                                        style={styles.qrImage}
+                                                    />
+                                                </View>
+                                            </View>
+                                        );
+                                    })()}
+
+                                    {/* Footer */}
+                                    <View style={styles.qrFooter}>
+                                        <Pressable 
+                                            style={styles.qrCloseButton} 
+                                            onPress={() => setQrVisible(false)}
+                                        >
+                                            <Text style={styles.qrCloseLabel}>Done</Text>
+                                        </Pressable>
                                     </View>
                                 </View>
-                            );
-                        })()}
-
-                        {/* Footer */}
-                        <View style={styles.qrFooter}>
-                            <Pressable 
-                                style={styles.qrCloseButton} 
-                                onPress={() => setQrVisible(false)}
-                            >
-                                <Text style={styles.qrCloseLabel}>Done</Text>
-                        </Pressable>
+                            </Pressable>
                         </View>
-                    </View>
-                </Pressable>
+                    ) : null}
+                </View>
             </Modal>
         </>
     );
@@ -1939,6 +2039,7 @@ export function MessageVideoViewer({ visible, initialIndex, data, onClose }: { v
 
 function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, safeBottom, safeTop, onShowQr, onClose, viewerVisible }: { item: MemoryVideoItem | (MemoryVideoItem & { mediaType: 'video' | 'photo' }); index: number; currentIndex: number; screenHeight: number; screenWidth: number; safeBottom: number; safeTop: number; onShowQr: (video: MemoryVideoItem) => void; onClose: () => void; viewerVisible: boolean }) {
     const videoRef = useRef<Video>(null);
+    const shouldResumeMainVideoAfterSharedModalRef = useRef(false);
     const mediaType = 'mediaType' in item ? item.mediaType : 'video'; // Default to video for backward compatibility
     const isPhoto = mediaType === 'photo';
     // Always call the hook, but only use it for videos
@@ -1966,6 +2067,8 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
     }, [item.id, item.videoUrl, signedVideoUrl, playbackUrl, isValidPlaybackUrl, viewerVisible, currentIndex, index, isPhoto]);
     const [videoReady, setVideoReady] = useState(false);
     const [videoError, setVideoError] = useState(false);
+    const [userPaused, setUserPaused] = useState(false);
+    const [isPlaying, setIsPlaying] = useState(false);
     const [imageLoaded, setImageLoaded] = useState(false);
     const [imageError, setImageError] = useState(false);
     const [titleExpanded, setTitleExpanded] = useState(false);
@@ -1973,6 +2076,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
     const titleMeasureRef = useRef<Text>(null);
     const [showFeatureDialog, setShowFeatureDialog] = useState(false);
     const [isFeaturing, setIsFeaturing] = useState(false);
+    const [sharedMemoryViewerVisible, setSharedMemoryViewerVisible] = useState(false);
     const { videoMessages, updateVideoMessageFeatured, deleteVideoMessage } = useVideoMessages();
     const { orders } = useOrders();
     const { sharedMemories, deleteSharedMemory } = useSharedMemories();
@@ -2070,6 +2174,8 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
     useEffect(() => {
         setVideoReady(false);
         setVideoError(false);
+        setUserPaused(false);
+        setIsPlaying(false);
         setImageLoaded(false);
         setImageError(false);
         setTitleExpanded(false);
@@ -2092,6 +2198,26 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
             cleanupVideo();
         }
     }, [playbackUrl, item.id, isPhoto]);
+
+    const handleTogglePlayback = useCallback(async () => {
+        if (isPhoto || !isValidPlaybackUrl) return;
+        if (!viewerVisible || currentIndex !== index) return;
+        const video = videoRef.current;
+        if (!video) return;
+
+        try {
+            const status = await video.getStatusAsync();
+            if (status?.isLoaded && status.isPlaying) {
+                await video.pauseAsync().catch(() => {});
+                setUserPaused(true);
+            } else if (status?.isLoaded) {
+                await video.playAsync().catch(() => {});
+                setUserPaused(false);
+            }
+        } catch (err) {
+            console.warn('[ViewerSlide] Toggle playback error:', err);
+        }
+    }, [currentIndex, index, isPhoto, isValidPlaybackUrl, viewerVisible]);
     
     // Measure title on mount and when title changes to determine if expand is needed
     useEffect(() => {
@@ -2121,6 +2247,11 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
             const startPlaying = async () => {
                 try {
                     if (videoRef.current) {
+                        // Respect user pause
+                        if (userPaused) {
+                            await videoRef.current.pauseAsync().catch(() => {});
+                            return;
+                        }
                         // Try to play immediately - video may already be buffered
                         await videoRef.current.playAsync().catch(() => {});
                     }
@@ -2157,7 +2288,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
             };
             pauseDistant();
         }
-    }, [viewerVisible, currentIndex, index, isPhoto, isValidPlaybackUrl]);
+    }, [viewerVisible, currentIndex, index, isPhoto, isValidPlaybackUrl, userPaused]);
     
     // Cleanup on unmount - ensure video is properly stopped and unloaded
     useEffect(() => {
@@ -2196,6 +2327,45 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
     const handleQrView = useCallback(() => {
         onShowQr(item);
     }, [item, onShowQr]);
+
+    const openSharedMemoryViewer = useCallback(() => {
+        if (!sharedMemory) return;
+
+        // Pause the main viewer video so it doesn't keep playing behind the modal.
+        if (!isPhoto && videoRef.current) {
+            // IMPORTANT: This is a temporary pause (not a user pause).
+            // We'll resume automatically on close if it was playing.
+            const pauseMain = async () => {
+                try {
+                    const status = await videoRef.current?.getStatusAsync();
+                    const wasPlaying = !!(status && 'isLoaded' in status && (status as any).isLoaded && (status as any).isPlaying);
+                    shouldResumeMainVideoAfterSharedModalRef.current = wasPlaying;
+                } catch {
+                    shouldResumeMainVideoAfterSharedModalRef.current = false;
+                } finally {
+                    videoRef.current?.pauseAsync().catch(() => {});
+                }
+            };
+            pauseMain();
+        }
+
+        setSharedMemoryViewerVisible(true);
+    }, [isPhoto, sharedMemory]);
+
+    const closeSharedMemoryViewer = useCallback(() => {
+        setSharedMemoryViewerVisible(false);
+
+        // Resume main video if it was playing before opening the modal
+        // (and the user didn't manually pause).
+        if (!isPhoto && !userPaused && viewerVisible && currentIndex === index && videoRef.current) {
+            if (shouldResumeMainVideoAfterSharedModalRef.current) {
+                shouldResumeMainVideoAfterSharedModalRef.current = false;
+                videoRef.current.playAsync().catch(() => {});
+            }
+        } else {
+            shouldResumeMainVideoAfterSharedModalRef.current = false;
+        }
+    }, []);
 
     const handleFeature = useCallback(async () => {
         if (isPhoto || !videoMessage) {
@@ -2331,7 +2501,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                     source={{ uri: playbackUrl }}
 					overrideFileExtensionAndroid="mp4"
                     resizeMode={ResizeMode.COVER}
-                    shouldPlay={currentIndex === index}
+                    shouldPlay={currentIndex === index && !userPaused && !sharedMemoryViewerVisible}
                     isMuted={false}
                     isLooping={true}
                     volume={1.0}
@@ -2343,7 +2513,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                         setVideoReady(true);
                         // Start playing immediately when video loads if this is the active video
                         // Video may already be partially buffered if it was preloaded as adjacent
-                        if (currentIndex === index && viewerVisible && videoRef.current) {
+                        if (currentIndex === index && viewerVisible && videoRef.current && !userPaused && !sharedMemoryViewerVisible) {
                             videoRef.current.playAsync().catch((err) => {
                                 console.warn('[ViewerSlide] Error playing video on load:', err);
                             });
@@ -2380,6 +2550,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                         // Handle playback status updates
                         try {
                             if (status?.isLoaded) {
+                                setIsPlaying(!!status.isPlaying);
                                 const isActive = viewerVisible && currentIndex === index;
                                 
                                 // Mark as ready as soon as video starts playing or has enough buffer
@@ -2390,7 +2561,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                                 
                                 // Auto-play when ready if this is the active video and not already playing
                                 // Start playing as soon as video is loaded and has enough buffer (progressive playback)
-                                if (isActive && status.isLoaded && !status.isPlaying && !status.didJustFinish && videoRef.current) {
+                                if (isActive && status.isLoaded && !status.isPlaying && !status.didJustFinish && videoRef.current && !userPaused && !sharedMemoryViewerVisible) {
                                     // Check if video has enough buffer to start playing
                                     // If playableDuration exists and is > 0, we have enough buffer
                                     const hasBuffer = status.playableDurationMillis 
@@ -2477,23 +2648,36 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                 </>
             )}
             <View style={styles.viewerSlideOverlay} pointerEvents="box-none">
-                {/* Shared Memory Thumbnail - Top Left */}
-                {sharedMemory && (
-                    <View style={[styles.viewerSharedMemoryThumbnail, { left: 20, top: safeTop + 16 }]} pointerEvents="auto">
-                        {sharedMemory.mediaType === 'photo' ? (
-                            <Image
-                                source={{ uri: sharedMemory.fileUrl }}
-                                style={styles.viewerSharedMemoryImage}
-                                resizeMode="cover"
-                            />
-                        ) : (
-                            <View style={[styles.viewerSharedMemoryImage, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
-                                <IconSymbol name="play.fill" size={22} color="#FFFFFF" />
-                            </View>
-                        )}
+                {/* Tap-to-pause/play layer (behind buttons) */}
+                {!isPhoto && isValidPlaybackUrl && viewerVisible && currentIndex === index ? (
+                    <Pressable
+                        style={styles.viewerTapToToggle}
+                        onPress={handleTogglePlayback}
+                        accessibilityRole="button"
+                        accessibilityLabel={isPlaying ? "Pause video" : "Play video"}
+                    />
+                ) : null}
+
+                {/* Center play indicator when paused */}
+                {!isPhoto && isValidPlaybackUrl && viewerVisible && currentIndex === index && userPaused ? (
+                    <View style={styles.viewerPausedOverlay} pointerEvents="none">
+                        <View style={styles.viewerPausedIcon}>
+                            <IconSymbol name="play.fill" size={26} color="#FFFFFF" />
+                        </View>
                     </View>
-                )}
-                
+                ) : null}
+
+                {/* Back button (explicit) */}
+                <Pressable
+                    style={[styles.viewerBackButton, { left: 20, top: safeTop + 16 }]}
+                    onPress={onClose}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel="Back"
+                >
+                    <IconSymbol name="chevron.left" size={22} color="#FFFFFF" />
+                </Pressable>
+
                 {/* Direction/Photo Indicator - Top Right (Replaces Close Button) */}
                 <Pressable 
                     style={[styles.viewerDirectionBadge, 
@@ -2515,7 +2699,36 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                 </Pressable>
                 
                 {/* Action Buttons Container */}
-                <View style={[styles.viewerActionsContainer, { right: 20, bottom: safeBottom + 140 }]}>
+                <View style={[styles.viewerActionsContainer, { right: 20, bottom: safeBottom + 160 }]}>
+                    {/* Shared Memory Thumbnail (on top of Feature/Star button) */}
+                    {sharedMemory && (
+                        <Pressable
+                            style={styles.viewerSharedMemoryThumbnail}
+                            pointerEvents="auto"
+                            onPress={openSharedMemoryViewer}
+                            hitSlop={10}
+                            accessibilityRole="button"
+                            accessibilityLabel="View shared memory"
+                        >
+                            {sharedMemory.mediaType === 'photo' ? (
+                                <Image
+                                    source={{ uri: sharedMemory.fileUrl }}
+                                    style={styles.viewerSharedMemoryImage}
+                                    resizeMode="cover"
+                                />
+                            ) : (
+                                <View
+                                    style={[
+                                        styles.viewerSharedMemoryImage,
+                                        { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' },
+                                    ]}
+                                >
+                                    <IconSymbol name="play.fill" size={22} color="#FFFFFF" />
+                                </View>
+                            )}
+                        </Pressable>
+                    )}
+
                     {/* Feature Button - Most Prominent */}
                     {!isPhoto && videoMessage && (
                         <Pressable 
@@ -2635,6 +2848,76 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                     {isPhoto && <Text style={styles.viewerMetaType}> • Photo</Text>}
                 </Text>
             </View>
+
+            {/* Shared memory viewer modal */}
+            <Modal
+                visible={sharedMemoryViewerVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={closeSharedMemoryViewer}
+            >
+                <Pressable style={styles.sharedMemoryViewerBackdrop} onPress={closeSharedMemoryViewer}>
+                    <View style={[styles.sharedMemoryViewerCard, { marginTop: safeTop + 8, marginBottom: safeBottom + 8 }]} onStartShouldSetResponder={() => true}>
+                        <View style={styles.sharedMemoryViewerHeader}>
+                            <View style={styles.sharedMemoryViewerHeaderLeft}>
+                                <View style={styles.sharedMemoryViewerHeaderIcon}>
+                                    <IconSymbol
+                                        name={sharedMemory?.mediaType === 'photo' ? 'photo.fill' : 'video.fill'}
+                                        size={16}
+                                        color={BRAND_COLOR}
+                                    />
+                                </View>
+                                <View style={{ flex: 1 }}>
+                                    <Text style={styles.sharedMemoryViewerTitle}>Shared memory</Text>
+                                    <Text style={styles.sharedMemoryViewerSubtitle}>
+                                        {sharedMemory?.mediaType === 'photo' ? 'Photo' : 'Video'}
+                                    </Text>
+                                </View>
+                            </View>
+
+                            <Pressable
+                                style={styles.sharedMemoryViewerClose}
+                                onPress={closeSharedMemoryViewer}
+                                hitSlop={10}
+                                accessibilityRole="button"
+                                accessibilityLabel="Close shared memory"
+                            >
+                                <IconSymbol name="xmark" size={16} color="#FFFFFF" />
+                            </Pressable>
+                        </View>
+
+                        <View style={styles.sharedMemoryViewerMediaWrap}>
+                            {sharedMemory?.mediaType === 'photo' ? (
+                                <Image
+                                    source={{ uri: sharedMemory.fileUrl }}
+                                    style={styles.sharedMemoryViewerMedia}
+                                    resizeMode="contain"
+                                />
+                            ) : sharedMemorySignedUrl || sharedMemory?.fileUrl ? (
+                                <Video
+                                    style={styles.sharedMemoryViewerMedia}
+                                    source={{ uri: sharedMemorySignedUrl || sharedMemory?.fileUrl || '' }}
+                                    resizeMode={ResizeMode.CONTAIN}
+                                    useNativeControls
+                                    shouldPlay
+                                    isLooping
+                                    isMuted={false}
+                                    volume={1.0}
+                                    progressUpdateIntervalMillis={500}
+                                    onError={(e) => {
+                                        console.warn('[SharedMemoryViewer] Video error:', e?.toString?.() || e);
+                                    }}
+                                />
+                            ) : (
+                                <View style={styles.sharedMemoryViewerLoading}>
+                                    <ActivityIndicator color={BRAND_COLOR} />
+                                    <Text style={styles.sharedMemoryViewerLoadingText}>Loading…</Text>
+                                </View>
+                            )}
+                        </View>
+                    </View>
+                </Pressable>
+            </Modal>
 
             {/* Feature Confirmation Dialog */}
             <Modal
@@ -3012,6 +3295,11 @@ const styles = StyleSheet.create({
         height: '100%',
         borderRadius: 0,
     },
+    sharedMemoryPhotoPlaceholder: {
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: '#111',
+    },
     messageGradientOverlay: {
         position: 'absolute',
         bottom: 0,
@@ -3155,12 +3443,48 @@ const styles = StyleSheet.create({
     vaultHeaderBlock: {
         gap: 6,
     },
+    vaultHeaderTop: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingBottom: 14,
+        gap: 12,
+    },
+    vaultHeaderTitle: {
+        fontFamily: BRAND_FONT,
+        fontSize: 20,
+        fontWeight: '800',
+        color: palette.textPrimary,
+        letterSpacing: -0.4,
+    },
     vaultHeaderHint: {
         color: palette.textSecondary,
         fontSize: 13,
     },
+    vaultHeaderButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 6,
+        paddingVertical: 10,
+        paddingHorizontal: 12,
+        borderRadius: 14,
+        backgroundColor: BRAND_COLOR,
+        shadowColor: BRAND_COLOR,
+        shadowOpacity: 0.22,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 6 },
+        elevation: 5,
+    },
+    vaultHeaderButtonText: {
+        color: '#FFFFFF',
+        fontSize: 13,
+        fontWeight: '800',
+        letterSpacing: 0.2,
+    },
     vaultFilterRow: {
-        paddingLeft: 4,
+        paddingLeft: 16,
         paddingRight: 20,
         gap: 8,
     },
@@ -3198,8 +3522,8 @@ const styles = StyleSheet.create({
         fontWeight: '800',
     },
     vaultListHeader: {
-        paddingTop: 16,
-        paddingBottom: 20,
+        paddingTop: 8,
+        paddingBottom: 10,
     },
     vaultEmptyState: {
         flex: 1,
@@ -3207,6 +3531,37 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         paddingHorizontal: 40,
         gap: 16,
+    },
+    vaultEmptyPrimaryButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 10,
+        backgroundColor: BRAND_COLOR,
+        borderRadius: 18,
+        paddingVertical: 14,
+        paddingHorizontal: 16,
+        minWidth: 220,
+        shadowColor: BRAND_COLOR,
+        shadowOpacity: 0.28,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 8,
+        marginTop: 6,
+    },
+    vaultEmptyPrimaryButtonText: {
+        color: '#FFFFFF',
+        fontSize: 14,
+        fontWeight: '800',
+    },
+    vaultEmptySecondaryButton: {
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+    },
+    vaultEmptySecondaryButtonText: {
+        color: palette.textSecondary,
+        fontSize: 14,
+        fontWeight: '700',
     },
     vaultSimpleTitle: {
         fontFamily: BRAND_FONT,
@@ -3328,21 +3683,26 @@ const styles = StyleSheet.create({
         letterSpacing: 0.2,
     },
     vaultCollectionList: {
-        paddingHorizontal: 1,
-        paddingTop: 0,
+        paddingHorizontal: 16,
+        paddingTop: 4,
     },
     vaultCollectionColumnWrapper: {
         justifyContent: 'space-between',
-        marginBottom: 1,
-        gap: 1,
+        marginBottom: 12,
+        gap: 12,
     },
     vaultCollectionCard: {
-        width: '49%',
-        borderRadius: 0,
-        padding: 0,
-        backgroundColor: 'transparent',
-        gap: 0,
+        flex: 1,
+        borderRadius: 22,
+        backgroundColor: palette.card,
+        borderWidth: 1,
+        borderColor: palette.border,
         overflow: 'hidden',
+        shadowColor: '#000',
+        shadowOpacity: 0.06,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 3,
     },
     vaultListEmptyState: {
         alignItems: 'center',
@@ -3352,14 +3712,17 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     vaultCollectionHeader: {
-        paddingTop: 16,
-        paddingHorizontal: 10,
+        paddingTop: 12,
+        paddingHorizontal: 12,
         paddingBottom: 12,
-        gap: 8,
-        backgroundColor: 'transparent',
+        gap: 6,
+        backgroundColor: palette.card,
     },
     vaultCollectionTitleRow: {
-        marginBottom: 2,
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: 8,
     },
     vaultCollectionName: {
         fontFamily: BRAND_FONT,
@@ -3367,12 +3730,13 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         color: palette.textPrimary,
         letterSpacing: -0.3,
-        lineHeight: 18,
+        lineHeight: 17,
+        flex: 1,
     },
     vaultCollectionDescription: {
         color: palette.textSecondary,
-        fontSize: 13,
-        lineHeight: 18,
+        fontSize: 12,
+        lineHeight: 16,
         fontWeight: '500',
         marginTop: 2,
     },
@@ -3469,6 +3833,58 @@ const styles = StyleSheet.create({
         width: '100%',
         height: '100%',
         borderRadius: 0,
+    },
+    vaultCollectionMedia: {
+        height: 150,
+        backgroundColor: '#000',
+    },
+    vaultCollectionThumbPlaceholder: {
+        flex: 1,
+        backgroundColor: 'rgba(255,255,255,0.10)',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    vaultCollectionBadges: {
+        position: 'absolute',
+        left: 10,
+        right: 10,
+        top: 10,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'flex-end',
+        gap: 8,
+    },
+    vaultCollectionCountPill: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 10,
+        paddingVertical: 6,
+        borderRadius: 999,
+        backgroundColor: 'rgba(0,0,0,0.35)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.35)',
+    },
+    vaultCollectionCountPillText: {
+        color: '#FFFFFF',
+        fontSize: 11,
+        fontWeight: '900',
+    },
+    vaultCollectionPlayOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        alignItems: 'flex-end',
+        justifyContent: 'flex-end',
+        padding: 8,
+    },
+    vaultCollectionPlayIcon: {
+        width: 26,
+        height: 26,
+        borderRadius: 13,
+        backgroundColor: 'rgba(0,0,0,0.55)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.18)',
     },
     vaultRow: {
         flexDirection: 'row',
@@ -3831,6 +4247,37 @@ const styles = StyleSheet.create({
         zIndex: 10,
         pointerEvents: 'box-none', // Allow touches to pass through to video, but capture touches on children
     },
+    viewerBackButton: {
+        position: 'absolute',
+        width: 44,
+        height: 44,
+        borderRadius: 22,
+        backgroundColor: 'rgba(0,0,0,0.45)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 20,
+    },
+    viewerTapToToggle: {
+        ...StyleSheet.absoluteFillObject,
+        // Keep this BEHIND the overlay buttons, otherwise it steals taps.
+        zIndex: 0,
+    },
+    viewerPausedOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 2,
+    },
+    viewerPausedIcon: {
+        width: 66,
+        height: 66,
+        borderRadius: 33,
+        backgroundColor: 'rgba(0,0,0,0.45)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.2)',
+    },
     viewerGradientOverlay: {
         position: 'absolute',
         bottom: 0,
@@ -3893,6 +4340,7 @@ const styles = StyleSheet.create({
         shadowRadius: 6,
         shadowOffset: { width: 0, height: 2 },
         elevation: 3,
+        zIndex: 20,
     },
     viewerDirectionBadgeReceived: {
         backgroundColor: 'rgba(16, 185, 129, 0.9)',
@@ -3907,7 +4355,6 @@ const styles = StyleSheet.create({
         borderColor: 'rgba(255,255,255,0.25)',
     },
     viewerSharedMemoryThumbnail: {
-        position: 'absolute',
         width: 80,
         height: 120,
         borderRadius: 8,
@@ -3931,6 +4378,103 @@ const styles = StyleSheet.create({
         flexDirection: 'column',
         alignItems: 'center',
         gap: 12,
+        zIndex: 20,
+    },
+    sharedMemoryViewerBackdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(47,35,24,0.55)',
+        paddingHorizontal: 18,
+        paddingVertical: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    sharedMemoryViewerCard: {
+        width: '100%',
+        maxWidth: 420,
+        maxHeight: '86%',
+        backgroundColor: palette.card,
+        borderRadius: 24,
+        overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: palette.border,
+        shadowColor: '#000',
+        shadowOpacity: 0.14,
+        shadowRadius: 24,
+        shadowOffset: { width: 0, height: 12 },
+        elevation: 10,
+    },
+    sharedMemoryViewerHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        paddingHorizontal: 16,
+        paddingTop: 14,
+        paddingBottom: 12,
+        borderBottomWidth: 1,
+        borderBottomColor: palette.border,
+        backgroundColor: palette.card,
+    },
+    sharedMemoryViewerHeaderLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        flex: 1,
+        paddingRight: 10,
+    },
+    sharedMemoryViewerHeaderIcon: {
+        width: 34,
+        height: 34,
+        borderRadius: 12,
+        backgroundColor: palette.accent,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    sharedMemoryViewerTitle: {
+        fontFamily: BRAND_FONT,
+        fontSize: 16,
+        color: palette.textPrimary,
+    },
+    sharedMemoryViewerSubtitle: {
+        marginTop: 2,
+        fontSize: 12,
+        fontWeight: '600',
+        color: palette.textSecondary,
+    },
+    sharedMemoryViewerClose: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: BRAND_COLOR,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    sharedMemoryViewerMediaWrap: {
+        padding: 14,
+        backgroundColor: palette.card,
+        flexGrow: 1,
+    },
+    sharedMemoryViewerMedia: {
+        width: '100%',
+        aspectRatio: 9 / 16,
+        backgroundColor: '#0B0B0B',
+        borderRadius: 18,
+        overflow: 'hidden',
+    },
+    sharedMemoryViewerLoading: {
+        width: '100%',
+        aspectRatio: 9 / 16,
+        backgroundColor: palette.cardAlt,
+        borderRadius: 18,
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 8,
+        borderWidth: 1,
+        borderColor: palette.border,
+    },
+    sharedMemoryViewerLoadingText: {
+        fontSize: 13,
+        fontWeight: '600',
+        color: palette.textSecondary,
     },
     viewerActionButton: {
         width: 56,
@@ -4001,6 +4545,11 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: 24,
+    },
+    qrOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        zIndex: 999,
+        elevation: 999,
     },
     qrCard: {
         width: '90%',

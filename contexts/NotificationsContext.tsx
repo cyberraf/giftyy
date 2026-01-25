@@ -241,7 +241,9 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       setHasMore(offset + fetchedCount < totalCount);
 
       if (fetchedCount === 0 && !append) {
-        setNotifications([]);
+        // Don't wipe existing notifications on a refresh that returns empty.
+        // If there are none at all, fall back to sample items to avoid a blank screen.
+        setNotifications((prev) => (prev.length === 0 ? SAMPLE_NOTIFICATIONS : prev));
         setLoading(false);
         setLoadingMore(false);
         setHasMore(false);

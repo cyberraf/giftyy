@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, Alert, Modal, Pressable, ScrollView, Switch, KeyboardAvoidingView, Platform, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, TextInput, Alert, Modal, Pressable, ScrollView, Switch, KeyboardAvoidingView, Platform, RefreshControl, ViewStyle } from 'react-native';
 import { useRouter } from 'expo-router';
 import StepBar from '@/components/StepBar';
 import BrandButton from '@/components/BrandButton';
@@ -40,6 +40,17 @@ export default function RecipientScreen() {
     const [shippingBreakdown, setShippingBreakdown] = useState<{ total: number; breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number }> }>({ total: 0, breakdown: [] });
     const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
     const [addRecipientVisible, setAddRecipientVisible] = useState(false);
+
+    const isFreshRecipient = useMemo(() => {
+        return !firstName && !lastName && !street && !city && !zip && !phone && !email;
+    }, [firstName, lastName, street, city, zip, phone, email]);
+
+    useEffect(() => {
+        // Ensure the toggle is on by default for new recipient flows.
+        if (isFreshRecipient && !notifyRecipient) {
+            setNotifyRecipient(true);
+        }
+    }, [isFreshRecipient, notifyRecipient, setNotifyRecipient]);
 
     const openAddRecipient = useCallback(() => {
         setAddRecipientVisible(true);
@@ -304,17 +315,17 @@ export default function RecipientScreen() {
         setEmail('');
     };
 
-    const showStateField = useMemo(() => {
-        const normalized = (country || '').trim().toUpperCase();
-        return normalized === 'UNITED STATES' || normalized === 'UNITED STATES OF AMERICA' || normalized === 'USA';
-    }, [country]);
+    const stateOptions = useMemo(() => getStateOptionsForCountry(country), [country]);
+    const hasStateList = stateOptions.length > 0;
 
     const selectedStateLabel = useMemo(() => {
-        const found = US_STATES.find((s) => s.code === stateCode);
-        return found ? `${found.name} (${found.code})` : '';
-    }, [stateCode]);
-
-    const stateOptions = useMemo(() => US_STATES.map((s) => `${s.name} (${s.code})`), []);
+        if (!stateCode) return '';
+        if (isUnitedStatesCountry(country)) {
+            const found = US_STATES.find((s) => s.code === stateCode);
+            return found ? `${found.name} (${found.code})` : stateCode;
+        }
+        return stateCode;
+    }, [stateCode, country]);
 
     const onNext = () => {
         if (!firstName || !street || !city || !stateCode || !zip || !country) {
@@ -445,7 +456,7 @@ export default function RecipientScreen() {
                         />
                         <Field label="City" value={city} onChangeText={setCity} style={{ flex: 1 }} />
                     </View>
-                    {showStateField ? (
+                    {hasStateList ? (
                         <View style={{ gap: 6 }}>
                             <Text style={{ fontWeight: '800' }}>
                                 State / Province<Text style={styles.requiredStar}>*</Text>
@@ -454,7 +465,21 @@ export default function RecipientScreen() {
                                 <Text style={{ color: stateCode ? '#111' : '#9ba1a6' }}>{selectedStateLabel || 'Select state / province'}</Text>
                             </Pressable>
                         </View>
-                    ) : null}
+                    ) : (
+                        <View style={{ gap: 6 }}>
+                            <Text style={{ fontWeight: '800' }}>
+                                State / Province / Region<Text style={styles.requiredStar}>*</Text>
+                            </Text>
+                            <TextInput
+                                value={stateCode}
+                                onChangeText={setStateCode}
+                                placeholder="Enter state / province / region"
+                                placeholderTextColor="#9ba1a6"
+                                style={styles.input}
+                                autoCapitalize="words"
+                            />
+                        </View>
+                    )}
                 </View>
 
                 {/* Notify toggle before contact fields */}
@@ -584,8 +609,7 @@ export default function RecipientScreen() {
                 onSelect={(value) => {
                     setCountry(value);
                     // If the new country doesn't require a state, clear it (keeps shipping/tax logic sane).
-                    const normalized = value.trim().toUpperCase();
-                    const requiresState = normalized === 'UNITED STATES' || normalized === 'UNITED STATES OF AMERICA' || normalized === 'USA';
+                    const requiresState = getStateOptionsForCountry(value).length > 0;
                     if (!requiresState) {
                         setStateCode('');
                     }
@@ -600,7 +624,7 @@ export default function RecipientScreen() {
                 onClose={() => setStateModalOpen(false)}
                 onSelect={(value) => {
                     const match = value.match(/\(([A-Z]{2})\)\s*$/);
-                    setStateCode(match?.[1] ?? '');
+                    setStateCode(match?.[1] ?? value);
                     setStateModalOpen(false);
                 }}
             />
@@ -608,7 +632,7 @@ export default function RecipientScreen() {
     );
 }
 
-function Field({ label, multiline, style, ...props }: { label: string; multiline?: boolean; value: string; onChangeText: (t: string) => void; style?: object } & Partial<TextInput['props']>) {
+function Field({ label, multiline, style, ...props }: { label: string; multiline?: boolean; value: string; onChangeText: (t: string) => void; style?: ViewStyle } & Partial<TextInput['props']>) {
     return (
         <View style={[{ gap: 6 }, style]}>
             <Text style={{ fontWeight: '800' }}>{label}</Text>
@@ -782,5 +806,143 @@ const US_STATES = [
     { code: 'VA', name: 'Virginia' }, { code: 'WA', name: 'Washington' }, { code: 'WV', name: 'West Virginia' },
     { code: 'WI', name: 'Wisconsin' }, { code: 'WY', name: 'Wyoming' },
 ];
+
+const CANADA_PROVINCES = [
+    { code: 'AB', name: 'Alberta' },
+    { code: 'BC', name: 'British Columbia' },
+    { code: 'MB', name: 'Manitoba' },
+    { code: 'NB', name: 'New Brunswick' },
+    { code: 'NL', name: 'Newfoundland and Labrador' },
+    { code: 'NT', name: 'Northwest Territories' },
+    { code: 'NS', name: 'Nova Scotia' },
+    { code: 'NU', name: 'Nunavut' },
+    { code: 'ON', name: 'Ontario' },
+    { code: 'PE', name: 'Prince Edward Island' },
+    { code: 'QC', name: 'Quebec' },
+    { code: 'SK', name: 'Saskatchewan' },
+    { code: 'YT', name: 'Yukon' },
+];
+
+const INDIA_STATES = [
+    'Andhra Pradesh',
+    'Arunachal Pradesh',
+    'Assam',
+    'Bihar',
+    'Chhattisgarh',
+    'Goa',
+    'Gujarat',
+    'Haryana',
+    'Himachal Pradesh',
+    'Jharkhand',
+    'Karnataka',
+    'Kerala',
+    'Madhya Pradesh',
+    'Maharashtra',
+    'Manipur',
+    'Meghalaya',
+    'Mizoram',
+    'Nagaland',
+    'Odisha',
+    'Punjab',
+    'Rajasthan',
+    'Sikkim',
+    'Tamil Nadu',
+    'Telangana',
+    'Tripura',
+    'Uttar Pradesh',
+    'Uttarakhand',
+    'West Bengal',
+    'Andaman and Nicobar Islands',
+    'Chandigarh',
+    'Dadra and Nagar Haveli and Daman and Diu',
+    'Delhi',
+    'Jammu and Kashmir',
+    'Ladakh',
+    'Lakshadweep',
+    'Puducherry',
+];
+
+const UNITED_KINGDOM_REGIONS = [
+    'England',
+    'Scotland',
+    'Wales',
+    'Northern Ireland',
+];
+
+const AUSTRALIA_STATES = [
+    'Australian Capital Territory',
+    'New South Wales',
+    'Northern Territory',
+    'Queensland',
+    'South Australia',
+    'Tasmania',
+    'Victoria',
+    'Western Australia',
+];
+
+const NIGERIA_STATES = [
+    'Abia',
+    'Adamawa',
+    'Akwa Ibom',
+    'Anambra',
+    'Bauchi',
+    'Bayelsa',
+    'Benue',
+    'Borno',
+    'Cross River',
+    'Delta',
+    'Ebonyi',
+    'Edo',
+    'Ekiti',
+    'Enugu',
+    'Gombe',
+    'Imo',
+    'Jigawa',
+    'Kaduna',
+    'Kano',
+    'Katsina',
+    'Kebbi',
+    'Kogi',
+    'Kwara',
+    'Lagos',
+    'Nasarawa',
+    'Niger',
+    'Ogun',
+    'Ondo',
+    'Osun',
+    'Oyo',
+    'Plateau',
+    'Rivers',
+    'Sokoto',
+    'Taraba',
+    'Yobe',
+    'Zamfara',
+    'Federal Capital Territory',
+];
+
+const normalizeCountry = (value: string) => value.trim().toUpperCase();
+
+const isUnitedStatesCountry = (value: string) => {
+    const normalized = normalizeCountry(value);
+    return normalized === 'UNITED STATES' || normalized === 'UNITED STATES OF AMERICA' || normalized === 'USA';
+};
+
+const COUNTRY_STATE_OPTIONS: Record<string, string[]> = {
+    'UNITED STATES': US_STATES.map((s) => `${s.name} (${s.code})`),
+    'UNITED STATES OF AMERICA': US_STATES.map((s) => `${s.name} (${s.code})`),
+    'USA': US_STATES.map((s) => `${s.name} (${s.code})`),
+    'CANADA': CANADA_PROVINCES.map((p) => `${p.name} (${p.code})`),
+    'INDIA': INDIA_STATES,
+    'UNITED KINGDOM': UNITED_KINGDOM_REGIONS,
+    'UK': UNITED_KINGDOM_REGIONS,
+    'GREAT BRITAIN': UNITED_KINGDOM_REGIONS,
+    'AUSTRALIA': AUSTRALIA_STATES,
+    'NIGERIA': NIGERIA_STATES,
+};
+
+const getStateOptionsForCountry = (value: string) => {
+    const normalized = normalizeCountry(value);
+    return COUNTRY_STATE_OPTIONS[normalized] ?? [];
+};
 
 

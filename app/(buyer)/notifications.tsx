@@ -343,7 +343,7 @@ export default function NotificationsScreen() {
 		loadMore,
 	} = useNotifications();
 
-	const [mode, setMode] = useState<'all' | 'unread'>('all');
+	const [mode, setMode] = useState<'all' | 'unread'>('unread');
 	const [category, setCategory] = useState<Category>('all');
 	const [filterOpen, setFilterOpen] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);

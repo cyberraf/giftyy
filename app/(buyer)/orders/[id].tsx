@@ -2,9 +2,10 @@ import { MemoryVideoItem, MessageVideoViewer } from '../(tabs)/memory';
 import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
 import { useOrders } from '@/contexts/OrdersContext';
 import { useVideoMessages } from '@/contexts/VideoMessagesContext';
-import { Stack, useLocalSearchParams } from 'expo-router';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const palette = {
   background: '#fff',
@@ -17,9 +18,11 @@ const palette = {
 
 export default function OrderDetailsScreen() {
   const { id } = useLocalSearchParams<{ id?: string }>();
+  const router = useRouter();
   const { getOrderById, loading } = useOrders();
   const { videoMessages } = useVideoMessages();
   const [viewerVisible, setViewerVisible] = useState(false);
+  const { bottom, top } = useSafeAreaInsets();
 
   const order = id ? getOrderById(id) : null;
   const orderCode = order?.orderCode || (id ?? 'GIF-0000000').toUpperCase();
@@ -75,7 +78,18 @@ export default function OrderDetailsScreen() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <Stack.Screen options={{ title: 'Order details', headerStyle: { backgroundColor: palette.background }, headerShadowVisible: false }} />
+        <Stack.Screen
+          options={{
+            title: 'Order details',
+            headerStyle: { backgroundColor: palette.background },
+            headerShadowVisible: false,
+            headerLeft: () => (
+              <Pressable onPress={() => router.back()} style={styles.headerBackButton}>
+                <Text style={styles.headerBackLabel}>Back</Text>
+              </Pressable>
+            ),
+          }}
+        />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color={BRAND_COLOR} />
         </View>
@@ -86,7 +100,18 @@ export default function OrderDetailsScreen() {
   if (!order) {
     return (
       <View style={styles.screen}>
-        <Stack.Screen options={{ title: 'Order details', headerStyle: { backgroundColor: palette.background }, headerShadowVisible: false }} />
+        <Stack.Screen
+          options={{
+            title: 'Order details',
+            headerStyle: { backgroundColor: palette.background },
+            headerShadowVisible: false,
+            headerLeft: () => (
+              <Pressable onPress={() => router.back()} style={styles.headerBackButton}>
+                <Text style={styles.headerBackLabel}>Back</Text>
+              </Pressable>
+            ),
+          }}
+        />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
           <Text style={{ color: palette.textSecondary, textAlign: 'center' }}>Order not found</Text>
         </View>
@@ -114,8 +139,25 @@ export default function OrderDetailsScreen() {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen options={{ title: 'Order details', headerStyle: { backgroundColor: palette.background }, headerShadowVisible: false }} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <Stack.Screen
+        options={{
+          title: 'Order details',
+          headerStyle: { backgroundColor: palette.background },
+          headerShadowVisible: false,
+          headerLeft: () => (
+            <Pressable onPress={() => router.back()} style={styles.headerBackButton}>
+              <Text style={styles.headerBackLabel}>Back</Text>
+            </Pressable>
+          ),
+        }}
+      />
+      <ScrollView contentContainerStyle={[styles.content, { paddingTop: top + 12, paddingBottom: 96 + bottom }]}>
+        <View style={styles.inlineHeader}>
+          <Pressable onPress={() => router.back()} style={styles.inlineBackButton}>
+            <Text style={styles.inlineBackLabel}>Back</Text>
+          </Pressable>
+          <Text style={styles.inlineTitle}>Order details</Text>
+        </View>
         <View style={styles.headerCard}>
           <Text style={styles.orderCode}>Order #{orderCode}</Text>
           <View style={styles.statusPill}>
@@ -188,9 +230,6 @@ export default function OrderDetailsScreen() {
           </View>
         )}
 
-        <Pressable style={styles.primaryButton}>
-          <Text style={styles.primaryLabel}>Contact support</Text>
-        </Pressable>
       </ScrollView>
 
       {videoItem && (
@@ -213,6 +252,35 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
     gap: 18,
+  },
+  inlineHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 4,
+  },
+  inlineBackButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 6,
+  },
+  inlineBackLabel: {
+    color: BRAND_COLOR,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  inlineTitle: {
+    fontFamily: BRAND_FONT,
+    color: palette.textPrimary,
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  headerBackButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+  },
+  headerBackLabel: {
+    color: BRAND_COLOR,
+    fontWeight: '700',
   },
   headerCard: {
     borderRadius: 22,
@@ -315,15 +383,5 @@ const styles = StyleSheet.create({
   secondaryLabel: {
     color: BRAND_COLOR,
     fontWeight: '700',
-  },
-  primaryButton: {
-    paddingVertical: 14,
-    borderRadius: 999,
-    alignItems: 'center',
-    backgroundColor: BRAND_COLOR,
-  },
-  primaryLabel: {
-    color: '#FFFFFF',
-    fontWeight: '800',
   },
 });

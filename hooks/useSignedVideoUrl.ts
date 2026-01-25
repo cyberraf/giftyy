@@ -48,6 +48,13 @@ export function useSignedVideoUrl(videoUrl?: string | null): string | null {
 			return;
 		}
 
+		// Fast path: if the URL is already public or already signed, don't add latency
+		// by requesting a new signed URL.
+		if (videoUrl.includes(PUBLIC_BUCKET_PATH) || videoUrl.includes(SIGNED_BUCKET_PATH)) {
+			setResolvedUrl(videoUrl);
+			return;
+		}
+
 		let isMounted = true;
 
 		const resolveUrl = async () => {

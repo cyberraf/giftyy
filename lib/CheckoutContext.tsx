@@ -67,7 +67,7 @@ const initialPayment: Payment = { name: '', cardNumber: '', expiry: '', cvv: '' 
 export function CheckoutProvider({ children }: { children: React.ReactNode }) {
     const [recipient, setRecipient] = useState<Recipient>(initialRecipient);
     const [cardPrice, setCardPrice] = useState<number>(0);
-    const [notifyRecipient, setNotifyRecipient] = useState<boolean>(false);
+    const [notifyRecipient, setNotifyRecipient] = useState<boolean>(true);
     const [cardType, setCardType] = useState<CardType>('');
     const [videoUri, setVideoUri] = useState<string | undefined>(undefined);
     const [videoTitle, setVideoTitle] = useState<string | undefined>(undefined);
@@ -83,7 +83,7 @@ export function CheckoutProvider({ children }: { children: React.ReactNode }) {
     const reset = () => {
         setRecipient(initialRecipient);
         setCardPrice(0);
-        setNotifyRecipient(false);
+        setNotifyRecipient(true);
         setCardType('');
         setVideoUri(undefined);
         setVideoTitle(undefined);
