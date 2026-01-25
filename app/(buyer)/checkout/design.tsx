@@ -407,7 +407,7 @@ export default function DesignScreen() {
                         }}
                         style={[styles.ctaBtn, { opacity: disabled ? 0.6 : 1 }]}
                     >
-                        <Text style={{ color: 'white', fontWeight: '800' }}>{`Continue with ${String(cardType || '').trim() || 'selection'}`}</Text>
+                        <Text style={{ color: 'white', fontWeight: '800' }}>Proceed to Recipient Details</Text>
                     </Pressable>
                     <Pressable 
                         style={{ alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 20 }}

@@ -4,6 +4,8 @@ import { logProductAnalyticsEvent } from '@/lib/product-analytics';
 
 export type CartItem = {
     id: string;
+    /** DB product id (products.id) */
+    productId: string;
     name: string;
     price: string; // keep as formatted string for now
     image?: string;
@@ -38,7 +40,12 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                 if (stored) {
                     const parsed = JSON.parse(stored);
                     if (Array.isArray(parsed)) {
-                        setItems(parsed);
+                        // Backfill older cart items that didn't store productId
+                        const hydrated = parsed.map((it: any) => ({
+                            ...it,
+                            productId: it.productId || it.product_id || it.id,
+                        }));
+                        setItems(hydrated);
                     }
                 }
             } catch (error) {
@@ -76,7 +83,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         });
 
         logProductAnalyticsEvent({
-            productId: newItem.id,
+            productId: (newItem as any).productId || newItem.id,
             eventType: 'added_to_cart',
             metadata: {
                 quantity: newItem.quantity ?? 1,

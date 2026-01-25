@@ -956,6 +956,7 @@ export default function ProductDetailsScreen() {
 		
 		addItem({
 			id: selectedVariation?.id || product.id,
+			productId: product.id,
 			name: itemName,
 			price: formattedPrice,
 			image: imageUris[0],
@@ -979,6 +980,7 @@ export default function ProductDetailsScreen() {
 			
 			addItem({
 				id: selectedVariation?.id || product.id,
+				productId: product.id,
 				name: itemName,
 				price: formattedPrice,
 				image: imageUris[0],

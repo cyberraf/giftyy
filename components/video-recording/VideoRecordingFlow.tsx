@@ -44,15 +44,22 @@ type Screen = 'welcome' | 'permission' | 'camera' | 'countdown' | 'recording' | 
 type VideoRecordingFlowProps = {
 	onVideoRecorded: (videoUri: string, durationMs: number) => void;
 	onCancel?: () => void;
+	/** If provided, flow starts in preview mode */
+	initialVideoUri?: string | null;
+	/** Optional initial duration for the preview */
+	initialDurationMs?: number;
+	/** Called when user chooses to retake and discard the video */
+	onRetake?: () => void;
 };
 
-export function VideoRecordingFlow({ onVideoRecorded, onCancel }: VideoRecordingFlowProps) {
-	const [screen, setScreen] = useState<Screen>('welcome');
+export function VideoRecordingFlow({ onVideoRecorded, onCancel, initialVideoUri, initialDurationMs, onRetake }: VideoRecordingFlowProps) {
+	const didApplyInitialRef = useRef(false);
+	const [screen, setScreen] = useState<Screen>(() => (initialVideoUri ? 'preview' : 'welcome'));
 	const [countdownNumber, setCountdownNumber] = useState(3);
 	const [recording, setRecording] = useState(false);
-	const [videoUri, setVideoUri] = useState<string | null>(null);
+	const [videoUri, setVideoUri] = useState<string | null>(initialVideoUri ?? null);
 	const [elapsedMs, setElapsedMs] = useState(0);
-	const [durationMs, setDurationMs] = useState(0);
+	const [durationMs, setDurationMs] = useState(initialDurationMs ?? 0);
 	const [useFrontCamera, setUseFrontCamera] = useState(true);
 
 	const { hasPermission: hasCameraPermission, requestPermission: requestCameraPermission } =
@@ -91,6 +98,17 @@ export function VideoRecordingFlow({ onVideoRecorded, onCancel }: VideoRecording
 			setScreen('camera');
 		}
 	}, [screen, hasCameraPermission, hasMicrophonePermission]);
+
+	// If a saved video is provided later, switch to preview once (do not override retakes)
+	useEffect(() => {
+		if (!didApplyInitialRef.current && initialVideoUri) {
+			didApplyInitialRef.current = true;
+			setVideoUri(initialVideoUri);
+			setDurationMs(initialDurationMs ?? 0);
+			setIsPlaying(true);
+			setScreen('preview');
+		}
+	}, [initialVideoUri, initialDurationMs]);
 
 	// Stop recording (moved first to avoid circular dependency)
 	const stopRecording = useCallback(async () => {
@@ -188,6 +206,10 @@ export function VideoRecordingFlow({ onVideoRecorded, onCancel }: VideoRecording
 
 	// Start countdown
 	const startCountdown = useCallback(() => {
+		if (countdownRef.current) {
+			clearInterval(countdownRef.current);
+			countdownRef.current = null;
+		}
 		let current = 3;
 		setCountdownNumber(3);
 		setScreen('countdown');
@@ -256,12 +278,28 @@ export function VideoRecordingFlow({ onVideoRecorded, onCancel }: VideoRecording
 
 
 	// Retake video
-	const handleRetake = useCallback(() => {
+	const handleRetake = useCallback(async () => {
+		// Ensure we don't reapply an initial video after retake
+		didApplyInitialRef.current = true;
+
+		// Stop preview playback before resetting
+		try {
+			if (previewRef.current) {
+				await previewRef.current.pauseAsync();
+				await previewRef.current.unloadAsync();
+			}
+		} catch (error) {
+			console.warn('Error stopping video preview:', error);
+		}
+
 		setVideoUri(null);
 		setElapsedMs(0);
 		setDurationMs(0);
-		setScreen('camera');
-	}, []);
+		setIsPlaying(true);
+		onRetake?.();
+		// Immediately start the recording flow again (countdown → recording)
+		startCountdown();
+	}, [onRetake, startCountdown]);
 
 	// Use video
 	const handleUseVideo = useCallback(async () => {
@@ -336,7 +374,7 @@ export function VideoRecordingFlow({ onVideoRecorded, onCancel }: VideoRecording
 					</Pressable>
 					{onCancel && (
 						<Pressable onPress={onCancel} style={styles.cancelButton}>
-							<Text style={styles.cancelButtonText}>Cancel</Text>
+							<Text style={styles.cancelButtonText}>Back</Text>
 						</Pressable>
 					)}
 				</Animated.View>
@@ -413,9 +451,16 @@ export function VideoRecordingFlow({ onVideoRecorded, onCancel }: VideoRecording
 					}}
 				/>
 				<Pressable
-					style={StyleSheet.absoluteFill}
+					style={styles.previewTapOverlay}
 					onPress={() => setIsPlaying((p) => !p)}
-				/>
+					accessibilityRole="button"
+				>
+					<View style={styles.previewCenterIcon}>
+						<View style={styles.previewCenterIconCircle}>
+							<IconSymbol name={isPlaying ? 'pause.fill' : 'play.fill'} size={28} color="#fff" />
+						</View>
+					</View>
+				</Pressable>
 				<View style={styles.previewControls}>
 					<Pressable onPress={handleRetake} style={styles.retakeButton}>
 						<View style={styles.retakeButtonContent}>
@@ -691,6 +736,24 @@ const styles = StyleSheet.create({
 		height: 32,
 		borderRadius: 4,
 		backgroundColor: '#fff',
+	},
+	previewTapOverlay: {
+		...StyleSheet.absoluteFillObject,
+	},
+	previewCenterIcon: {
+		flex: 1,
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	previewCenterIconCircle: {
+		width: 72,
+		height: 72,
+		borderRadius: 36,
+		alignItems: 'center',
+		justifyContent: 'center',
+		backgroundColor: 'rgba(0,0,0,0.35)',
+		borderWidth: 1,
+		borderColor: 'rgba(255,255,255,0.22)',
 	},
 	previewControls: {
 		position: 'absolute',

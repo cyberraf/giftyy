@@ -12,7 +12,7 @@ import { useAuth } from '@/contexts/AuthContext';
 export default function AuthCallbackScreen() {
 	const router = useRouter();
 	const params = useLocalSearchParams();
-	const { user } = useAuth();
+	const { user, syncAuth } = useAuth();
 	const [processing, setProcessing] = useState(true);
 	const [currentUrl, setCurrentUrl] = useState<string | null>(null);
 	const hasProcessedRef = useRef(false);
@@ -259,6 +259,8 @@ export default function AuthCallbackScreen() {
 						const { data: verifySession } = await supabase.auth.getSession();
 						if (verifySession?.session) {
 							console.log('✅ Session verified and saved');
+							// Ensure AuthContext picks up the new session + profile immediately
+							await syncAuth();
 							// Navigate to home - the auth state change will handle profile loading
 							router.replace('/(buyer)/(tabs)/home');
 							return;

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TextInput, Alert, Modal, Pressable, ScrollView,
 import { useRouter } from 'expo-router';
 import StepBar from '@/components/StepBar';
 import BrandButton from '@/components/BrandButton';
+import { COUNTRY_LIST, RecipientFormModal, SelectListModal } from '@/components/recipients/RecipientFormModal';
 import { useCheckout } from '@/lib/CheckoutContext';
 import { useCart } from '@/contexts/CartContext';
 import { useRecipients } from '@/contexts/RecipientsContext';
@@ -32,11 +33,17 @@ export default function RecipientScreen() {
     const [zip, setZip] = useState(recipient.zip);
     const [phone, setPhone] = useState(recipient.phone ?? '');
     const [email, setEmail] = useState(recipient.email ?? '');
-    const [statePickerVisible, setStatePickerVisible] = useState(false);
+    const [countryModalOpen, setCountryModalOpen] = useState(false);
+    const [stateModalOpen, setStateModalOpen] = useState(false);
     const [vendorNames, setVendorNames] = useState<Map<string, string>>(new Map());
     const [refreshing, setRefreshing] = useState(false);
     const [shippingBreakdown, setShippingBreakdown] = useState<{ total: number; breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number }> }>({ total: 0, breakdown: [] });
     const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
+    const [addRecipientVisible, setAddRecipientVisible] = useState(false);
+
+    const openAddRecipient = useCallback(() => {
+        setAddRecipientVisible(true);
+    }, []);
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -297,6 +304,18 @@ export default function RecipientScreen() {
         setEmail('');
     };
 
+    const showStateField = useMemo(() => {
+        const normalized = (country || '').trim().toUpperCase();
+        return normalized === 'UNITED STATES' || normalized === 'UNITED STATES OF AMERICA' || normalized === 'USA';
+    }, [country]);
+
+    const selectedStateLabel = useMemo(() => {
+        const found = US_STATES.find((s) => s.code === stateCode);
+        return found ? `${found.name} (${found.code})` : '';
+    }, [stateCode]);
+
+    const stateOptions = useMemo(() => US_STATES.map((s) => `${s.name} (${s.code})`), []);
+
     const onNext = () => {
         if (!firstName || !street || !city || !stateCode || !zip || !country) {
             Alert.alert('Missing info', 'Please fill all required fields');
@@ -330,7 +349,13 @@ export default function RecipientScreen() {
                 {/* Saved Recipients Section */}
                 {recipients.length > 0 ? (
                     <View style={styles.savedRecipientsSection}>
-                        <Text style={styles.sectionTitle}>Select from saved recipients</Text>
+                        <View style={styles.savedRecipientsHeader}>
+                            <Text style={styles.sectionTitle}>Select from saved recipients</Text>
+                            <Pressable onPress={openAddRecipient} style={styles.savedRecipientsAddBtn} accessibilityRole="button">
+                                <IconSymbol name="plus" size={16} color={GIFTYY_THEME.colors.primary} />
+                                <Text style={styles.savedRecipientsAddText}>Add</Text>
+                            </Pressable>
+                        </View>
                         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recipientsScroll}>
                             {recipients.map((rec) => {
                                 const isSelected = selectedRecipientId === rec.id;
@@ -384,22 +409,12 @@ export default function RecipientScreen() {
                         </View>
                         <Pressable
                             style={styles.addRecipientCTAButton}
-                            onPress={() => router.push('/(buyer)/(tabs)/profile?tab=Recipients')}
+                            onPress={openAddRecipient}
                         >
                             <Text style={styles.addRecipientCTAButtonText}>Add recipients</Text>
                             <IconSymbol name="chevron.right" size={18} color="#FFFFFF" />
                         </Pressable>
                     </View>
-                )}
-
-                {recipients.length > 0 && (
-                    <Pressable
-                        style={styles.addMoreRecipientsButton}
-                        onPress={() => router.push('/(buyer)/(tabs)/profile?tab=Recipients')}
-                    >
-                        <IconSymbol name="plus.circle.fill" size={20} color={GIFTYY_THEME.colors.primary} />
-                        <Text style={styles.addMoreRecipientsText}>Add more recipients for future orders</Text>
-                    </Pressable>
                 )}
 
                 <View style={styles.divider} />
@@ -409,20 +424,37 @@ export default function RecipientScreen() {
                     <Field label="First name" value={firstName} onChangeText={setFirstName} style={{ flex: 1 }} />
                     <Field label="Last name (optional)" value={lastName} onChangeText={setLastName} style={{ flex: 1 }} />
                 </View>
-                <Field label="Street address" value={street} onChangeText={setStreet} />
-                <Field label="Apt, suite, etc. (optional)" value={apartment} onChangeText={setApartment} />
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <Field label="City" value={city} onChangeText={setCity} style={{ flex: 1 }} />
-                    <View style={{ flex: 1 }}>
-                        <Text style={{ fontWeight: '800', marginBottom: 6 }}>State</Text>
-                        <Pressable onPress={() => setStatePickerVisible(true)} style={[styles.input, { justifyContent: 'center' }]}>
-                            <Text style={{ color: stateCode ? '#111' : '#9ba1a6' }}>{stateCode || 'Select state'}</Text>
+                <View style={{ gap: 12 }}>
+                    <Field label="Street address" value={street} onChangeText={setStreet} />
+                    <Field label="Apartment / unit (optional)" value={apartment} onChangeText={setApartment} />
+                    <View style={{ gap: 6 }}>
+                        <Text style={{ fontWeight: '800' }}>
+                            Country<Text style={styles.requiredStar}>*</Text>
+                        </Text>
+                        <Pressable onPress={() => setCountryModalOpen(true)} style={[styles.input, { justifyContent: 'center' }]}>
+                            <Text style={{ color: country ? '#111' : '#9ba1a6' }}>{country || 'Select country'}</Text>
                         </Pressable>
                     </View>
-                </View>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <Field label="Country" value={country} onChangeText={setCountry} style={{ flex: 1 }} />
-                    <Field label="ZIP" value={zip} onChangeText={setZip} style={{ flex: 1 }} keyboardType="number-pad" />
+                    <View style={{ flexDirection: 'row', gap: 8 }}>
+                        <Field
+                            label="ZIP / Postal code"
+                            value={zip}
+                            onChangeText={setZip}
+                            style={{ flex: 1 }}
+                            keyboardType="number-pad"
+                        />
+                        <Field label="City" value={city} onChangeText={setCity} style={{ flex: 1 }} />
+                    </View>
+                    {showStateField ? (
+                        <View style={{ gap: 6 }}>
+                            <Text style={{ fontWeight: '800' }}>
+                                State / Province<Text style={styles.requiredStar}>*</Text>
+                            </Text>
+                            <Pressable onPress={() => setStateModalOpen(true)} style={[styles.input, { justifyContent: 'center' }]}>
+                                <Text style={{ color: stateCode ? '#111' : '#9ba1a6' }}>{selectedStateLabel || 'Select state / province'}</Text>
+                            </Pressable>
+                        </View>
+                    ) : null}
                 </View>
 
                 {/* Notify toggle before contact fields */}
@@ -522,7 +554,7 @@ export default function RecipientScreen() {
                     <Text style={{ color: '#9ba1a6', marginTop: 4, fontSize: 12 }}>Tax and shipping are estimated. Final amounts calculated at payment.</Text>
                 </View>
 
-                <BrandButton title="Continue" onPress={onNext} />
+                <BrandButton title="Add Video Message" onPress={onNext} />
                 <Pressable 
                     style={{ marginTop: 12, alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 20 }}
                     onPress={() => router.back()}
@@ -533,22 +565,45 @@ export default function RecipientScreen() {
             </ScrollView>
             </KeyboardAvoidingView>
 
-            <Modal visible={statePickerVisible} transparent animationType="fade" onRequestClose={() => setStatePickerVisible(false)}>
-                <Pressable style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.3)' }} onPress={() => setStatePickerVisible(false)} />
-                <View style={{ position: 'absolute', left: 0, right: 0, bottom: 0, backgroundColor: 'white', borderTopLeftRadius: 16, borderTopRightRadius: 16, padding: 16 }}>
-                    <Text style={{ fontWeight: '900', fontSize: 16, marginBottom: 8 }}>Select state</Text>
-                    <ScrollView style={{ maxHeight: 300 }}>
-                        {US_STATES.map((s) => (
-                            <Pressable key={s.code} onPress={() => { setStateCode(s.code); setStatePickerVisible(false); }} style={{ paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
-                                <Text style={{ fontWeight: '700' }}>{s.name} ({s.code})</Text>
-                            </Pressable>
-                        ))}
-                    </ScrollView>
-                    <Pressable onPress={() => setStatePickerVisible(false)} style={{ paddingVertical: 12, alignItems: 'center' }}>
-                        <Text style={{ color: '#f75507', fontWeight: '800' }}>Close</Text>
-                    </Pressable>
-                </View>
-            </Modal>
+			<RecipientFormModal
+                visible={addRecipientVisible}
+                mode="add"
+                editingRecipient={null}
+                onClose={() => setAddRecipientVisible(false)}
+                onSaved={refreshRecipients}
+            />
+
+            <SelectListModal
+                visible={countryModalOpen}
+                title="Select country"
+                options={COUNTRY_LIST}
+                selectedValue={country}
+                searchable
+                searchPlaceholder="Search countries…"
+                onClose={() => setCountryModalOpen(false)}
+                onSelect={(value) => {
+                    setCountry(value);
+                    // If the new country doesn't require a state, clear it (keeps shipping/tax logic sane).
+                    const normalized = value.trim().toUpperCase();
+                    const requiresState = normalized === 'UNITED STATES' || normalized === 'UNITED STATES OF AMERICA' || normalized === 'USA';
+                    if (!requiresState) {
+                        setStateCode('');
+                    }
+                    setCountryModalOpen(false);
+                }}
+            />
+            <SelectListModal
+                visible={stateModalOpen}
+                title="Select state / province"
+                options={stateOptions}
+                selectedValue={selectedStateLabel}
+                onClose={() => setStateModalOpen(false)}
+                onSelect={(value) => {
+                    const match = value.match(/\(([A-Z]{2})\)\s*$/);
+                    setStateCode(match?.[1] ?? '');
+                    setStateModalOpen(false);
+                }}
+            />
         </View>
     );
 }
@@ -564,6 +619,7 @@ function Field({ label, multiline, style, ...props }: { label: string; multiline
 
 const styles = StyleSheet.create({
     input: { borderWidth: 1, borderColor: '#eee', borderRadius: 12, padding: 12, backgroundColor: '#fafafa', color: '#111', height: 44 },
+    requiredStar: { color: GIFTYY_THEME.colors.primary, fontWeight: '900' },
     summaryCard: { marginTop: 6, backgroundColor: 'white', borderWidth: 1, borderColor: '#eee', borderRadius: 14, padding: 12, gap: 6 },
     rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     muted: { color: '#6b7280', fontWeight: '700' },
@@ -574,6 +630,19 @@ const styles = StyleSheet.create({
     infoText: { color: '#6b7280', lineHeight: 18 },
     savedRecipientsSection: { gap: 12 },
     sectionTitle: { fontSize: 18, fontWeight: '900', color: '#111', marginBottom: 4 },
+    savedRecipientsHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+    savedRecipientsAddBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingVertical: 8,
+        paddingHorizontal: 10,
+        borderRadius: 999,
+        backgroundColor: '#FFF7F3',
+        borderWidth: 1,
+        borderColor: '#FFE8DC',
+    },
+    savedRecipientsAddText: { color: GIFTYY_THEME.colors.primary, fontWeight: '800' },
     recipientsScroll: { gap: 12, paddingRight: 16 },
     recipientCard: {
         width: 280,
@@ -691,22 +760,6 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontWeight: '800',
         fontSize: 15,
-    },
-    addMoreRecipientsButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        paddingVertical: 10,
-        paddingHorizontal: 12,
-        backgroundColor: '#FFFFFF',
-        borderWidth: 1,
-        borderColor: '#E5E7EB',
-        borderRadius: 10,
-    },
-    addMoreRecipientsText: {
-        color: GIFTYY_THEME.colors.primary,
-        fontWeight: '700',
-        fontSize: 14,
     },
 });
 

@@ -1,16 +1,40 @@
 import { useAuth } from '@/contexts/AuthContext';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 import * as Linking from 'expo-linking';
 import { Redirect, useRouter, useSegments } from 'expo-router';
 import React, { useEffect } from 'react';
 import { ActivityIndicator, Alert, Text, View } from 'react-native';
 
+const HAS_SEEN_GUIDE_KEY = 'giftyy_has_seen_guide_v1';
+
 export default function Index() {
-	const { user, loading } = useAuth();
+	const { user, loading, syncAuth } = useAuth();
 	const router = useRouter();
 	const segments = useSegments();
 	const [isHandlingDeepLink, setIsHandlingDeepLink] = React.useState(false);
 	const [hasCheckedInitialUrl, setHasCheckedInitialUrl] = React.useState(false);
+	const [hasSeenGuide, setHasSeenGuide] = React.useState<boolean | null>(null);
+	const [bypassGuide, setBypassGuide] = React.useState(false);
+
+	// Load onboarding/guide completion flag
+	useEffect(() => {
+		let cancelled = false;
+		(async () => {
+			try {
+				const v = await AsyncStorage.getItem(HAS_SEEN_GUIDE_KEY);
+				if (cancelled) return;
+				setHasSeenGuide(v === '1');
+			} catch {
+				// If storage fails, do not block users.
+				if (cancelled) return;
+				setHasSeenGuide(true);
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, []);
 
 	// Log component render for debugging
 	React.useEffect(() => {
@@ -32,6 +56,8 @@ export default function Index() {
 		
 		// Handle deep links for password reset and OAuth callbacks
 		const handleDeepLink = async (url: string) => {
+			// If the app was opened via deep link, do not interrupt with onboarding.
+			setBypassGuide(true);
 			if (__DEV__) {
 				console.log('🔵 ========================================');
 				console.log('🔵 handleDeepLink called with URL:', url);
@@ -263,6 +289,7 @@ export default function Index() {
 								if (__DEV__) {
 									console.log('✅ Session verified and saved');
 								}
+								await syncAuth();
 								router.replace('/(buyer)/(tabs)/home');
 								return;
 							} else {
@@ -356,6 +383,7 @@ export default function Index() {
 							// Force a small delay to ensure auth state updates
 							// The AuthContext's onAuthStateChange should fire automatically
 							await new Promise(resolve => setTimeout(resolve, 1000));
+							await syncAuth();
 							
 							// Navigate to home
 							router.replace('/(buyer)/(tabs)/home');
@@ -455,6 +483,7 @@ export default function Index() {
 					
 					// Only handle if it's not the Expo dev client URL
 					if (url && !url.includes('expo-development-client')) {
+						setBypassGuide(true);
 						if (__DEV__) {
 							console.log('🔴 Processing deep link...');
 						}
@@ -502,6 +531,7 @@ export default function Index() {
 			
 			// Only handle if it's not the Expo dev client URL
 			if (event.url && !event.url.includes('expo-development-client')) {
+				setBypassGuide(true);
 				if (__DEV__) {
 					console.log('🔴 Processing URL event...');
 				}
@@ -520,7 +550,7 @@ export default function Index() {
 	}, [router, hasCheckedInitialUrl]);
 
 	// Show loading while checking initial URL or handling deep link
-	if (loading || isHandlingDeepLink || !hasCheckedInitialUrl) {
+	if (loading || isHandlingDeepLink || !hasCheckedInitialUrl || hasSeenGuide === null) {
 		if (__DEV__) {
 		console.log('🔵 Showing loading screen - loading:', loading, 'isHandlingDeepLink:', isHandlingDeepLink, 'hasCheckedInitialUrl:', hasCheckedInitialUrl);
 	}
@@ -536,6 +566,11 @@ export default function Index() {
 				)}
 			</View>
 		);
+	}
+
+	// First-time users: show guide slides after splash (unless app was opened via deep link).
+	if (!bypassGuide && hasSeenGuide === false) {
+		return <Redirect href="/guide" />;
 	}
 
 	if (__DEV__) {

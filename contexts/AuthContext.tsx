@@ -2,16 +2,20 @@ import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { getSupabaseErrorMessage, isNetworkError } from '@/utils/supabase-errors';
 import { AuthError, Session, User } from '@supabase/supabase-js';
 import { router } from 'expo-router';
+import * as Linking from 'expo-linking';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { AppState } from 'react-native';
 
 export type Profile = {
 	id: string;
 	first_name: string | null;
 	last_name: string | null;
+	email?: string | null;
 	phone: string | null;
 	date_of_birth: string | null;
 	bio: string | null;
 	profile_image_url: string | null;
+	store_name?: string | null;
 	role: 'buyer';
 	created_at: string;
 	updated_at: string;
@@ -22,6 +26,7 @@ type AuthContextType = {
 	session: Session | null;
 	profile: Profile | null;
 	loading: boolean;
+	syncAuth: () => Promise<void>;
 	signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
 	signInWithGoogle: () => Promise<{ error: AuthError | null }>;
 	signUp: (email: string, password: string, firstName: string, lastName: string) => Promise<{ error: AuthError | null }>;
@@ -47,136 +52,234 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		return !!(anyUser?.email_confirmed_at || anyUser?.confirmed_at);
 	}, []);
 
-	const fetchProfile = useCallback(async (userId: string) => {
+	const extractNamesFromUser = useCallback((u: User) => {
+		// For OAuth providers like Google, the name might be in different fields
+		let firstName = (u.user_metadata as any)?.first_name ?? null;
+		let lastName = (u.user_metadata as any)?.last_name ?? null;
+
+		// If name is in full_name (common for Google OAuth), split it
+		if (!firstName && (u.user_metadata as any)?.full_name) {
+			const nameParts = String((u.user_metadata as any).full_name).split(' ');
+			firstName = nameParts[0] || null;
+			lastName = nameParts.slice(1).join(' ') || null;
+		}
+
+		// Fallback to name field if available
+		if (!firstName && (u.user_metadata as any)?.name) {
+			const nameParts = String((u.user_metadata as any).name).split(' ');
+			firstName = nameParts[0] || null;
+			lastName = nameParts.slice(1).join(' ') || null;
+		}
+
+		return { firstName, lastName };
+	}, []);
+
+	const fetchProfileForUser = useCallback(async (u: User) => {
 		try {
-			const { data, error } = await supabase
+			// 1) Primary: profile id matches auth uid
+			const { data: byId, error: byIdError } = await supabase
 				.from('profiles')
 				.select('*')
-				.eq('id', userId)
-				.single();
+				.eq('id', u.id)
+				.maybeSingle();
 
-			if (error) {
-				// If profile doesn't exist (PGRST116), try to create it
-				if (error.code === 'PGRST116') {
-					console.log('Profile not found, creating new profile...');
-					
-					// Get user metadata from auth
-					const { data: { user } } = await supabase.auth.getUser();
-					if (!user) {
-						console.error('No user found when trying to create profile');
-						return;
-					}
-
-					// Extract name from user metadata
-					// For OAuth providers like Google, the name might be in different fields
-					let firstName = user.user_metadata?.first_name || null;
-					let lastName = user.user_metadata?.last_name || null;
-					
-					// If name is in full_name (common for Google OAuth), split it
-					if (!firstName && user.user_metadata?.full_name) {
-						const nameParts = user.user_metadata.full_name.split(' ');
-						firstName = nameParts[0] || null;
-						lastName = nameParts.slice(1).join(' ') || null;
-					}
-					
-					// Fallback to name field if available
-					if (!firstName && user.user_metadata?.name) {
-						const nameParts = user.user_metadata.name.split(' ');
-						firstName = nameParts[0] || null;
-						lastName = nameParts.slice(1).join(' ') || null;
-					}
-
-					// Create profile with user metadata
-					const { data: newProfile, error: createError } = await supabase
-						.from('profiles')
-						.insert({
-							id: userId,
-							first_name: firstName,
-							last_name: lastName,
-							role: 'buyer',
-						})
-						.select()
-						.single();
-
-					if (createError) {
-						console.error('Error creating profile:', createError);
-						return;
-					}
-
-					setProfile(newProfile as Profile);
-				} else {
-					// Other errors
-					console.error('Error fetching profile:', error);
-				}
+			if (byId) {
+				setProfile(byId as Profile);
 				return;
 			}
 
-			setProfile(data as Profile);
+			// 2) Fallback: for some legacy datasets, profile row may be keyed differently.
+			// If the profiles table has an email column, try to locate by email.
+			const email = u.email?.trim().toLowerCase();
+			if (email) {
+				const { data: byEmail, error: byEmailError } = await supabase
+					.from('profiles')
+					.select('*')
+					.eq('email', email)
+					.maybeSingle();
+
+				if (byEmail) {
+					setProfile(byEmail as Profile);
+					// Best-effort: ensure there's also a row keyed by auth uid (doesn't block UI).
+					const { firstName, lastName } = extractNamesFromUser(u);
+					supabase
+						.from('profiles')
+						.upsert(
+							{
+								id: u.id,
+								email,
+								first_name: firstName,
+								last_name: lastName,
+								role: (byEmail as any)?.role ?? 'buyer',
+							},
+							{ onConflict: 'id' }
+						)
+						.then(() => {})
+						.catch(() => {});
+					return;
+				}
+
+				// If email lookup errors (e.g. column doesn't exist), ignore and continue to create.
+				if (byEmailError) {
+					// Avoid noisy logs for missing column scenarios
+					const msg = String((byEmailError as any)?.message || '');
+					if (!msg.toLowerCase().includes('column') && !msg.toLowerCase().includes('does not exist')) {
+						console.warn('Error fetching profile by email:', byEmailError);
+					}
+				}
+			}
+
+			// 3) Create profile if missing
+			const { firstName, lastName } = extractNamesFromUser(u);
+			const { data: created, error: createError } = await supabase
+				.from('profiles')
+				.insert({
+					id: u.id,
+					email: email ?? null,
+					first_name: firstName,
+					last_name: lastName,
+					role: 'buyer',
+				})
+				.select()
+				.single();
+
+			if (createError) {
+				// If RLS blocks insert, surface the error for debugging.
+				console.error('Error creating profile:', createError);
+				// As a last resort, clear profile but keep session.
++				setProfile(null);
+				return;
+			}
+
+			setProfile(created as Profile);
 		} catch (error) {
 			console.error('Error fetching profile:', error);
 		}
-	}, []);
+	}, [extractNamesFromUser]);
 
-	useEffect(() => {
-		let cancelled = false;
-
-		// Get initial session
-		(async () => {
-			const { data: { session } } = await supabase.auth.getSession();
-			if (cancelled) return;
-
+	/**
+	 * Apply a session to local state + fetch profile.
+	 * This is used by:
+	 * - initial bootstrap
+	 * - onAuthStateChange
+	 * - AppState "active" (important for Android OAuth return-to-app)
+	 */
+	const applySession = useCallback(
+		async (nextSession: Session | null, cancelled?: () => boolean) => {
 			// Never treat unverified users as authenticated; also clear any tokens if they exist.
-			if (session?.user && !isEmailVerified(session.user)) {
+			if (nextSession?.user && !isEmailVerified(nextSession.user)) {
 				await supabase.auth.signOut();
-				if (cancelled) return;
+				if (cancelled?.()) return;
 				setSession(null);
 				setUser(null);
 				setProfile(null);
 				setLoading(false);
+				// If we know the email, route them to the verify screen.
+				if (nextSession.user.email) {
+					router.replace(`/(auth)/verify-email?email=${encodeURIComponent(nextSession.user.email)}`);
+				}
 				return;
 			}
 
-			setSession(session);
-			setUser(session?.user ?? null);
-			if (session?.user) {
-				fetchProfile(session.user.id);
+			if (cancelled?.()) return;
+			setSession(nextSession);
+			setUser(nextSession?.user ?? null);
+			if (nextSession?.user) {
+				await fetchProfileForUser(nextSession.user);
+			} else {
+				setProfile(null);
 			}
 			setLoading(false);
-		})();
+		},
+		[fetchProfileForUser, isEmailVerified]
+	);
+
+	const syncSessionFromSupabase = useCallback(
+		async (cancelled?: () => boolean) => {
+			try {
+				const {
+					data: { session: currentSession },
+					error,
+				} = await supabase.auth.getSession();
+
+				// Handle invalid refresh token errors (can happen after returning from OAuth or on stale tokens)
+				if (error) {
+					const errorMessage = error.message?.toLowerCase() || '';
+					if (errorMessage.includes('refresh token') || errorMessage.includes('token not found')) {
+						console.log('Invalid refresh token detected, clearing session...');
+						await supabase.auth.signOut();
+						await applySession(null, cancelled);
+						return;
+					}
+					// For other errors, log but continue with whatever session we got (often null).
+					console.warn('Error getting session:', error.message);
+				}
+
+				await applySession(currentSession ?? null, cancelled);
+			} catch (err: any) {
+				const errorMessage = err?.message?.toLowerCase() || '';
+				if (errorMessage.includes('refresh token') || errorMessage.includes('token not found')) {
+					console.log('Invalid refresh token detected in catch block, clearing session...');
+					await supabase.auth.signOut();
+				} else {
+					console.error('Unexpected error getting session:', err);
+				}
+				await applySession(null, cancelled);
+			}
+		},
+		[applySession]
+	);
+
+	useEffect(() => {
+		let cancelled = false;
+		const isCancelled = () => cancelled;
+
+		// Get initial session
+		syncSessionFromSupabase(isCancelled);
 
 		// Listen for auth changes
 		const {
 			data: { subscription },
 		} = supabase.auth.onAuthStateChange(async (_event, session) => {
-			// Never treat unverified users as authenticated; also clear any tokens if they exist.
-			if (session?.user && !isEmailVerified(session.user)) {
-				await supabase.auth.signOut();
-				setSession(null);
-				setUser(null);
-				setProfile(null);
-				// If we know the email, route them to the verify screen.
-				if (session.user.email) {
-					router.replace(`/(auth)/verify-email?email=${encodeURIComponent(session.user.email)}`);
-				}
-				setLoading(false);
-				return;
-			}
-
-			setSession(session);
-			setUser(session?.user ?? null);
-			if (session?.user) {
-				await fetchProfile(session.user.id);
-			} else {
-				setProfile(null);
-			}
-			setLoading(false);
+			await applySession(session ?? null);
 		});
+
+		// IMPORTANT (Android): Returning from the OAuth browser often triggers AppState active
+		// before (or instead of) onAuthStateChange firing in time. Sync session on active.
+		const appStateSub = AppState.addEventListener('change', (nextState) => {
+			if (nextState === 'active') {
+				syncSessionFromSupabase();
+			}
+		});
+
+		// IMPORTANT: In some cold-start + deep-link scenarios, the auth event can be missed
+		// if setSession happens before onAuthStateChange subscription is registered.
+		// Listening for the deep-link and then syncing session makes this deterministic.
+		const linkingSub = Linking.addEventListener('url', (event) => {
+			const url = event?.url || '';
+			if (!url) return;
+			// Only react to auth-related deep links.
+			if (url.includes('auth/callback') || url.includes('access_token') || url.includes('refresh_token')) {
+				// Give Supabase a moment to persist tokens, then sync.
+				setTimeout(() => {
+					syncSessionFromSupabase();
+				}, 250);
+			}
+		});
+
+		// Also do a short delayed re-sync on mount to catch races.
+		const bootstrapResync = setTimeout(() => {
+			syncSessionFromSupabase();
+		}, 750);
 
 		return () => {
 			cancelled = true;
 			subscription.unsubscribe();
+			appStateSub.remove();
+			linkingSub.remove();
+			clearTimeout(bootstrapResync);
 		};
-	}, [fetchProfile, isEmailVerified]);
+	}, [applySession, syncSessionFromSupabase]);
 
 	const signIn = useCallback(async (email: string, password: string) => {
 		try {
@@ -210,7 +313,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 					};
 				}
 
-				await fetchProfile(data.user.id);
+				// Apply session immediately so the app can hydrate without needing a restart.
+				// (onAuthStateChange should also fire, but this avoids races.)
+				await applySession(data.session ?? null);
 				router.replace('/(buyer)/(tabs)/home');
 			}
 
@@ -226,7 +331,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				} as AuthError,
 			};
 		}
-	}, [fetchProfile, isEmailVerified]);
+	}, [applySession, isEmailVerified]);
 
 	const signInWithGoogle = useCallback(async () => {
 		try {
@@ -329,7 +434,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 							
 							if (sessionData?.session) {
 								console.log('✅ Session established from callback URL');
-								await fetchProfile(sessionData.session.user.id);
+								await applySession(sessionData.session);
 								return { error: null };
 							}
 						}
@@ -358,7 +463,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
 				if (sessionData?.session) {
 					console.log(`✅ Session found after ${attempts * 500}ms`);
-					await fetchProfile(sessionData.session.user.id);
+					await applySession(sessionData.session);
 					return { error: null };
 				}
 				
@@ -371,7 +476,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
 			if (sessionData?.session) {
 				console.log('✅ Session found on final check');
-				await fetchProfile(sessionData.session.user.id);
+				await applySession(sessionData.session);
 				return { error: null };
 			}
 			
@@ -394,7 +499,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				} as AuthError,
 			};
 		}
-	}, [fetchProfile]);
+	}, [applySession]);
 
 	const signUp = useCallback(async (email: string, password: string, firstName: string, lastName: string) => {
 		try {
@@ -795,17 +900,22 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			.eq('id', user.id);
 
 		if (!error) {
-			await fetchProfile(user.id);
+			await fetchProfileForUser(user);
 		}
 
 		return { error };
-	}, [user, fetchProfile]);
+	}, [user, fetchProfileForUser]);
 
 	const refreshProfile = useCallback(async () => {
 		if (user) {
-			await fetchProfile(user.id);
+			await fetchProfileForUser(user);
 		}
-	}, [user, fetchProfile]);
+	}, [user, fetchProfileForUser]);
+
+	// Expose a deterministic "rehydrate now" helper for deep-link flows.
+	const syncAuth = useCallback(async () => {
+		await syncSessionFromSupabase();
+	}, [syncSessionFromSupabase]);
 
 	const deleteAccount = useCallback(async (password: string): Promise<{ error: AuthError | Error | null }> => {
 		if (!user || !user.email) {
@@ -880,6 +990,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				session,
 				profile,
 				loading,
+				syncAuth,
 				signIn,
 				signInWithGoogle,
 				signUp,

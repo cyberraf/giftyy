@@ -22,7 +22,7 @@ const DRAFT_VIDEO_TITLE_KEY = 'draft_video_title';
 export default function VideoScreen() {
 	useKeepAwake();
 	const router = useRouter();
-	const { setLocalVideoUri, setVideoDurationMs, setVideoTitle } = useCheckout();
+	const { setLocalVideoUri, setVideoDurationMs, setVideoTitle, localVideoUri, videoDurationMs, videoTitle } = useCheckout();
 	const { setVisible } = useBottomBarVisibility();
 
 	const [recordedVideoUri, setRecordedVideoUri] = useState<string | null>(null);
@@ -30,8 +30,9 @@ export default function VideoScreen() {
 	const [showTitleModal, setShowTitleModal] = useState(false);
 	const [localVideoTitle, setLocalVideoTitle] = useState('');
 	const [error, setError] = useState<string | null>(null);
-	const [videoRecorded, setVideoRecorded] = useState(false);
 	const [isMounted, setIsMounted] = useState(false);
+	const [isScreenFocused, setIsScreenFocused] = useState(false);
+	const [flowKey, setFlowKey] = useState(0);
 
 	// Load saved title from storage
 	useEffect(() => {
@@ -40,13 +41,16 @@ export default function VideoScreen() {
 				const savedTitle = await AsyncStorage.getItem(DRAFT_VIDEO_TITLE_KEY);
 				if (savedTitle) {
 					setLocalVideoTitle(savedTitle);
+				} else if (videoTitle && videoTitle.trim()) {
+					// If coming back from later steps, prefill with existing title
+					setLocalVideoTitle(videoTitle);
 				}
 			} catch (err) {
 				console.warn('Error loading saved video title:', err);
 			}
 		};
 		loadSavedTitle();
-	}, []);
+	}, [videoTitle]);
 
 	// Save title to storage whenever it changes
 	useEffect(() => {
@@ -65,31 +69,31 @@ export default function VideoScreen() {
 		return () => clearTimeout(timeoutId);
 	}, [localVideoTitle]);
 
-	// Ensure component is mounted before rendering camera
-	// This prevents Android crash from rendering camera during navigation transition
-	useEffect(() => {
-		// Use InteractionManager to wait for navigation animations to complete
-		const task = InteractionManager.runAfterInteractions(() => {
-			setIsMounted(true);
-		});
-		return () => {
-			if (task && task.cancel) task.cancel();
-		};
-	}, []);
-
 	// Hide bottom bar when on this screen
 	useFocusEffect(
 		useCallback(() => {
 			setVisible(false);
+			setIsScreenFocused(true);
+			setFlowKey((k) => k + 1);
+			// Wait for navigation animations to finish before rendering camera
+			const task = InteractionManager.runAfterInteractions(() => {
+				setIsMounted(true);
+				// If there's a saved video in checkout state, ensure we can preview it
+				if (localVideoUri) {
+					setRecordedVideoUri(localVideoUri);
+					setRecordedDurationMs(videoDurationMs || 0);
+				}
+			});
 			return () => {
 				setVisible(true);
-				// Clean up: reset video state when navigating away
+				setIsScreenFocused(false);
+				// Clean up: reset local UI state when navigating away
 				setRecordedVideoUri(null);
 				setShowTitleModal(false);
-				setVideoRecorded(false);
 				setIsMounted(false);
+				if (task && (task as any).cancel) (task as any).cancel();
 			};
-		}, [setVisible])
+		}, [setVisible, localVideoUri, videoDurationMs])
 	);
 
 	// Handle video recorded from the flow
@@ -110,7 +114,6 @@ export default function VideoScreen() {
 		// Delay state changes to allow camera to properly stop and cleanup
 		// This prevents the Android crash from unmounting while camera is active
 		setTimeout(() => {
-			setVideoRecorded(true);
 			setShowTitleModal(true);
 		}, 300);
 	}, []);
@@ -165,10 +168,23 @@ export default function VideoScreen() {
 				<StepBar current={4} total={7} label="Record a video message" />
 			</View>
 			<View style={styles.videoFlowContainer} collapsable={false}>
-				{!videoRecorded && isMounted ? (
+				{isScreenFocused && (isMounted || recordedVideoUri || localVideoUri) ? (
 					<VideoRecordingFlow
+						key={flowKey}
 						onVideoRecorded={handleVideoRecorded}
 						onCancel={handleCancel}
+						onRetake={() => {
+							// Discard saved checkout video so it doesn't come back
+							setLocalVideoUri(undefined);
+							setVideoDurationMs(undefined);
+							setVideoTitle(undefined);
+							setRecordedVideoUri(null);
+							setRecordedDurationMs(0);
+							setLocalVideoTitle('');
+							AsyncStorage.removeItem(DRAFT_VIDEO_TITLE_KEY).catch(console.warn);
+						}}
+						initialVideoUri={recordedVideoUri || localVideoUri || null}
+						initialDurationMs={recordedDurationMs || videoDurationMs || 0}
 					/>
 				) : null}
 			</View>

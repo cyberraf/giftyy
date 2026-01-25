@@ -1,5 +1,5 @@
-import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './AuthContext';
 
 export type Recipient = {
@@ -9,6 +9,7 @@ export type Recipient = {
     relationship: string;
     email?: string;
     phone: string;
+    birthDate?: string; // ISO date string: YYYY-MM-DD
     address: string;
     apartment?: string;
     city: string;
@@ -51,6 +52,7 @@ function dbRowToRecipient(row: any): Recipient {
         relationship: row.relationship,
         email: row.email || undefined,
         phone: row.phone,
+        birthDate: row.birth_date || undefined,
         address: row.address,
         apartment: row.apartment || undefined,
         city: row.city,
@@ -81,6 +83,7 @@ function recipientToDbRow(recipient: Partial<Recipient>): any {
     if (recipient.relationship !== undefined) row.relationship = recipient.relationship;
     if (recipient.email !== undefined) row.email = recipient.email;
     if (recipient.phone !== undefined) row.phone = recipient.phone;
+    if (recipient.birthDate !== undefined) row.birth_date = recipient.birthDate || null;
     if (recipient.address !== undefined) row.address = recipient.address;
     if (recipient.apartment !== undefined) row.apartment = recipient.apartment;
     if (recipient.city !== undefined) row.city = recipient.city;

@@ -12,7 +12,7 @@ import { calculateVendorShippingSync, calculateVendorShippingByZone } from '@/li
 import * as FileSystem from 'expo-file-system/legacy';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState, useEffect } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 
 export default function PaymentScreen() {
     const router = useRouter();

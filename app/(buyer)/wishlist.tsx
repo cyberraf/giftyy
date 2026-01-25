@@ -232,6 +232,7 @@ export default function WishlistScreen() {
 		
 		addItem({
 			id: product.id,
+			productId: product.id,
 			name: product.name,
 			price: product.discountPercentage > 0
 				? (product.price * (1 - product.discountPercentage / 100)).toFixed(2)

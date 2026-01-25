@@ -1,9 +1,9 @@
-import { IconSymbol, IconSymbolName } from '@/components/ui/icon-symbol';
 import { MarketplaceProductCard } from '@/components/marketplace/ProductCard';
+import { RecipientFormModal } from '@/components/recipients/RecipientFormModal';
+import { IconSymbol, IconSymbolName } from '@/components/ui/icon-symbol';
 import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
-import { useCart } from '@/contexts/CartContext';
 import { useOrders } from '@/contexts/OrdersContext';
 import { useProducts } from '@/contexts/ProductsContext';
 import { useRecipients, type Recipient as RecipientType } from '@/contexts/RecipientsContext';
@@ -11,12 +11,11 @@ import { useVideoMessages } from '@/contexts/VideoMessagesContext';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { supabase } from '@/lib/supabase';
 import { getVendorsInfo, type VendorInfo } from '@/lib/vendor-utils';
-import { Picker } from '@react-native-picker/picker';
 import { decode } from 'base64-arraybuffer';
 import * as ImagePicker from 'expo-image-picker';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Dimensions, Image, KeyboardAvoidingView, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Alert, Dimensions, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -44,296 +43,10 @@ const palette = {
     success: '#10B981',
 };
 
-const COUNTRY_LIST = [
-    'Afghanistan',
-    'Albania',
-    'Algeria',
-    'Andorra',
-    'Angola',
-    'Antigua and Barbuda',
-    'Argentina',
-    'Armenia',
-    'Australia',
-    'Austria',
-    'Azerbaijan',
-    'Bahamas',
-    'Bahrain',
-    'Bangladesh',
-    'Barbados',
-    'Belarus',
-    'Belgium',
-    'Belize',
-    'Benin',
-    'Bhutan',
-    'Bolivia',
-    'Bosnia and Herzegovina',
-    'Botswana',
-    'Brazil',
-    'Brunei',
-    'Bulgaria',
-    'Burkina Faso',
-    'Burundi',
-    'Cabo Verde',
-    'Cambodia',
-    'Cameroon',
-    'Canada',
-    'Central African Republic',
-    'Chad',
-    'Chile',
-    'China',
-    'Colombia',
-    'Comoros',
-    'Congo (Republic)',
-    'Congo (Democratic Republic)',
-    'Costa Rica',
-    'Croatia',
-    'Cuba',
-    'Cyprus',
-    'Czech Republic',
-    'Denmark',
-    'Djibouti',
-    'Dominica',
-    'Dominican Republic',
-    'Ecuador',
-    'Egypt',
-    'El Salvador',
-    'Equatorial Guinea',
-    'Eritrea',
-    'Estonia',
-    'Eswatini',
-    'Ethiopia',
-    'Fiji',
-    'Finland',
-    'France',
-    'Gabon',
-    'Gambia',
-    'Georgia',
-    'Germany',
-    'Ghana',
-    'Greece',
-    'Grenada',
-    'Guatemala',
-    'Guinea',
-    'Guinea-Bissau',
-    'Guyana',
-    'Haiti',
-    'Honduras',
-    'Hungary',
-    'Iceland',
-    'India',
-    'Indonesia',
-    'Iran',
-    'Iraq',
-    'Ireland',
-    'Israel',
-    'Italy',
-    'Jamaica',
-    'Japan',
-    'Jordan',
-    'Kazakhstan',
-    'Kenya',
-    'Kiribati',
-    'Korea (North)',
-    'Korea (South)',
-    'Kosovo',
-    'Kuwait',
-    'Kyrgyzstan',
-    'Laos',
-    'Latvia',
-    'Lebanon',
-    'Lesotho',
-    'Liberia',
-    'Libya',
-    'Liechtenstein',
-    'Lithuania',
-    'Luxembourg',
-    'Madagascar',
-    'Malawi',
-    'Malaysia',
-    'Maldives',
-    'Mali',
-    'Malta',
-    'Marshall Islands',
-    'Mauritania',
-    'Mauritius',
-    'Mexico',
-    'Micronesia',
-    'Moldova',
-    'Monaco',
-    'Mongolia',
-    'Montenegro',
-    'Morocco',
-    'Mozambique',
-    'Myanmar',
-    'Namibia',
-    'Nauru',
-    'Nepal',
-    'Netherlands',
-    'New Zealand',
-    'Nicaragua',
-    'Niger',
-    'Nigeria',
-    'North Macedonia',
-    'Norway',
-    'Oman',
-    'Pakistan',
-    'Palau',
-    'Panama',
-    'Papua New Guinea',
-    'Paraguay',
-    'Peru',
-    'Philippines',
-    'Poland',
-    'Portugal',
-    'Qatar',
-    'Romania',
-    'Russia',
-    'Rwanda',
-    'Saint Kitts and Nevis',
-    'Saint Lucia',
-    'Saint Vincent and the Grenadines',
-    'Samoa',
-    'San Marino',
-    'Sao Tome and Principe',
-    'Saudi Arabia',
-    'Senegal',
-    'Serbia',
-    'Seychelles',
-    'Sierra Leone',
-    'Singapore',
-    'Slovakia',
-    'Slovenia',
-    'Solomon Islands',
-    'Somalia',
-    'South Africa',
-    'South Sudan',
-    'Spain',
-    'Sri Lanka',
-    'Sudan',
-    'Suriname',
-    'Sweden',
-    'Switzerland',
-    'Syria',
-    'Taiwan',
-    'Tajikistan',
-    'Tanzania',
-    'Thailand',
-    'Timor-Leste',
-    'Togo',
-    'Tonga',
-    'Trinidad and Tobago',
-    'Tunisia',
-    'Turkey',
-    'Turkmenistan',
-    'Tuvalu',
-    'Uganda',
-    'Ukraine',
-    'United Arab Emirates',
-    'United Kingdom',
-    'United States',
-    'Uruguay',
-    'Uzbekistan',
-    'Vanuatu',
-    'Vatican City',
-    'Venezuela',
-    'Vietnam',
-    'Yemen',
-    'Zambia',
-    'Zimbabwe',
-];
-
-const US_STATES = [
-    'Alabama', 'Alaska', 'Arizona', 'Arkansas', 'California', 'Colorado', 'Connecticut', 'Delaware', 'District of Columbia',
-    'Florida', 'Georgia', 'Hawaii', 'Idaho', 'Illinois', 'Indiana', 'Iowa', 'Kansas', 'Kentucky', 'Louisiana', 'Maine',
-    'Maryland', 'Massachusetts', 'Michigan', 'Minnesota', 'Mississippi', 'Missouri', 'Montana', 'Nebraska', 'Nevada',
-    'New Hampshire', 'New Jersey', 'New Mexico', 'New York', 'North Carolina', 'North Dakota', 'Ohio', 'Oklahoma',
-    'Oregon', 'Pennsylvania', 'Rhode Island', 'South Carolina', 'South Dakota', 'Tennessee', 'Texas', 'Utah',
-    'Vermont', 'Virginia', 'Washington', 'West Virginia', 'Wisconsin', 'Wyoming', 'American Samoa', 'Guam',
-    'Northern Mariana Islands', 'Puerto Rico', 'U.S. Virgin Islands'
-];
-
-const CANADA_PROVINCES = [
-    'Alberta', 'British Columbia', 'Manitoba', 'New Brunswick', 'Newfoundland and Labrador', 'Northwest Territories',
-    'Nova Scotia', 'Nunavut', 'Ontario', 'Prince Edward Island', 'Quebec', 'Saskatchewan', 'Yukon'
-];
-
-const AUSTRALIA_STATES = [
-    'Australian Capital Territory', 'New South Wales', 'Northern Territory', 'Queensland', 'South Australia',
-    'Tasmania', 'Victoria', 'Western Australia'
-];
-
-const INDIA_STATES = [
-    'Andhra Pradesh', 'Arunachal Pradesh', 'Assam', 'Bihar', 'Chhattisgarh', 'Goa', 'Gujarat', 'Haryana', 'Himachal Pradesh',
-    'Jharkhand', 'Karnataka', 'Kerala', 'Madhya Pradesh', 'Maharashtra', 'Manipur', 'Meghalaya', 'Mizoram', 'Nagaland',
-    'Odisha', 'Punjab', 'Rajasthan', 'Sikkim', 'Tamil Nadu', 'Telangana', 'Tripura', 'Uttar Pradesh', 'Uttarakhand',
-    'West Bengal', 'Andaman and Nicobar Islands', 'Chandigarh', 'Dadra and Nagar Haveli and Daman and Diu',
-    'Delhi', 'Jammu and Kashmir', 'Ladakh', 'Lakshadweep', 'Puducherry'
-];
-
-const normalizeCountry = (country: string) => country.trim().toUpperCase();
-
-const COUNTRY_STATE_OPTIONS: Record<string, string[]> = {
-    'UNITED STATES': US_STATES,
-    'UNITED STATES OF AMERICA': US_STATES,
-    'USA': US_STATES,
-    'CANADA': CANADA_PROVINCES,
-    'AUSTRALIA': AUSTRALIA_STATES,
-    'INDIA': INDIA_STATES,
-};
-
-const getStateOptionsForCountry = (country: string) => {
-    const normalized = normalizeCountry(country);
-    return COUNTRY_STATE_OPTIONS[normalized] ?? [];
-};
-
-const requiresStateField = (country: string) => getStateOptionsForCountry(country).length > 0;
-
 // Use Recipient type from context
 type Recipient = RecipientType;
 
 type RecipientCardProps = Omit<Recipient, 'id'> & { onEdit: () => void; onDelete: () => void; isEditing: boolean };
-
-type RecipientFormState = Omit<Recipient, 'id'>;
-
-const INITIAL_RECIPIENTS: Recipient[] = [
-    {
-        id: 'rec-1',
-        firstName: 'Jordan',
-        lastName: 'Miles',
-        relationship: 'Best friend',
-        email: 'jordan.miles@email.com',
-        phone: '(415) 594-3021',
-        address: '238 Market Street',
-        apartment: 'Apt 5B',
-        city: 'San Francisco',
-        state: 'CA',
-        country: 'USA',
-        zip: '94107',
-        sports: 'Running, tennis',
-        hobbies: 'Photography, hiking',
-        favoriteColors: 'Terracotta, sage',
-        favoriteArtists: 'Taylor Swift, Norah Jones',
-        notes: 'Allergic to peanuts. Loves coffee.',
-    },
-    {
-        id: 'rec-2',
-        firstName: 'Carmen',
-        lastName: 'Diaz',
-        relationship: 'Sister',
-        email: 'carmen.diaz@email.com',
-        phone: '(323) 882-1188',
-        address: '1090 Palm Drive',
-        city: 'Los Angeles',
-        state: 'CA',
-        country: 'USA',
-        zip: '90015',
-        sports: 'Yoga',
-        hobbies: 'Travel, art museums',
-        favoriteColors: 'Blush, navy',
-        favoriteArtists: 'Lorde, Adele',
-        notes: '',
-    },
-];
 
 export default function ProfileScreen() {
 	const { top } = useSafeAreaInsets();
@@ -551,7 +264,12 @@ export default function ProfileScreen() {
                     {/* Main Content Section */}
                     <View style={styles.heroMainContent}>
                         {/* Profile Picture with subtle shadow */}
-                        <Pressable style={styles.heroAvatarWrapper} onPress={handleAvatarPress}>
+                        <Pressable
+                            style={styles.heroAvatarWrapper}
+                            onPress={handleAvatarPress}
+                            accessibilityRole="button"
+                            accessibilityLabel="Upload profile picture"
+                        >
                             {authProfile?.profile_image_url ? (
                                 <Image 
                                     source={{ uri: authProfile.profile_image_url }} 
@@ -562,6 +280,11 @@ export default function ProfileScreen() {
                                     <Text style={styles.heroAvatarInitials}>{displayInitials}</Text>
                                 </View>
                             )}
+                            <View style={styles.heroAvatarEditOverlay} pointerEvents="none">
+                                <View style={styles.heroAvatarEditOverlayCircle}>
+                                    <IconSymbol name="square.and.pencil" size={14} color="rgba(255,255,255,0.55)" />
+                                </View>
+                            </View>
                             <View style={styles.heroAvatarRing} />
                         </Pressable>
 
@@ -1070,91 +793,31 @@ function SettingsSwitchRow({ label, subtitle, value, onValueChange }: { label: s
 }
 
 function RecipientsPanel() {
-    const emptyForm: RecipientFormState = {
-        firstName: '',
-        lastName: '',
-        relationship: '',
-        email: '',
-        phone: '',
-        address: '',
-        apartment: '',
-        city: '',
-        state: '',
-        country: '',
-        zip: '',
-        sports: '',
-        hobbies: '',
-        favoriteColors: '',
-        favoriteArtists: '',
-        stylePreferences: '',
-        favoriteGenres: '',
-        personalityLifestyle: '',
-        giftTypePreference: '',
-        dietaryPreferences: '',
-        allergies: '',
-        recentLifeEvents: '',
-        ageRange: '',
-        notes: '',
-    };
-
-    const { recipients, loading: recipientsLoading, setRecipients, addRecipient, updateRecipient, deleteRecipient } = useRecipients();
-    const [formMode, setFormMode] = useState<'add' | 'edit' | null>(null);
+    const { recipients, loading: recipientsLoading, deleteRecipient } = useRecipients();
+    const [recipientModalVisible, setRecipientModalVisible] = useState(false);
+    const [recipientModalMode, setRecipientModalMode] = useState<'add' | 'edit'>('add');
     const [activeRecipientId, setActiveRecipientId] = useState<string | null>(null);
-    const [form, setForm] = useState<RecipientFormState>(emptyForm);
-    const [modalVisible, setModalVisible] = useState(false);
-    const [formPage, setFormPage] = useState(0);
+    const [editingRecipient, setEditingRecipient] = useState<Recipient | null>(null);
 
-    const updateForm = useCallback((patch: Partial<RecipientFormState>) => {
-        setForm((prev) => ({ ...prev, ...patch }));
-    }, []);
-
-    const resetForm = () => {
-        setForm(emptyForm);
-        setFormMode(null);
+    const closeModal = () => {
+        setRecipientModalVisible(false);
+        setRecipientModalMode('add');
+        setEditingRecipient(null);
         setActiveRecipientId(null);
-        setModalVisible(false);
-        setFormPage(0);
     };
 
     const handleAdd = () => {
         setActiveRecipientId(null);
-        setForm(emptyForm);
-        setFormMode('add');
-        setModalVisible(true);
-        setFormPage(0);
+        setEditingRecipient(null);
+        setRecipientModalMode('add');
+        setRecipientModalVisible(true);
     };
 
     const handleEdit = (recipient: Recipient) => {
         setActiveRecipientId(recipient.id);
-        setForm({
-            firstName: recipient.firstName,
-            lastName: recipient.lastName ?? '',
-            relationship: recipient.relationship,
-            email: recipient.email ?? '',
-            phone: recipient.phone,
-            address: recipient.address,
-            apartment: recipient.apartment ?? '',
-            city: recipient.city,
-            state: recipient.state ?? '',
-            country: recipient.country,
-            zip: recipient.zip,
-            sports: recipient.sports ?? '',
-            hobbies: recipient.hobbies ?? '',
-            favoriteColors: recipient.favoriteColors ?? '',
-            favoriteArtists: recipient.favoriteArtists ?? '',
-            stylePreferences: recipient.stylePreferences ?? '',
-            favoriteGenres: recipient.favoriteGenres ?? '',
-            personalityLifestyle: recipient.personalityLifestyle ?? '',
-            giftTypePreference: recipient.giftTypePreference ?? '',
-            dietaryPreferences: recipient.dietaryPreferences ?? '',
-            allergies: recipient.allergies ?? '',
-            recentLifeEvents: recipient.recentLifeEvents ?? '',
-            ageRange: recipient.ageRange ?? '',
-            notes: recipient.notes ?? '',
-        });
-        setFormMode('edit');
-        setModalVisible(true);
-        setFormPage(0);
+        setEditingRecipient(recipient);
+        setRecipientModalMode('edit');
+        setRecipientModalVisible(true);
     };
 
     const handleDelete = (id: string) => {
@@ -1169,79 +832,12 @@ function RecipientsPanel() {
                         Alert.alert('Error', `Failed to delete recipient: ${error.message}`);
                     } else {
                         if (activeRecipientId === id) {
-                            resetForm();
+                            closeModal();
                         }
                     }
                 },
             },
         ]);
-    };
-
-    const handleSave = async () => {
-        if (!formMode) {
-            return;
-        }
-
-        const trimmed: RecipientFormState = {
-            firstName: form.firstName.trim(),
-            lastName: form.lastName.trim(),
-            relationship: form.relationship.trim(),
-            email: form.email.trim(),
-            phone: form.phone.trim(),
-            address: form.address.trim(),
-            apartment: form.apartment?.trim() ?? '',
-            city: form.city.trim(),
-            state: form.state.trim(),
-            country: form.country.trim(),
-            zip: form.zip.trim(),
-            sports: form.sports.trim(),
-            hobbies: form.hobbies.trim(),
-            favoriteColors: form.favoriteColors.trim(),
-            favoriteArtists: form.favoriteArtists.trim(),
-            stylePreferences: form.stylePreferences.trim(),
-            favoriteGenres: form.favoriteGenres.trim(),
-            personalityLifestyle: form.personalityLifestyle.trim(),
-            giftTypePreference: form.giftTypePreference.trim(),
-            dietaryPreferences: form.dietaryPreferences.trim(),
-            allergies: form.allergies.trim(),
-            recentLifeEvents: form.recentLifeEvents.trim(),
-            ageRange: form.ageRange.trim(),
-            notes: form.notes.trim(),
-        };
-
-        if (!trimmed.firstName || !trimmed.address || !trimmed.city || !trimmed.country || !trimmed.zip) {
-            Alert.alert('Missing details', 'First name, address, city, country, and ZIP are required.');
-            return;
-        }
-
-        const stateIsRequired = requiresStateField(trimmed.country);
-        if (stateIsRequired && !trimmed.state) {
-            Alert.alert('Missing details', 'State / province is required for the selected country.');
-            return;
-        }
-
-        if (!stateIsRequired) {
-            trimmed.state = '';
-        }
-
-        let error: Error | null = null;
-        if (formMode === 'edit' && activeRecipientId) {
-            const result = await updateRecipient(activeRecipientId, trimmed);
-            error = result.error;
-        } else {
-            const result = await addRecipient(trimmed);
-            error = result.error;
-        }
-
-        if (error) {
-            Alert.alert('Error', `Failed to save recipient: ${error.message}`);
-        } else {
-            resetForm();
-        }
-    };
-
-    const handleCancel = () => {
-        resetForm();
     };
 
     return (
@@ -1252,7 +848,9 @@ function RecipientsPanel() {
 
                 <Pressable style={styles.recipientAddButton} onPress={handleAdd} accessibilityRole="button">
                     <IconSymbol name="plus" size={20} color={BRAND_COLOR} />
-                    <Text style={styles.recipientAddButtonLabel}>{formMode === 'add' ? 'Adding new recipient' : 'Add new recipient'}</Text>
+                    <Text style={styles.recipientAddButtonLabel}>
+                        {recipientModalVisible && recipientModalMode === 'add' ? 'Adding new recipient' : 'Add new recipient'}
+                    </Text>
                 </Pressable>
 
                 {recipients.map((recipient) => (
@@ -1284,7 +882,7 @@ function RecipientsPanel() {
                         notes={recipient.notes}
                         onEdit={() => handleEdit(recipient)}
                         onDelete={() => handleDelete(recipient.id)}
-                        isEditing={formMode === 'edit' && activeRecipientId === recipient.id}
+                        isEditing={recipientModalVisible && recipientModalMode === 'edit' && activeRecipientId === recipient.id}
                     />
                 ))}
                 {recipients.length === 0 && (
@@ -1295,387 +893,12 @@ function RecipientsPanel() {
                 )}
             </View>
 
-            <Modal
-                visible={modalVisible}
-                transparent
-                animationType="fade"
-                onRequestClose={handleCancel}
-                presentationStyle="overFullScreen"
-            >
-                <View style={styles.modalOverlay}>
-                    <KeyboardAvoidingView
-                        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                        keyboardVerticalOffset={Platform.OS === 'ios' ? 24 : 0}
-                        style={styles.modalCardWrapper}
-                    >
-                        <View style={styles.modalCard}>
-                            <Text style={styles.modalTitle}>{formMode === 'edit' ? 'Edit recipient' : 'New recipient'}</Text>
-                            <View style={styles.modalFormContainer}>
-                                <ScrollView
-                                    keyboardShouldPersistTaps="handled"
-                                    contentContainerStyle={styles.modalFormContent}
-                                    showsVerticalScrollIndicator={true}
-                                    nestedScrollEnabled={true}
-                                >
-                                    {formPage === 0 ? (
-                                        <RecipientFormFields form={form} onChange={updateForm} />
-                                    ) : (
-                                        <RecipientPreferenceFields form={form} onChange={updateForm} />
-                                    )}
-                                </ScrollView>
-                            </View>
-                            <View style={styles.modalStepperRow}>
-                                {[0, 1].map((index) => (
-                                    <View key={index} style={[styles.modalStepDot, index === formPage && styles.modalStepDotActive]} />
-                                ))}
-                            </View>
-                            <View style={styles.modalButtonRow}>
-                                <Pressable style={styles.modalSecondaryButton} onPress={handleCancel} accessibilityRole="button">
-                                    <Text style={styles.modalSecondaryLabel}>Cancel</Text>
-                                </Pressable>
-                                {formPage === 0 ? (
-                                    <Pressable style={styles.modalPrimaryButton} onPress={() => setFormPage(1)} accessibilityRole="button">
-                                        <Text style={styles.modalPrimaryLabel}>Next</Text>
-                                    </Pressable>
-                                ) : (
-                                    <View style={styles.modalPagerActions}>
-                                        <Pressable style={styles.modalSecondaryButton} onPress={() => setFormPage(0)} accessibilityRole="button">
-                                            <Text style={styles.modalSecondaryLabel}>Back</Text>
-                                        </Pressable>
-                                        <Pressable style={styles.modalPrimaryButton} onPress={handleSave} accessibilityRole="button" hitSlop={8}>
-                                            <Text style={styles.modalPrimaryLabel}>Save</Text>
-                                        </Pressable>
-                                    </View>
-                                )}
-                            </View>
-                        </View>
-                    </KeyboardAvoidingView>
-                </View>
-            </Modal>
-        </View>
-    );
-}
-
-function RecipientFormFields({ form, onChange }: { form: RecipientFormState; onChange: (patch: Partial<RecipientFormState>) => void }) {
-    const stateOptions = useMemo(() => getStateOptionsForCountry(form.country), [form.country]);
-    const showStateField = stateOptions.length > 0;
-    return (
-        <View style={styles.formFields}>
-            <View style={styles.formRow}>
-                <View style={[styles.inputGroup, styles.formColumn]}>
-                    <Text style={styles.inputLabel}>First name</Text>
-                    <TextInput
-                        value={form.firstName}
-                        onChangeText={(text) => onChange({ firstName: text })}
-                        style={styles.textInput}
-                        placeholder="Jordan"
-                        placeholderTextColor="rgba(47,35,24,0.4)"
-                        autoCapitalize="words"
-                        returnKeyType="next"
-                    />
-                </View>
-                <View style={[styles.inputGroup, styles.formColumn]}>
-                    <Text style={styles.inputLabel}>Last name (optional)</Text>
-                    <TextInput
-                        value={form.lastName}
-                        onChangeText={(text) => onChange({ lastName: text })}
-                        style={styles.textInput}
-                        placeholder="Miles"
-                        placeholderTextColor="rgba(47,35,24,0.4)"
-                        autoCapitalize="words"
-                        returnKeyType="next"
-                    />
-                </View>
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Relationship</Text>
-                <TextInput
-                    value={form.relationship}
-                    onChangeText={(text) => onChange({ relationship: text })}
-                    style={styles.textInput}
-                    placeholder="e.g. Sister, coworker"
-                    placeholderTextColor="rgba(47,35,24,0.4)"
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                />
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Email (optional)</Text>
-                <TextInput
-                    value={form.email}
-                    onChangeText={(text) => onChange({ email: text })}
-                    style={styles.textInput}
-                    placeholder="name@example.com"
-                    placeholderTextColor="rgba(47,35,24,0.4)"
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    returnKeyType="next"
-                />
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Phone</Text>
-                <TextInput
-                    value={form.phone}
-                    onChangeText={(text) => onChange({ phone: text })}
-                    style={styles.textInput}
-                    placeholder="(555) 123-4567"
-                    placeholderTextColor="rgba(47,35,24,0.4)"
-                    keyboardType="phone-pad"
-                    returnKeyType="next"
-                />
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Street address</Text>
-                <TextInput
-                    value={form.address}
-                    onChangeText={(text) => onChange({ address: text })}
-                    style={styles.textInput}
-                    placeholder="238 Market Street"
-                    placeholderTextColor="rgba(47,35,24,0.4)"
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                />
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Apartment / unit (optional)</Text>
-                <TextInput
-                    value={form.apartment}
-                    onChangeText={(text) => onChange({ apartment: text })}
-                    style={styles.textInput}
-                    placeholder="Apt 5B"
-                    placeholderTextColor="rgba(47,35,24,0.4)"
-                    autoCapitalize="characters"
-                    returnKeyType="next"
-                />
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Country</Text>
-                <View style={styles.pickerContainer}>
-                    <Picker
-                        selectedValue={form.country}
-                        onValueChange={(value) => onChange({ country: value, state: '' })}
-                        style={styles.picker}
-                        mode="dropdown"
-                        dropdownIconColor={palette.textSecondary}
-                    >
-                        <Picker.Item label="Select country" value="" color={palette.textSecondary} />
-                        {COUNTRY_LIST.map((country) => (
-                            <Picker.Item key={country} label={country} value={country} color={palette.textPrimary} />
-                        ))}
-                    </Picker>
-                </View>
-            </View>
-            <View style={styles.formRow}>
-                <View style={[styles.inputGroup, styles.formColumn]}>
-                    <Text style={styles.inputLabel}>ZIP / Postal code</Text>
-                    <TextInput
-                        value={form.zip}
-                        onChangeText={(text) => onChange({ zip: text })}
-                        style={styles.textInput}
-                        placeholder="94107"
-                        placeholderTextColor="rgba(47,35,24,0.4)"
-                        autoCapitalize="characters"
-                        returnKeyType={showStateField ? 'next' : 'done'}
-                    />
-                </View>
-                <View style={[styles.inputGroup, styles.formColumn]}>
-                    <Text style={styles.inputLabel}>City</Text>
-                    <TextInput
-                        value={form.city}
-                        onChangeText={(text) => onChange({ city: text })}
-                        style={styles.textInput}
-                        placeholder="San Francisco"
-                        placeholderTextColor="rgba(47,35,24,0.4)"
-                        autoCapitalize="words"
-                        returnKeyType={showStateField ? 'next' : 'done'}
-                    />
-                </View>
-            </View>
-            <View style={styles.formRow}>
-                {showStateField ? (
-                    <View style={[styles.inputGroup, styles.formColumn]}>
-                        <Text style={styles.inputLabel}>State / Province</Text>
-                        <View style={styles.pickerContainer}>
-                            <Picker
-                                selectedValue={form.state}
-                                onValueChange={(value) => onChange({ state: value })}
-                                style={styles.picker}
-                                mode="dropdown"
-                                dropdownIconColor={palette.textSecondary}
-                            >
-                                <Picker.Item label="Select state / province" value="" color={palette.textSecondary} />
-                                {stateOptions.map((state) => (
-                                    <Picker.Item key={state} label={state} value={state} color={palette.textPrimary} />
-                                ))}
-                            </Picker>
-                        </View>
-                    </View>
-                ) : null}
-            </View>
-        </View>
-    );
-}
-
-function RecipientPreferenceFields({ form, onChange }: { form: RecipientFormState; onChange: (patch: Partial<RecipientFormState>) => void }) {
-    return (
-        <View style={styles.formFields}>
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Sports (optional)</Text>
-                <TextInput
-                    value={form.sports}
-                    onChangeText={(text) => onChange({ sports: text })}
-                    style={styles.textInput}
-                    placeholder="Running, tennis"
-                    placeholderTextColor="rgba(47,35,24,0.4)"
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                />
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Hobbies (optional)</Text>
-                <TextInput
-                    value={form.hobbies}
-                    onChangeText={(text) => onChange({ hobbies: text })}
-                    style={styles.textInput}
-                    placeholder="Photography, hiking"
-                    placeholderTextColor="rgba(47,35,24,0.4)"
-                    autoCapitalize="sentences"
-                    returnKeyType="next"
-                />
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Favorite colors (optional)</Text>
-                <TextInput
-                    value={form.favoriteColors}
-                    onChangeText={(text) => onChange({ favoriteColors: text })}
-                    style={styles.textInput}
-                    placeholder="Terracotta, sage"
-                    placeholderTextColor="rgba(47,35,24,0.4)"
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                />
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Favorite artists (optional)</Text>
-                <TextInput
-                    value={form.favoriteArtists}
-                    onChangeText={(text) => onChange({ favoriteArtists: text })}
-                    style={styles.textInput}
-                    placeholder="Taylor Swift, Norah Jones"
-                    placeholderTextColor="rgba(47,35,24,0.4)"
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                />
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Style preferences (optional)</Text>
-                <TextInput
-                    value={form.stylePreferences}
-                    onChangeText={(text) => onChange({ stylePreferences: text })}
-                    style={styles.textInput}
-                    placeholder="Minimalist, bold, vintage, modern, bohemian"
-                    placeholderTextColor="rgba(47,35,24,0.4)"
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                />
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Favorite genres (optional)</Text>
-                <TextInput
-                    value={form.favoriteGenres}
-                    onChangeText={(text) => onChange({ favoriteGenres: text })}
-                    style={styles.textInput}
-                    placeholder="Books, movies, TV shows, music genres"
-                    placeholderTextColor="rgba(47,35,24,0.4)"
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                />
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Personality & lifestyle (optional)</Text>
-                <TextInput
-                    value={form.personalityLifestyle}
-                    onChangeText={(text) => onChange({ personalityLifestyle: text })}
-                    style={styles.textInput}
-                    placeholder="Introverted, adventurous, homebody, active"
-                    placeholderTextColor="rgba(47,35,24,0.4)"
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                />
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Gift type preference (optional)</Text>
-                <TextInput
-                    value={form.giftTypePreference}
-                    onChangeText={(text) => onChange({ giftTypePreference: text })}
-                    style={styles.textInput}
-                    placeholder="Practical, sentimental, experiential, luxury"
-                    placeholderTextColor="rgba(47,35,24,0.4)"
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                />
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Dietary preferences (optional)</Text>
-                <TextInput
-                    value={form.dietaryPreferences}
-                    onChangeText={(text) => onChange({ dietaryPreferences: text })}
-                    style={styles.textInput}
-                    placeholder="Vegetarian, vegan, gluten-free, foodie"
-                    placeholderTextColor="rgba(47,35,24,0.4)"
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                />
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Allergies & sensitivities (optional)</Text>
-                <TextInput
-                    value={form.allergies}
-                    onChangeText={(text) => onChange({ allergies: text })}
-                    style={styles.textInput}
-                    placeholder="Food, fragrances, materials"
-                    placeholderTextColor="rgba(47,35,24,0.4)"
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                />
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Recent life events (optional)</Text>
-                <TextInput
-                    value={form.recentLifeEvents}
-                    onChangeText={(text) => onChange({ recentLifeEvents: text })}
-                    style={styles.textInput}
-                    placeholder="New job, moved, had a baby, retired"
-                    placeholderTextColor="rgba(47,35,24,0.4)"
-                    autoCapitalize="words"
-                    returnKeyType="next"
-                />
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Age range (optional)</Text>
-                <TextInput
-                    value={form.ageRange}
-                    onChangeText={(text) => onChange({ ageRange: text })}
-                    style={styles.textInput}
-                    placeholder="e.g. 25-30, 40s, 60+"
-                    placeholderTextColor="rgba(47,35,24,0.4)"
-                    autoCapitalize="none"
-                    returnKeyType="next"
-                />
-            </View>
-            <View style={styles.inputGroup}>
-                <Text style={styles.inputLabel}>Anything else? (optional)</Text>
-                <TextInput
-                    value={form.notes}
-                    onChangeText={(text) => onChange({ notes: text })}
-                    style={[styles.textInput, styles.textInputMultiline]}
-                    placeholder="Additional notes, preferences, or gift ideas..."
-                    placeholderTextColor="rgba(47,35,24,0.4)"
-                    multiline
-                    numberOfLines={4}
-                    textAlignVertical="top"
-                />
-            </View>
+            <RecipientFormModal
+                visible={recipientModalVisible}
+                mode={recipientModalMode}
+                editingRecipient={editingRecipient}
+                onClose={closeModal}
+            />
         </View>
     );
 }
@@ -1978,6 +1201,23 @@ const styles = StyleSheet.create({
         borderColor: BRAND_COLOR,
         opacity: 0.2,
         zIndex: 1,
+    },
+    heroAvatarEditOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 3,
+    },
+    heroAvatarEditOverlayCircle: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        alignItems: 'center',
+        justifyContent: 'center',
+        // Transparent overlay badge (lets the photo show through)
+        backgroundColor: 'rgba(0,0,0,0.28)',
+        borderWidth: 1,
+        borderColor: 'rgba(255,255,255,0.55)',
     },
     heroAvatarInitials: {
         fontSize: 32,
@@ -2809,7 +2049,6 @@ const styles = StyleSheet.create({
     modalCard: {
         width: '100%',
         maxWidth: 420,
-        height: '80%',
         backgroundColor: '#FFFFFF',
         borderRadius: 24,
         overflow: 'hidden',
@@ -2910,6 +2149,99 @@ const styles = StyleSheet.create({
     picker: {
         height: 48,
         color: palette.textPrimary,
+    },
+    pickerPressable: {
+        height: 48,
+        paddingHorizontal: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    pickerPlaceholderText: {
+        color: 'rgba(47,35,24,0.45)',
+        fontWeight: '600',
+    },
+    pickerValueText: {
+        color: palette.textPrimary,
+        fontWeight: '700',
+    },
+    selectModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.55)',
+        justifyContent: 'flex-end',
+        padding: 16,
+    },
+    selectModalBackdrop: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'transparent',
+    },
+    selectModalCard: {
+        backgroundColor: '#FFFFFF',
+        borderRadius: 18,
+        padding: 14,
+        maxHeight: '78%',
+        shadowColor: '#000',
+        shadowOpacity: 0.12,
+        shadowRadius: 20,
+        elevation: 6,
+    },
+    selectModalTitle: {
+        fontFamily: BRAND_FONT,
+        fontSize: 16,
+        fontWeight: '900',
+        color: palette.textPrimary,
+        paddingHorizontal: 4,
+        paddingBottom: 10,
+    },
+    selectModalSearch: {
+        height: 44,
+        borderWidth: 1,
+        borderColor: palette.border,
+        borderRadius: 12,
+        paddingHorizontal: 12,
+        backgroundColor: palette.cardAlt,
+        color: palette.textPrimary,
+        marginBottom: 10,
+    },
+    selectModalList: {
+        borderTopWidth: 1,
+        borderTopColor: 'rgba(230,222,214,0.65)',
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(230,222,214,0.65)',
+    },
+    selectModalOptionRow: {
+        paddingVertical: 12,
+        paddingHorizontal: 6,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderBottomWidth: 1,
+        borderBottomColor: 'rgba(230,222,214,0.4)',
+    },
+    selectModalOptionRowSelected: {
+        backgroundColor: palette.accentSoft,
+    },
+    selectModalOptionText: {
+        color: palette.textPrimary,
+        fontWeight: '700',
+        flex: 1,
+        paddingRight: 10,
+    },
+    selectModalOptionTextSelected: {
+        color: palette.textPrimary,
+    },
+    selectModalCloseButton: {
+        marginTop: 10,
+        paddingVertical: 10,
+        alignItems: 'center',
+        borderRadius: 12,
+        backgroundColor: palette.cardAlt,
+        borderWidth: 1,
+        borderColor: palette.border,
+    },
+    selectModalCloseText: {
+        color: BRAND_COLOR,
+        fontWeight: '900',
     },
     settingsTabBar: {
         flexDirection: 'row',

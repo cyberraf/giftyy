@@ -53,6 +53,14 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DEALS_ROW_CARD_WIDTH = SCREEN_WIDTH * 0.44;
 const ALL_PRODUCTS_PER_PAGE = 18;
 
+// Home "Key features" guide screenshots (bundled)
+const GUIDE_HOME = require('../../../assets/images/guide-home.png');
+const GUIDE_CARD = require('../../../assets/images/guide-card.png');
+const GUIDE_VIDEO = require('../../../assets/images/guide-video.png');
+const GUIDE_SHARED_MEMORY = require('../../../assets/images/guide-shared-memory.png');
+const GUIDE_MEMORIES = require('../../../assets/images/guide-memories.png');
+const GUIDE_REACTIONS = require('../../../assets/images/guide-reactions.png');
+
 // Category definitions
 const CATEGORIES = [
 	{ id: 'birthday', name: 'Birthday', icon: 'gift.fill' },
@@ -88,6 +96,7 @@ export default function MarketplaceHomeScreen() {
 	const [selectedCategory, setSelectedCategory] = useState<string | null>(params.category || null);
 	const [searchQuery, setSearchQuery] = useState('');
 	const [showFilters, setShowFilters] = useState(false);
+	const [cartRequiredDialog, setCartRequiredDialog] = useState<null | { title: string; message: string }>(null);
 	const [allProductsPage, setAllProductsPage] = useState(1);
 	const [vendorsMap, setVendorsMap] = useState<Map<string, VendorInfo>>(new Map());
 	const [filters, setFilters] = useState<{
@@ -780,31 +789,73 @@ export default function MarketplaceHomeScreen() {
 	
 	// Promotional banners
 	const banners = useMemo(() => {
-		const bannerItems = [];
-		
-		if (saleProducts.length > 0) {
-			bannerItems.push({
-				id: 'deals',
-				title: 'Special Deals',
-				subtitle: 'Up to 50% off selected items',
+		return [
+			{
+				id: 'guide-home',
+				title: 'Shop gifts',
+				subtitle: 'Discover and shop gifts fast',
 				backgroundColor: GIFTYY_THEME.colors.primary,
-				ctaText: 'Shop Deals',
-				onPress: () => router.push('/(buyer)/deals'),
-			});
-		}
-		
-		if (bundlesWithProducts.length > 0) {
-			bannerItems.push({
-				id: 'collections',
-				title: 'Giftyy Bundles',
-				subtitle: 'Curated gifts for every occasion',
+				ctaText: 'View',
+				imageSource: GUIDE_HOME,
+				onPress: () => router.push({ pathname: '/guide', params: { start: 'home' } }),
+			},
+			{
+				id: 'guide-card',
+				title: 'Add your Giftyy Card',
+				subtitle: 'Link your gift to a memory',
+				backgroundColor: GIFTYY_THEME.colors.primaryDark,
+				ctaText: 'View',
+				imageSource: GUIDE_CARD,
+				onPress: () =>
+					setCartRequiredDialog({
+						title: 'Add a gift to your cart',
+						message:
+							'To add a Giftyy Card, first add any product to your cart, then proceed to checkout.',
+					}),
+			},
+			{
+				id: 'guide-video',
+				title: 'Record a video message',
+				subtitle: 'Make it personal',
+				backgroundColor: GIFTYY_THEME.colors.primaryLight,
+				ctaText: 'View',
+				imageSource: GUIDE_VIDEO,
+				onPress: () =>
+					setCartRequiredDialog({
+						title: 'Add a gift to your cart',
+						message:
+							'To record a video message, first add any product to your cart, then proceed to checkout.',
+					}),
+			},
+			{
+				id: 'guide-shared-memory',
+				title: 'Add shared memories',
+				subtitle: 'Attach photos & moments',
+				backgroundColor: GIFTYY_THEME.colors.warning,
+				ctaText: 'View',
+				imageSource: GUIDE_SHARED_MEMORY,
+				onPress: () => router.push({ pathname: '/(buyer)/(tabs)/memory', params: { tab: 'Shared memories' } }),
+			},
+			{
+				id: 'guide-memories',
+				title: 'View your memories',
+				subtitle: 'Revisit moments anytime',
+				backgroundColor: GIFTYY_THEME.colors.info,
+				ctaText: 'View',
+				imageSource: GUIDE_MEMORIES,
+				onPress: () => router.push({ pathname: '/(buyer)/(tabs)/memory', params: { tab: 'Overview' } }),
+			},
+			{
+				id: 'guide-reactions',
+				title: 'View recipient reactions',
+				subtitle: 'See how they reacted',
 				backgroundColor: GIFTYY_THEME.colors.success,
-				onPress: () => router.push('/(buyer)/bundles'),
-			});
-		}
-		
-		return bannerItems;
-	}, [saleProducts, bundlesWithProducts]);
+				ctaText: 'View',
+				imageSource: GUIDE_REACTIONS,
+				onPress: () => router.push({ pathname: '/(buyer)/(tabs)/memory', params: { tab: 'Reactions' } }),
+			},
+		];
+	}, [router]);
 	
 	const headerPaddingTop = top + 6;
 	// Calculate responsive header height: safe area top + padding + search box height + bottom padding
@@ -1300,7 +1351,7 @@ export default function MarketplaceHomeScreen() {
 									subtitle={`${filteredProducts.length} items available • Page ${allProductsPage} of ${allProductsTotalPages}`}
 									icon="square.grid.3x3"
 								/>
-								<View style={styles.dealsGrid}>
+								<View style={styles.allProductsGrid}>
 									{allProductsPageItems.map((product, index) => {
 										const vendor = product.vendorId ? vendorsMap.get(product.vendorId) : undefined;
 										const imageUrl = product.imageUrl ? (() => {
@@ -1311,20 +1362,17 @@ export default function MarketplaceHomeScreen() {
 												return product.imageUrl;
 											}
 										})() : undefined;
-										
-										// Ensure 3-column layout - remove marginRight from last item in each row
-										const isLastInRow = (index + 1) % 3 === 0;
-										// Use 3-column width from theme
-										const threeColumnWidth = GIFTYY_THEME.layout.cardWidth3Col;
+
+										// True 3-column grid width with consistent gaps
+										const gridGap = 10;
+										const gridPadding = GIFTYY_THEME.spacing.lg;
+										const threeColumnWidth = (SCREEN_WIDTH - gridPadding * 2 - gridGap * 2) / 3;
 										
 							return (
 											<Animated.View
 												key={product.id}
 												entering={FadeInUp.duration(400).delay(400 + index * 30)}
-												style={{ 
-													marginRight: isLastInRow ? 0 : 10, 
-													marginBottom: 10 
-												}}
+												style={{ width: threeColumnWidth, marginBottom: gridGap }}
 											>
 												<MarketplaceProductCard
 													id={product.id}
@@ -1431,6 +1479,46 @@ export default function MarketplaceHomeScreen() {
 				}}
 				categories={categories}
 			/>
+
+			{/* Cart required dialog (for card/video features) */}
+			<Modal
+				transparent
+				visible={!!cartRequiredDialog}
+				animationType="fade"
+				onRequestClose={() => setCartRequiredDialog(null)}
+			>
+				<Pressable style={styles.dialogOverlay} onPress={() => setCartRequiredDialog(null)}>
+					<Pressable style={styles.dialogCard} onPress={(e) => e.stopPropagation()}>
+						<View style={styles.dialogIconCircle}>
+							<IconSymbol name="cart.fill" size={22} color="#ffffff" />
+						</View>
+						<Text style={styles.dialogTitle}>{cartRequiredDialog?.title || ''}</Text>
+						<Text style={styles.dialogMessage}>{cartRequiredDialog?.message || ''}</Text>
+
+						<View style={styles.dialogActions}>
+							<Pressable
+								style={styles.dialogSecondaryButton}
+								onPress={() => {
+									setCartRequiredDialog(null);
+									router.push('/(buyer)/(tabs)/cart');
+								}}
+								accessibilityRole="button"
+								accessibilityLabel="Go to cart"
+							>
+								<Text style={styles.dialogSecondaryText}>Go to cart</Text>
+							</Pressable>
+							<Pressable
+								style={styles.dialogPrimaryButton}
+								onPress={() => setCartRequiredDialog(null)}
+								accessibilityRole="button"
+								accessibilityLabel="Browse gifts"
+							>
+								<Text style={styles.dialogPrimaryText}>Browse gifts</Text>
+							</Pressable>
+						</View>
+					</Pressable>
+				</Pressable>
+			</Modal>
 			
 			{/* Gift suggestion explanation removed for a cleaner personalized section */}
         </View>
@@ -1538,6 +1626,12 @@ const styles = StyleSheet.create({
 		paddingHorizontal: GIFTYY_THEME.spacing.lg,
 		justifyContent: 'flex-start',
 	},
+	allProductsGrid: {
+		flexDirection: 'row',
+		flexWrap: 'wrap',
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
+		justifyContent: 'space-between',
+	},
 	dealsRowContainer: {
 		paddingHorizontal: GIFTYY_THEME.spacing.lg,
 		paddingVertical: GIFTYY_THEME.spacing.md,
@@ -1567,6 +1661,79 @@ const styles = StyleSheet.create({
 		fontSize: GIFTYY_THEME.typography.sizes.sm,
 		fontWeight: GIFTYY_THEME.typography.weights.bold,
 		color: GIFTYY_THEME.colors.gray800,
+	},
+	dialogOverlay: {
+		flex: 1,
+		backgroundColor: 'rgba(0,0,0,0.45)',
+		justifyContent: 'center',
+		paddingHorizontal: 22,
+	},
+	dialogCard: {
+		backgroundColor: '#ffffff',
+		borderRadius: 22,
+		padding: 18,
+		borderWidth: 1,
+		borderColor: 'rgba(0,0,0,0.06)',
+		shadowColor: '#000',
+		shadowOpacity: 0.12,
+		shadowRadius: 18,
+		shadowOffset: { width: 0, height: 10 },
+		elevation: 6,
+		alignItems: 'center',
+	},
+	dialogIconCircle: {
+		width: 56,
+		height: 56,
+		borderRadius: 28,
+		backgroundColor: GIFTYY_THEME.colors.primary,
+		alignItems: 'center',
+		justifyContent: 'center',
+		marginBottom: 12,
+	},
+	dialogTitle: {
+		fontSize: 18,
+		fontWeight: '900',
+		color: GIFTYY_THEME.colors.gray900,
+		textAlign: 'center',
+	},
+	dialogMessage: {
+		marginTop: 8,
+		fontSize: 14,
+		lineHeight: 20,
+		color: GIFTYY_THEME.colors.gray600,
+		textAlign: 'center',
+	},
+	dialogActions: {
+		flexDirection: 'row',
+		gap: 10,
+		marginTop: 16,
+		width: '100%',
+	},
+	dialogSecondaryButton: {
+		flex: 1,
+		borderRadius: 999,
+		paddingVertical: 12,
+		alignItems: 'center',
+		justifyContent: 'center',
+		borderWidth: 1,
+		borderColor: 'rgba(17,24,39,0.14)',
+		backgroundColor: '#ffffff',
+	},
+	dialogSecondaryText: {
+		color: GIFTYY_THEME.colors.gray900,
+		fontWeight: '800',
+	},
+	dialogPrimaryButton: {
+		flex: 1,
+		borderRadius: 999,
+		paddingVertical: 12,
+		alignItems: 'center',
+		justifyContent: 'center',
+		backgroundColor: GIFTYY_THEME.colors.primary,
+	},
+	dialogPrimaryText: {
+		color: '#ffffff',
+		fontWeight: '900',
 	},
 	paginationText: {
 		fontSize: GIFTYY_THEME.typography.sizes.sm,

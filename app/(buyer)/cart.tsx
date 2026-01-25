@@ -329,10 +329,13 @@ function SummaryCard({
 				<Text style={styles.summaryTotalLabel}>Total</Text>
 				<Text style={styles.summaryTotal}>${total.toFixed(2)}</Text>
 			</View>
+			<Text style={styles.summaryWarning}>
+				Every order includes a Giftyy Card at a separate cost.
+			</Text>
 			<Text style={styles.summaryHint}>Tax and shipping will be finalized at checkout.</Text>
 			<View style={{ marginTop: 16 }}>
 				<BrandButton
-					title="Proceed to Checkout"
+					title="Add Giftyy Card"
 					onPress={onCheckout}
 				/>
 			</View>
@@ -369,7 +372,7 @@ function CheckoutBar({
 				<Text style={styles.stickyAmount}>${total.toFixed(2)}</Text>
 				<Text style={styles.stickyHint}>Secure payment • Easy returns</Text>
 			</View>
-			<BrandButton title={`Proceed to checkout (${count})`} onPress={onCheckout} />
+			<BrandButton title={`Add Giftyy Card (${count})`} onPress={onCheckout} />
 		</View>
 	);
 }
@@ -611,6 +614,19 @@ const styles = StyleSheet.create({
 	summaryHint: {
 		color: '#94a3b8',
 		fontSize: 12,
+	},
+	summaryWarning: {
+		color: '#b45309',
+		fontSize: 12,
+		fontWeight: '700',
+		backgroundColor: '#fef3c7',
+		borderWidth: 1,
+		borderColor: '#fde68a',
+		paddingHorizontal: 10,
+		paddingVertical: 8,
+		borderRadius: 12,
+		overflow: 'hidden',
+		lineHeight: 16,
 	},
 	clearRow: {
 		flexDirection: 'row',

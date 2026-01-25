@@ -15,6 +15,7 @@ import { supabase } from '@/lib/supabase';
 import { ResizeMode, Video } from 'expo-av';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
+import { useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Dimensions, FlatList, Image, Modal, NativeScrollEvent, NativeSyntheticEvent, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -132,6 +133,7 @@ function getRememberMemories(videos: MemoryVideoItem[], videoMessages: VideoMess
 
 export default function MemoryTabScreen() {
     const { top } = useSafeAreaInsets();
+    const params = useLocalSearchParams<{ tab?: string }>();
     const { videoMessages, loading: videosLoading, refreshVideoMessages } = useVideoMessages();
     const { vaults, loading: vaultsLoading, refreshVaults } = useVaults();
     const { sharedMemories, loading: sharedMemoriesLoading, refreshSharedMemories } = useSharedMemories();
@@ -173,6 +175,20 @@ export default function MemoryTabScreen() {
     const tabs = useMemo<TabKey[]>(() => {
         return hasVaults ? [...baseTabs, 'Vaults'] : [...baseTabs];
     }, [hasVaults]);
+
+    // Allow navigation directly to a specific tab via URL param (e.g. from Home "Key features" carousel)
+    useEffect(() => {
+        const raw = params?.tab;
+        const requested = typeof raw === 'string' ? raw : undefined;
+        if (!requested) return;
+
+        // Accept exact match, or case-insensitive match against available tabs.
+        const normalized = requested.trim().toLowerCase();
+        const match = tabs.find((t) => String(t).toLowerCase() === normalized);
+        if (match && match !== activeTab) {
+            setActiveTab(match);
+        }
+    }, [params?.tab, tabs, activeTab]);
 
     useEffect(() => {
         if (!tabs.includes(activeTab)) {
@@ -2306,8 +2322,8 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                 </>
             ) : (
                 <>
-            {/* Preload adjacent videos (currentIndex - 1, currentIndex, currentIndex + 1) for smooth scrolling */}
-            {isValidPlaybackUrl && Math.abs(currentIndex - index) <= 1 ? (
+            {/* NOTE: Only mount the active video to avoid decoder/network issues on some real devices. */}
+            {isValidPlaybackUrl && viewerVisible && currentIndex === index ? (
                 <Video
                     key={`video-${item.id}-${playbackUrl.substring(0, 50)}`}
                     ref={videoRef}
@@ -2471,17 +2487,9 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                                 resizeMode="cover"
                             />
                         ) : (
-                            sharedMemorySignedUrl || sharedMemory.fileUrl ? (
-                                <VideoPreview
-                                    videoUrl={sharedMemorySignedUrl || sharedMemory.fileUrl || ''}
-                                    style={styles.viewerSharedMemoryImage}
-                                    pauseWhenViewerOpen={false}
-                                />
-                            ) : (
-                                <View style={[styles.viewerSharedMemoryImage, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
-                                    <ActivityIndicator size="small" color="#fff" />
-                                </View>
-                            )
+                            <View style={[styles.viewerSharedMemoryImage, { backgroundColor: '#000', justifyContent: 'center', alignItems: 'center' }]}>
+                                <IconSymbol name="play.fill" size={22} color="#FFFFFF" />
+                            </View>
                         )}
                     </View>
                 )}

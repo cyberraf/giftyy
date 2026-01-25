@@ -68,6 +68,8 @@ const MAPPING: Record<string, keyof typeof MaterialIcons.glyphMap> = {
   calendar: 'calendar-today',
   'envelope.fill': 'email',
   'play.fill': 'play-arrow',
+  'pause.fill': 'pause',
+  pause: 'pause',
   'arrow.down.circle.fill': 'arrow-circle-down',
   'arrow.up.circle.fill': 'arrow-circle-up',
   'ellipsis.circle': 'more-vert',

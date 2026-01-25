@@ -8,7 +8,7 @@ import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { verticalScale, responsiveFontSize } from '@/utils/responsive';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect, useRef, useState } from 'react';
-import { Dimensions, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, Image, Pressable, StyleSheet, Text, View, type ImageSourcePropType } from 'react-native';
 import Animated, {
 	Easing,
 	useAnimatedStyle,
@@ -33,7 +33,10 @@ type BannerItem = {
 	id: string;
 	title: string;
 	subtitle?: string;
+	/** Remote image URL (legacy) */
 	image?: string;
+	/** Bundled image (preferred for onboarding / guides) */
+	imageSource?: ImageSourcePropType;
 	backgroundColor?: string;
 	ctaText?: string;
 	onPress?: () => void;
@@ -78,6 +81,10 @@ function AnimatedDot({ isActive, index }: { isActive: boolean; index: number }) 
 }
 
 function BannerSlide({ banner }: { banner: BannerItem }) {
+	const imageSource =
+		banner.imageSource ??
+		(banner.image ? ({ uri: banner.image } as const) : undefined);
+
 	return (
 		<View style={styles.cardOuter}>
 			<View style={styles.cardInner}>
@@ -90,15 +97,13 @@ function BannerSlide({ banner }: { banner: BannerItem }) {
 				end={{ x: 1, y: 1 }}
 				style={styles.gradient}
 			>
-				{banner.image && (
-					<Image
-						source={{ uri: banner.image }}
-						style={styles.backgroundImage}
-						resizeMode="cover"
-					/>
+				{imageSource && (
+					<View style={styles.previewContainer}>
+						<Image source={imageSource} style={styles.previewImage} resizeMode="contain" />
+					</View>
 				)}
 				<View style={styles.content}>
-					<Text style={styles.title} numberOfLines={1} ellipsizeMode="tail">{banner.title}</Text>
+					<Text style={styles.title} numberOfLines={2}>{banner.title}</Text>
 					{banner.subtitle && (
 						<Text style={styles.subtitle}>{banner.subtitle}</Text>
 					)}
@@ -254,19 +259,34 @@ const styles = StyleSheet.create({
 		position: 'relative',
 		overflow: 'hidden',
 	},
-	backgroundImage: {
+	previewContainer: {
 		position: 'absolute',
+		right: GIFTYY_THEME.spacing.lg,
+		top: '10%',
+		bottom: '10%',
+		width: '30%',
+		borderRadius: GIFTYY_THEME.radius.xl,
+		overflow: 'hidden',
+		backgroundColor: 'rgba(255, 255, 255, 0.18)',
+		borderWidth: 1,
+		borderColor: 'rgba(255, 255, 255, 0.26)',
+		padding: 6,
+	},
+	previewImage: {
 		width: '100%',
 		height: '100%',
-		opacity: 0.3,
+		borderRadius: GIFTYY_THEME.radius.lg,
+		backgroundColor: 'rgba(255, 255, 255, 0.06)',
 	},
 	content: {
 		zIndex: 1,
-		maxWidth: '70%',
+		// keep enough room for the right-side screenshot preview
+		maxWidth: '66%',
 	},
 	title: {
 		// Use smaller font size on smaller screens (< 375px)
-		fontSize: SCREEN_WIDTH < 375 ? GIFTYY_THEME.typography.sizes['2xl'] : GIFTYY_THEME.typography.sizes['3xl'],
+		fontSize: SCREEN_WIDTH < 375 ? GIFTYY_THEME.typography.sizes.xl : GIFTYY_THEME.typography.sizes['2xl'],
+		lineHeight: SCREEN_WIDTH < 375 ? 24 : 28,
 		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
 		color: GIFTYY_THEME.colors.white,
 		marginBottom: GIFTYY_THEME.spacing.sm,
@@ -279,7 +299,7 @@ const styles = StyleSheet.create({
 		fontSize: SCREEN_WIDTH < 375 ? GIFTYY_THEME.typography.sizes.sm : GIFTYY_THEME.typography.sizes.base,
 		color: GIFTYY_THEME.colors.white,
 		opacity: 0.95,
-		marginBottom: GIFTYY_THEME.spacing.lg,
+		marginBottom: GIFTYY_THEME.spacing.md,
 		fontWeight: GIFTYY_THEME.typography.weights.medium,
 	},
 	cta: {

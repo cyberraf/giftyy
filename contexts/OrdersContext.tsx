@@ -261,7 +261,8 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 					const unitPrice = parseFloat(item.price.replace(/[^0-9.]/g, ''));
 					return {
 						order_id: orderData.id,
-						product_id: item.id,
+						// order_items.product_id references products.id
+						product_id: (item as any).productId || item.id,
 						product_name: item.name,
 						product_image_url: item.image || null,
 						quantity: item.quantity,
@@ -293,12 +294,12 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 					await Promise.all(
 						cartItems.map(async (item) => {
 							const { error: rpcError } = await supabase.rpc('decrement_product_stock', {
-								p_product_id: item.id,
+								p_product_id: (item as any).productId || item.id,
 								p_quantity: item.quantity,
 							});
 
 							if (rpcError) {
-								console.warn('Failed to decrement stock for product', item.id, rpcError);
+								console.warn('Failed to decrement stock for product', (item as any).productId || item.id, rpcError);
 							}
 						})
 					);
@@ -311,7 +312,7 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 					await Promise.all(
 						cartItems.map((item) =>
 							logProductAnalyticsEvent({
-								productId: item.id,
+								productId: (item as any).productId || item.id,
 								eventType: 'purchase',
 								metadata: {
 									orderId: orderData.id,

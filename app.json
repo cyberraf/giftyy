@@ -3,9 +3,9 @@
     "name": "Giftyy",
     "slug": "giftyy",
     "version": "1.0.0",
-    "description": "Making gifting fun and memorable",
+    "description": "Because every gift deserves a story",
     "orientation": "portrait",
-    "icon": "./assets/images/icon.png",
+    "icon": "./assets/images/giftyy.png",
     "scheme": "giftyy",
     "userInterfaceStyle": "automatic",
     "primaryColor": "#f75507",
@@ -22,9 +22,9 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
+        "foregroundImage": "./assets/images/giftyy.png",
+        "backgroundImage": "./assets/images/giftyy.png",
+        "monochromeImage": "./assets/images/giftyy.png"
       },
       "versionCode": 25,
       "edgeToEdgeEnabled": true,
@@ -38,7 +38,7 @@
     },
     "web": {
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/giftyy.png"
     },
     "plugins": [
       "expo-router",
