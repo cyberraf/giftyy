@@ -418,12 +418,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				// Process the callback URL immediately
 				try {
 					const url = callbackUrl;
+					// Support both implicit (tokens in hash) and PKCE (code in query/hash)
+					const parsed = Linking.parse(url);
 					const hashIndex = url.indexOf('#');
 					if (hashIndex !== -1) {
 						const hashPart = url.substring(hashIndex + 1);
 						const hashParams = new URLSearchParams(hashPart);
 						const accessToken = hashParams.get('access_token');
 						const refreshToken = hashParams.get('refresh_token');
+						const code = hashParams.get('code');
 						
 						if (accessToken && refreshToken) {
 							console.log('🔵 Setting session with tokens from callback...');
@@ -438,6 +441,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 								return { error: null };
 							}
 						}
+
+						if (code) {
+							console.log('🔵 Exchanging OAuth code for session (hash)...');
+							const { data: exchanged, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+							if (!exchangeError && exchanged?.session) {
+								console.log('✅ Session established from code exchange (hash)');
+								await applySession(exchanged.session);
+								return { error: null };
+							}
+							console.warn('❌ Code exchange failed (hash):', exchangeError);
+						}
+					}
+
+					// If code came via query params (?code=...), exchange it.
+					const codeFromQuery = (parsed.queryParams?.code as string | undefined) || undefined;
+					if (codeFromQuery) {
+						console.log('🔵 Exchanging OAuth code for session (query)...');
+						const { data: exchanged, error: exchangeError } = await supabase.auth.exchangeCodeForSession(codeFromQuery);
+						if (!exchangeError && exchanged?.session) {
+							console.log('✅ Session established from code exchange (query)');
+							await applySession(exchanged.session);
+							return { error: null };
+						}
+						console.warn('❌ Code exchange failed (query):', exchangeError);
 					}
 				} catch (err) {
 					console.error('❌ Error processing callback URL:', err);

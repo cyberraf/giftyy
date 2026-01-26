@@ -2,7 +2,7 @@ import { supabase } from '@/lib/supabase';
 import * as Linking from 'expo-linking';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState, useRef } from 'react';
-import { ActivityIndicator, Text, View } from 'react-native';
+import { ActivityIndicator, InteractionManager, Text, View } from 'react-native';
 import { useAuth } from '@/contexts/AuthContext';
 
 /**
@@ -280,15 +280,56 @@ export default function AuthCallbackScreen() {
 					return;
 				}
 			} else if (code) {
-				// Code exchange flow
-				console.log('OAuth code received, checking for session...');
-				const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-				if (!sessionError && sessionData?.session) {
-					console.log('✅ Session found after code exchange');
-					router.replace('/(buyer)/(tabs)/home');
+				// Code exchange flow (PKCE)
+				console.log('OAuth code received, exchanging for session...');
+				try {
+					const { data: exchanged, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+					if (exchangeError) {
+						console.error('❌ Error exchanging code for session:', exchangeError);
+						router.replace('/(auth)/login');
+						return;
+					}
+
+					// Ensure AuthContext picks up the new session + profile immediately
+					if (exchanged?.session) {
+						console.log('✅ Session established from code exchange');
+						await syncAuth();
+						// Wait for interactions to complete and state to propagate
+						await new Promise(resolve => InteractionManager.runAfterInteractions(() => resolve(undefined)));
+						// Small delay to ensure auth state has propagated
+						await new Promise(resolve => setTimeout(resolve, 300));
+						// Navigate to home - force a refresh by using push then replace
+						router.push('/(buyer)/(tabs)/home');
+						// Small delay then replace to ensure navigation completes
+						setTimeout(() => {
+							router.replace('/(buyer)/(tabs)/home');
+						}, 100);
+						return;
+					}
+
+					// Fallback: check session directly
+					const { data: sessionData } = await supabase.auth.getSession();
+					if (sessionData?.session) {
+						console.log('✅ Session found after code exchange (via getSession)');
+						await syncAuth();
+						// Wait for interactions to complete and state to propagate
+						await new Promise(resolve => InteractionManager.runAfterInteractions(() => resolve(undefined)));
+						// Small delay to ensure auth state has propagated
+						await new Promise(resolve => setTimeout(resolve, 300));
+						// Navigate to home - force a refresh by using push then replace
+						router.push('/(buyer)/(tabs)/home');
+						// Small delay then replace to ensure navigation completes
+						setTimeout(() => {
+							router.replace('/(buyer)/(tabs)/home');
+						}, 100);
+						return;
+					}
+
+					console.error('❌ No session found after code exchange');
+					router.replace('/(auth)/login');
 					return;
-				} else {
-					console.error('❌ No session found after code exchange:', sessionError);
+				} catch (err) {
+					console.error('❌ Unexpected error exchanging code:', err);
 					router.replace('/(auth)/login');
 					return;
 				}
@@ -328,7 +369,14 @@ export default function AuthCallbackScreen() {
 				hasProcessedRef.current = true;
 				clearInterval(pollInterval);
 				setProcessing(false);
-				router.replace('/(buyer)/(tabs)/home');
+				// Wait for interactions and state to propagate, then navigate
+				InteractionManager.runAfterInteractions(async () => {
+					await new Promise(resolve => setTimeout(resolve, 300));
+					router.push('/(buyer)/(tabs)/home');
+					setTimeout(() => {
+						router.replace('/(buyer)/(tabs)/home');
+					}, 100);
+				});
 				return;
 			}
 			
@@ -340,7 +388,16 @@ export default function AuthCallbackScreen() {
 				hasProcessedRef.current = true;
 				clearInterval(pollInterval);
 				setProcessing(false);
-				router.replace('/(buyer)/(tabs)/home');
+				// Ensure AuthContext picks up the session
+				await syncAuth();
+				// Wait for interactions and state to propagate, then navigate
+				InteractionManager.runAfterInteractions(async () => {
+					await new Promise(resolve => setTimeout(resolve, 300));
+					router.push('/(buyer)/(tabs)/home');
+					setTimeout(() => {
+						router.replace('/(buyer)/(tabs)/home');
+					}, 100);
+				});
 				return;
 			}
 			

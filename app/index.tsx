@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase';
 import * as Linking from 'expo-linking';
 import { Redirect, useRouter, useSegments } from 'expo-router';
 import React, { useEffect } from 'react';
-import { ActivityIndicator, Alert, Text, View } from 'react-native';
+import { ActivityIndicator, Alert, InteractionManager, Text, View } from 'react-native';
 
 const HAS_SEEN_GUIDE_KEY = 'giftyy_has_seen_guide_v1';
 
@@ -290,7 +290,13 @@ export default function Index() {
 									console.log('✅ Session verified and saved');
 								}
 								await syncAuth();
-								router.replace('/(buyer)/(tabs)/home');
+								// Wait for interactions and state to propagate, then navigate
+								await new Promise(resolve => InteractionManager.runAfterInteractions(() => resolve(undefined)));
+								await new Promise(resolve => setTimeout(resolve, 300));
+								router.push('/(buyer)/(tabs)/home');
+								setTimeout(() => {
+									router.replace('/(buyer)/(tabs)/home');
+								}, 100);
 								return;
 							} else {
 								if (__DEV__) {
@@ -316,18 +322,32 @@ export default function Index() {
 				} else if (code) {
 					// Code exchange flow
 					if (__DEV__) {
-						console.log('🔴 OAuth code received, checking for session...');
+						console.log('🔴 OAuth code received, exchanging for session...');
 					}
-					const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-					if (!sessionError && sessionData?.session) {
-						if (__DEV__) {
-							console.log('✅ Session found after code exchange');
+					try {
+						const { data: exchanged, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+						if (!exchangeError && exchanged?.session) {
+							if (__DEV__) {
+								console.log('✅ Session established from code exchange');
+							}
+							await syncAuth();
+							// Wait for interactions and state to propagate, then navigate
+							await new Promise(resolve => InteractionManager.runAfterInteractions(() => resolve(undefined)));
+							await new Promise(resolve => setTimeout(resolve, 300));
+							router.push('/(buyer)/(tabs)/home');
+							setTimeout(() => {
+								router.replace('/(buyer)/(tabs)/home');
+							}, 100);
+							return;
 						}
-						router.replace('/(buyer)/(tabs)/home');
-						return;
-					} else {
 						if (__DEV__) {
-							console.error('❌ No session found after code exchange:', sessionError);
+							console.error('❌ Code exchange failed:', exchangeError);
+						}
+						router.replace('/(auth)/login');
+						return;
+					} catch (err) {
+						if (__DEV__) {
+							console.error('❌ Error exchanging code:', err);
 						}
 						router.replace('/(auth)/login');
 						return;
@@ -380,13 +400,16 @@ export default function Index() {
 								}
 							}
 							
-							// Force a small delay to ensure auth state updates
-							// The AuthContext's onAuthStateChange should fire automatically
-							await new Promise(resolve => setTimeout(resolve, 1000));
+							// Ensure AuthContext picks up the session
 							await syncAuth();
-							
-							// Navigate to home
-							router.replace('/(buyer)/(tabs)/home');
+							// Wait for interactions and state to propagate, then navigate
+							await new Promise(resolve => InteractionManager.runAfterInteractions(() => resolve(undefined)));
+							await new Promise(resolve => setTimeout(resolve, 300));
+							// Navigate to home - force a refresh
+							router.push('/(buyer)/(tabs)/home');
+							setTimeout(() => {
+								router.replace('/(buyer)/(tabs)/home');
+							}, 100);
 							return;
 						} else if (error) {
 							if (__DEV__) {
@@ -402,21 +425,19 @@ export default function Index() {
 						// Code exchange (alternative OAuth flow)
 						// Try to exchange the code for a session
 						if (__DEV__) {
-							console.log('OAuth code received, attempting code exchange...');
+							console.log('OAuth code received, exchanging for session...');
 						}
-						// Note: Supabase might handle this automatically via getSession
-						// But we can try to get the session
-						const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-						if (!sessionError && sessionData?.session) {
-							if (__DEV__) {
-								console.log('✅ Session found after code exchange');
+						try {
+							const { data: exchanged, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+							if (!exchangeError && exchanged?.session) {
+								if (__DEV__) console.log('✅ Session established from code exchange');
+								await syncAuth();
+								router.replace('/(buyer)/(tabs)/home');
+								return;
 							}
-							router.replace('/(buyer)/(tabs)/home');
-							return;
-						} else {
-							if (__DEV__) {
-								console.error('❌ No session found after code exchange:', sessionError);
-							}
+							if (__DEV__) console.error('❌ Code exchange failed:', exchangeError);
+						} catch (err) {
+							if (__DEV__) console.error('❌ Error exchanging code:', err);
 						}
 					} else {
 						if (__DEV__) {
