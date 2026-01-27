@@ -2,8 +2,11 @@ import { MarketplaceProductCard } from '@/components/marketplace/ProductCard';
 import { RecipientFormModal } from '@/components/recipients/RecipientFormModal';
 import { IconSymbol, IconSymbolName } from '@/components/ui/icon-symbol';
 import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
+import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCategories } from '@/contexts/CategoriesContext';
+import { useNotifications } from '@/contexts/NotificationsContext';
 import { useOrders } from '@/contexts/OrdersContext';
 import { useProducts } from '@/contexts/ProductsContext';
 import { useRecipients, type Recipient as RecipientType } from '@/contexts/RecipientsContext';
@@ -49,7 +52,7 @@ type Recipient = RecipientType;
 type RecipientCardProps = Omit<Recipient, 'id'> & { onEdit: () => void; onDelete: () => void; isEditing: boolean };
 
 export default function ProfileScreen() {
-	const { top } = useSafeAreaInsets();
+    const { top } = useSafeAreaInsets();
     const router = useRouter();
     const params = useLocalSearchParams<{ tab?: string }>();
     const [activeTab, setActiveTab] = useState<TabKey>('Overview');
@@ -61,191 +64,195 @@ export default function ProfileScreen() {
         }
     }, [params.tab]);
 
-	const { bottom } = useSafeAreaInsets();
-	const { profile: authProfile, user } = useAuth();
-	const { videoMessages } = useVideoMessages();
-	const { refreshOrders } = useOrders();
-	const { refreshRecipients } = useRecipients();
-	const { refreshProducts } = useProducts();
-	const [refreshing, setRefreshing] = useState(false);
+    const { bottom } = useSafeAreaInsets();
+    const { profile: authProfile, user } = useAuth();
+    const { videoMessages } = useVideoMessages();
+    const { refreshOrders } = useOrders();
+    const { refreshRecipients } = useRecipients();
+    const { refreshProducts } = useProducts();
+    const { refresh: refreshNotifications } = useNotifications();
+    const { refreshCategories } = useCategories();
+    const [refreshing, setRefreshing] = useState(false);
 
-	const onRefresh = useCallback(async () => {
-		setRefreshing(true);
-		try {
-			await Promise.all([
-				refreshOrders(),
-				refreshRecipients(),
-				refreshProducts(),
-			]);
-		} catch (error) {
-			console.error('Error refreshing profile data:', error);
-		} finally {
-			setRefreshing(false);
-		}
-	}, [refreshOrders, refreshRecipients, refreshProducts]);
-	
-	const displayName = useMemo(() => {
-		if (authProfile?.first_name) {
-			return authProfile.first_name;
-		}
-		if (user?.email) {
-			return user.email.split('@')[0];
-		}
-		return 'User';
-	}, [authProfile, user]);
+    const onRefresh = useCallback(async () => {
+        setRefreshing(true);
+        try {
+            await Promise.all([
+                refreshOrders(),
+                refreshRecipients(),
+                refreshProducts(),
+                refreshNotifications(),
+                refreshCategories(),
+            ]);
+        } catch (error) {
+            console.error('Error refreshing profile data:', error);
+        } finally {
+            setRefreshing(false);
+        }
+    }, [refreshOrders, refreshRecipients, refreshProducts, refreshNotifications, refreshCategories]);
 
-	const displayInitials = useMemo(() => {
-		if (authProfile?.first_name && authProfile?.last_name) {
-			return `${authProfile.first_name.charAt(0)}${authProfile.last_name.charAt(0)}`.toUpperCase();
-		}
-		if (authProfile?.first_name) {
-			return authProfile.first_name.charAt(0).toUpperCase();
-		}
-		if (user?.email) {
-			return user.email.charAt(0).toUpperCase();
-		}
-		return 'U';
-	}, [authProfile, user]);
+    const displayName = useMemo(() => {
+        if (authProfile?.first_name) {
+            return authProfile.first_name;
+        }
+        if (user?.email) {
+            return user.email.split('@')[0];
+        }
+        return 'User';
+    }, [authProfile, user]);
 
-	const fullName = useMemo(() => {
-		if (authProfile?.first_name && authProfile?.last_name) {
-			return `${authProfile.first_name} ${authProfile.last_name}`;
-		}
-		if (authProfile?.first_name) {
-			return authProfile.first_name;
-		}
-		if (user?.email) {
-			return user.email.split('@')[0];
-		}
-		return 'User';
-	}, [authProfile, user]);
+    const displayInitials = useMemo(() => {
+        if (authProfile?.first_name && authProfile?.last_name) {
+            return `${authProfile.first_name.charAt(0)}${authProfile.last_name.charAt(0)}`.toUpperCase();
+        }
+        if (authProfile?.first_name) {
+            return authProfile.first_name.charAt(0).toUpperCase();
+        }
+        if (user?.email) {
+            return user.email.charAt(0).toUpperCase();
+        }
+        return 'U';
+    }, [authProfile, user]);
 
-	const joinedSince = useMemo(() => {
-		if (authProfile?.created_at) {
-			const date = new Date(authProfile.created_at);
-			return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-		}
-		if (user?.created_at) {
-			const date = new Date(user.created_at);
-			return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-		}
-		return null;
-	}, [authProfile, user]);
+    const fullName = useMemo(() => {
+        if (authProfile?.first_name && authProfile?.last_name) {
+            return `${authProfile.first_name} ${authProfile.last_name}`;
+        }
+        if (authProfile?.first_name) {
+            return authProfile.first_name;
+        }
+        if (user?.email) {
+            return user.email.split('@')[0];
+        }
+        return 'User';
+    }, [authProfile, user]);
 
-	const [membershipStatus, setMembershipStatus] = useState<string>('Free');
+    const joinedSince = useMemo(() => {
+        if (authProfile?.created_at) {
+            const date = new Date(authProfile.created_at);
+            return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        }
+        if (user?.created_at) {
+            const date = new Date(user.created_at);
+            return date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        }
+        return null;
+    }, [authProfile, user]);
 
-	// Load active buyer plan name for header badge
-	useEffect(() => {
-		let active = true;
-		(async () => {
-			try {
-				if (!user) {
-					if (active) setMembershipStatus('Free');
-					return;
-				}
-				const { data, error } = await supabase
-					.from('buyer_plan_assignments')
-					.select('status,buyer_plans ( name )')
-					.eq('buyer_id', user.id)
-					.eq('status', 'active')
-					.maybeSingle();
-				if (error) {
-					console.warn('Failed to fetch buyer plan:', error.message);
-					if (active) setMembershipStatus('Free');
-					return;
-				}
-				const planName = (data as any)?.buyer_plans?.name || 'Free';
-				if (active) setMembershipStatus(planName);
-			} catch {
-				if (active) setMembershipStatus('Free');
-			}
-		})();
-		return () => { active = false; };
-	}, [user?.id]);
+    const [membershipStatus, setMembershipStatus] = useState<string>('Free');
 
-	const memoriesSent = useMemo(() => {
-		return videoMessages.filter(vm => vm.direction === 'sent').length;
-	}, [videoMessages]);
+    // Load active buyer plan name for header badge
+    useEffect(() => {
+        let active = true;
+        (async () => {
+            try {
+                if (!user) {
+                    if (active) setMembershipStatus('Free');
+                    return;
+                }
+                const { data, error } = await supabase
+                    .from('buyer_plan_assignments')
+                    .select('status,buyer_plans ( name )')
+                    .eq('buyer_id', user.id)
+                    .eq('status', 'active')
+                    .maybeSingle();
+                if (error) {
+                    console.warn('Failed to fetch buyer plan:', error.message);
+                    if (active) setMembershipStatus('Free');
+                    return;
+                }
+                const planName = (data as any)?.buyer_plans?.name || 'Free';
+                if (active) setMembershipStatus(planName);
+            } catch {
+                if (active) setMembershipStatus('Free');
+            }
+        })();
+        return () => { active = false; };
+    }, [user?.id]);
 
-	const memoriesReceived = useMemo(() => {
-		return videoMessages.filter(vm => vm.direction === 'received').length;
-	}, [videoMessages]);
+    const memoriesSent = useMemo(() => {
+        return videoMessages.filter(vm => vm.direction === 'sent').length;
+    }, [videoMessages]);
 
-	const handleAvatarPress = useCallback(async () => {
-		try {
-			const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-			if (!permission.granted) {
-				Alert.alert('Permission needed', 'Please allow photo library access to update your profile picture.');
-				return;
-			}
+    const memoriesReceived = useMemo(() => {
+        return videoMessages.filter(vm => vm.direction === 'received').length;
+    }, [videoMessages]);
 
-			const result = await ImagePicker.launchImageLibraryAsync({
-				mediaTypes: ImagePicker.MediaTypeOptions.Images,
-				allowsEditing: true,
-				quality: 0.8,
-				base64: true,
-			});
+    const handleAvatarPress = useCallback(async () => {
+        try {
+            const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+            if (!permission.granted) {
+                Alert.alert('Permission needed', 'Please allow photo library access to update your profile picture.');
+                return;
+            }
 
-			if (result.canceled || !result.assets?.length) {
-				return;
-			}
+            const result = await ImagePicker.launchImageLibraryAsync({
+                mediaTypes: ImagePicker.MediaTypeOptions.Images,
+                allowsEditing: true,
+                quality: 0.8,
+                base64: true,
+            });
 
-			const asset = result.assets[0];
-			if (!asset.base64) {
-				Alert.alert('Upload failed', 'Could not read the selected image. Please try a different photo.');
-				return;
-			}
+            if (result.canceled || !result.assets?.length) {
+                return;
+            }
 
-			const contentType = asset.type === 'video' ? 'video/mp4' : asset.mimeType || 'image/jpeg';
-			const fileName = `profile-${user?.id}-${Date.now()}.jpg`;
+            const asset = result.assets[0];
+            if (!asset.base64) {
+                Alert.alert('Upload failed', 'Could not read the selected image. Please try a different photo.');
+                return;
+            }
 
-			const { error: uploadError } = await supabase.storage
-				.from('profile_images')
-				.upload(`avatars/${user?.id}/${fileName}`, decode(asset.base64), {
-					contentType,
-					upsert: true,
-				});
+            const contentType = asset.type === 'video' ? 'video/mp4' : asset.mimeType || 'image/jpeg';
+            const fileName = `profile-${user?.id}-${Date.now()}.jpg`;
 
-			if (uploadError) {
-				console.error('Error uploading profile image:', uploadError);
-				Alert.alert('Upload failed', 'We could not upload your profile picture. Please try again.');
-				return;
-			}
+            const { error: uploadError } = await supabase.storage
+                .from('profile_images')
+                .upload(`avatars/${user?.id}/${fileName}`, decode(asset.base64), {
+                    contentType,
+                    upsert: true,
+                });
 
-			const { data } = supabase.storage.from('profile_images').getPublicUrl(`avatars/${user?.id}/${fileName}`);
+            if (uploadError) {
+                console.error('Error uploading profile image:', uploadError);
+                Alert.alert('Upload failed', 'We could not upload your profile picture. Please try again.');
+                return;
+            }
 
-			const { error: updateError } = await supabase.from('profiles').update({
-				profile_image_url: data.publicUrl,
-				updated_at: new Date().toISOString(),
-			})
-			.eq('id', user?.id);
+            const { data } = supabase.storage.from('profile_images').getPublicUrl(`avatars/${user?.id}/${fileName}`);
 
-			if (updateError) {
-				console.error('Error updating profile image:', updateError);
-				Alert.alert('Update failed', 'Image uploaded but we could not update your profile. Please try again.');
-				return;
-			}
+            const { error: updateError } = await supabase.from('profiles').update({
+                profile_image_url: data.publicUrl,
+                updated_at: new Date().toISOString(),
+            })
+                .eq('id', user?.id);
 
-			Alert.alert('Profile updated', 'Your profile picture has been updated.');
-		} catch (error) {
-			console.error('Unexpected error updating profile image:', error);
-			Alert.alert('Something went wrong', 'We could not update your profile picture. Please try again.');
-		}
-	}, [user]);
+            if (updateError) {
+                console.error('Error updating profile image:', updateError);
+                Alert.alert('Update failed', 'Image uploaded but we could not update your profile. Please try again.');
+                return;
+            }
 
-	return (
-        <View style={[styles.screen, { paddingTop: top + 8 }]}> 
-            <ScrollView 
-				contentContainerStyle={[styles.content, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20 }]}
-				refreshControl={
-					<RefreshControl
-						refreshing={refreshing}
-						onRefresh={onRefresh}
-						tintColor={BRAND_COLOR}
-						colors={[BRAND_COLOR]}
-					/>
-				}
-			>
+            Alert.alert('Profile updated', 'Your profile picture has been updated.');
+        } catch (error) {
+            console.error('Unexpected error updating profile image:', error);
+            Alert.alert('Something went wrong', 'We could not update your profile picture. Please try again.');
+        }
+    }, [user]);
+
+    return (
+        <View style={[styles.screen, { paddingTop: top + 8 }]}>
+            <ScrollView
+                contentContainerStyle={[styles.content, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20 }]}
+                refreshControl={
+                    <RefreshControl
+                        refreshing={refreshing}
+                        onRefresh={onRefresh}
+                        tintColor={BRAND_COLOR}
+                        colors={[BRAND_COLOR]}
+                    />
+                }
+            >
                 <View style={styles.heroCard}>
                     {/* Top Section: Badges */}
                     <View style={styles.heroTopSection}>
@@ -271,8 +278,8 @@ export default function ProfileScreen() {
                             accessibilityLabel="Upload profile picture"
                         >
                             {authProfile?.profile_image_url ? (
-                                <Image 
-                                    source={{ uri: authProfile.profile_image_url }} 
+                                <Image
+                                    source={{ uri: authProfile.profile_image_url }}
                                     style={styles.heroAvatarImage}
                                 />
                             ) : (
@@ -294,14 +301,14 @@ export default function ProfileScreen() {
                             {authProfile?.email && (
                                 <Text style={styles.heroEmail}>{authProfile.email}</Text>
                             )}
-                            
+
                             {/* Stats Row with improved design */}
                             <View style={styles.heroStatsContainer}>
                                 <View style={styles.heroStatCard}>
                                     <Text style={styles.heroStatValue}>{memoriesSent}</Text>
                                     <Text style={styles.heroStatLabel}>Sent</Text>
                                 </View>
-                                
+
                                 <View style={styles.heroStatCard}>
                                     <Text style={styles.heroStatValue}>{memoriesReceived}</Text>
                                     <Text style={styles.heroStatLabel}>Received</Text>
@@ -419,16 +426,16 @@ function WishlistPanel() {
                             return product.imageUrl;
                         }
                     })() : undefined;
-                    
+
                     // Ensure 3-column layout - remove marginRight from last item in each row
                     const isLastInRow = (index + 1) % 3 === 0;
-                    
+
                     return (
                         <View
                             key={product.id}
-                            style={{ 
-                                marginRight: isLastInRow ? 0 : 10, 
-                                marginBottom: 10 
+                            style={{
+                                marginRight: isLastInRow ? 0 : 10,
+                                marginBottom: 10
                             }}
                         >
                             <MarketplaceProductCard
@@ -492,7 +499,7 @@ function OverviewPanel({ onTabChange }: { onTabChange?: (tab: TabKey) => void })
             .slice(0, 3);
     }, [orders, videoMessages]);
     const router = useRouter();
-    
+
     // Mock data - in a real app, this would come from state/API
     const accountStats = {
         totalOrders: 12,
@@ -534,31 +541,31 @@ function OverviewPanel({ onTabChange }: { onTabChange?: (tab: TabKey) => void })
             <View style={styles.groupCard}>
                 <Text style={styles.groupTitle}>Quick actions</Text>
                 <View style={styles.quickGrid}>
-                    <QuickActionButton 
+                    <QuickActionButton
                         onPress={() => handleQuickAction('orders')}
                         title="Orders"
                         subtitle="View all orders"
                         icon="doc.plaintext"
                     />
-                    <QuickActionButton 
+                    <QuickActionButton
                         onPress={() => handleQuickAction('recipients')}
                         title="Recipients"
                         subtitle="Manage contacts"
                         icon="person.2.fill"
                     />
-                    <QuickActionButton 
+                    <QuickActionButton
                         onPress={() => handleQuickAction('memories')}
                         title="Memories"
                         subtitle="Video messages"
                         icon="camera.fill"
                     />
-                    <QuickActionButton 
+                    <QuickActionButton
                         onPress={() => handleQuickAction('order-tracker')}
                         title="Track orders"
                         subtitle="Live status & ETA"
                         icon="magnifyingglass"
                     />
-                    <QuickActionButton 
+                    <QuickActionButton
                         onPress={() => handleQuickAction('settings')}
                         title="Settings"
                         subtitle="Preferences"
@@ -676,7 +683,7 @@ function SettingsPanel() {
         <View style={styles.sectionGap}>
             <View style={styles.groupCard}>
                 <Text style={styles.groupTitle}>Account settings</Text>
-                <SettingsLinkRow 
+                <SettingsLinkRow
                     onPress={() => router.push('/(buyer)/settings/profile')}
                     label="Profile & preferences"
                     icon="person.circle.fill"
@@ -684,7 +691,7 @@ function SettingsPanel() {
                 />
             </View>
 
-            
+
 
             <View style={styles.groupCard}>
                 <Text style={styles.groupTitle}>Notification preferences</Text>
@@ -693,7 +700,7 @@ function SettingsPanel() {
 
             <View style={styles.groupCard}>
                 <Text style={styles.groupTitle}>Privacy settings</Text>
-                <SettingsLinkRow 
+                <SettingsLinkRow
                     onPress={() => router.push('/(buyer)/settings/privacy')}
                     label="Privacy policy"
                     icon="hand.raised.fill"
@@ -701,7 +708,7 @@ function SettingsPanel() {
                 />
             </View>
 
-            
+
 
             <Pressable style={styles.dangerButton} onPress={handleSignOut}>
                 <IconSymbol name="arrow.right.square" size={18} color={palette.textPrimary} />
@@ -1041,7 +1048,7 @@ function QuickAction({ href, title, subtitle, icon }: { href: string; title: str
                 </View>
                 <Text style={styles.linkChevron}>›</Text>
             </Pressable>
-				</Link>
+        </Link>
     );
 }
 
@@ -1050,11 +1057,11 @@ function QuickActionButton({ onPress, title, subtitle, icon }: { onPress: () => 
         <Pressable style={styles.quickAction} onPress={onPress}>
             <View style={styles.quickIconContainer}>
                 <IconSymbol name={icon} size={20} color={BRAND_COLOR} />
-			</View>
+            </View>
             <View style={{ flex: 1 }}>
                 <Text style={styles.quickTitle}>{title}</Text>
                 <Text style={styles.quickSubtitle}>{subtitle}</Text>
-		</View>
+            </View>
             <IconSymbol name="chevron.right" size={20} color={palette.textSecondary} />
         </Pressable>
     );
@@ -1107,7 +1114,7 @@ function OrderRow({ code, status, eta, href }: { code: string; status: string; e
                 <Text style={styles.orderStatus}>{status}</Text>
             </Pressable>
         </Link>
-	);
+    );
 }
 
 const styles = StyleSheet.create({
@@ -2036,13 +2043,7 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontWeight: '800',
     },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        paddingHorizontal: 24,
-    },
-    modalCardWrapper: {
+    modalContent: {
         flex: 1,
         justifyContent: 'center',
     },

@@ -1,18 +1,18 @@
 import { BRAND_COLOR } from '@/constants/theme';
 import { useAlert } from '@/contexts/AlertContext';
 import { useAuth } from '@/contexts/AuthContext';
+import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import { Link, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import { ActivityIndicator, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Image, Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function LoginScreen() {
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
 	const [loading, setLoading] = useState(false);
-	const [googleLoading, setGoogleLoading] = useState(false);
-	const { signIn, signInWithGoogle } = useAuth();
+	const { signIn } = useAuth();
 	const { alert } = useAlert();
 	const router = useRouter();
 	const insets = useSafeAreaInsets();
@@ -40,19 +40,11 @@ export default function LoginScreen() {
 		}
 	};
 
-	const handleGoogleSignIn = async () => {
-		setGoogleLoading(true);
-		const { error } = await signInWithGoogle();
-		setGoogleLoading(false);
 
-		if (error) {
-			alert('Google Sign-In Failed', error.message || 'Unable to sign in with Google. Please try again.');
-		}
-	};
 
 	return (
 		<View style={[styles.container, { paddingTop: Math.max(insets.top, 20) }]}>
-			<ScrollView 
+			<ScrollView
 				style={styles.scrollView}
 				contentContainerStyle={styles.content}
 				showsVerticalScrollIndicator={false}
@@ -115,50 +107,48 @@ export default function LoginScreen() {
 				<Pressable
 					style={styles.forgotPasswordButton}
 					onPress={() => router.push('/(auth)/forgot-password')}
-					disabled={loading || googleLoading}
+					disabled={loading}
 				>
 					<Text style={styles.forgotPasswordText}>Forgot password?</Text>
 				</Pressable>
 
-				{/* Divider */}
-				<View style={styles.dividerContainer}>
-					<View style={styles.dividerLine} />
-					<Text style={styles.dividerText}>OR</Text>
-					<View style={styles.dividerLine} />
-				</View>
 
-				{/* Google Sign In Button */}
-				<Pressable
-					style={[styles.googleButton, (loading || googleLoading) && styles.buttonDisabled]}
-					onPress={handleGoogleSignIn}
-					disabled={loading || googleLoading}
-				>
-					{googleLoading ? (
-						<ActivityIndicator color="#4285F4" />
-					) : (
-						<>
-							<View style={styles.googleIconContainer}>
-								<Image
-									source={require('@/assets/images/google-icon.png')}
-									style={styles.googleIcon}
-									resizeMode="contain"
-								/>
-							</View>
-							<Text style={styles.googleButtonText}>Continue with Google</Text>
-						</>
-					)}
-				</Pressable>
 
 				{/* Sign Up Link */}
 				<View style={styles.signupContainer}>
 					<Text style={styles.signupText}>Don't have an account? </Text>
 					<Link href="/(auth)/signup" asChild>
-						<Pressable disabled={loading || googleLoading}>
+						<Pressable disabled={loading}>
 							<Text style={styles.signupLink}>Sign up</Text>
 						</Pressable>
 					</Link>
 				</View>
 			</ScrollView>
+
+			{/* Social Media Footer */}
+			<View style={styles.footer}>
+				<Text style={styles.socialText}>Follow us</Text>
+				<View style={styles.socialIcons}>
+					<Pressable
+						style={styles.socialButton}
+						onPress={() => Linking.openURL('https://www.instagram.com/giftyy_llc')}
+					>
+						<FontAwesome5 name="instagram" size={24} color="#E4405F" />
+					</Pressable>
+					<Pressable
+						style={styles.socialButton}
+						onPress={() => Linking.openURL('https://www.tiktok.com/@giftyy_llc')}
+					>
+						<FontAwesome5 name="tiktok" size={24} color="#000000" />
+					</Pressable>
+					<Pressable
+						style={styles.socialButton}
+						onPress={() => Linking.openURL('https://linkedin.com/company/giftyy-store')}
+					>
+						<FontAwesome5 name="linkedin" size={24} color="#0A66C2" />
+					</Pressable>
+				</View>
+			</View>
 		</View>
 	);
 }
@@ -264,54 +254,39 @@ const styles = StyleSheet.create({
 		color: BRAND_COLOR,
 		fontWeight: '700',
 	},
-	dividerContainer: {
-		flexDirection: 'row',
+	footer: {
 		alignItems: 'center',
-		marginVertical: 24,
+		paddingVertical: 20,
+		paddingBottom: 24,
+		borderTopWidth: 1,
+		borderTopColor: '#E5E7EB',
+		backgroundColor: '#FFFFFF',
 	},
-	dividerLine: {
-		flex: 1,
-		height: 1,
-		backgroundColor: '#E5E7EB',
-	},
-	dividerText: {
-		marginHorizontal: 16,
+	socialText: {
 		fontSize: 14,
-		color: '#9CA3AF',
+		color: '#6B7280',
+		marginBottom: 16,
 		fontWeight: '500',
 	},
-	googleButton: {
+	socialIcons: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'center',
-		backgroundColor: '#FFFFFF',
+		gap: 20,
+	},
+	socialButton: {
+		width: 48,
+		height: 48,
+		borderRadius: 24,
+		backgroundColor: '#F9FAFB',
 		borderWidth: 1,
 		borderColor: '#E5E7EB',
-		borderRadius: 12,
-		paddingVertical: 16,
-		marginBottom: 16,
-		shadowColor: '#000',
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.1,
-		shadowRadius: 4,
-		elevation: 2,
-	},
-	googleIconContainer: {
-		marginRight: 12,
-		width: 20,
-		height: 20,
 		alignItems: 'center',
 		justifyContent: 'center',
-		backgroundColor: '#FFFFFF',
-		borderRadius: 2,
-	},
-	googleIcon: {
-		width: 20,
-		height: 20,
-	},
-	googleButtonText: {
-		color: '#1F2937',
-		fontSize: 16,
-		fontWeight: '600',
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 2 },
+		shadowOpacity: 0.05,
+		shadowRadius: 4,
+		elevation: 2,
 	},
 });

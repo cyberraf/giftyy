@@ -79,18 +79,18 @@ export default function MarketplaceHomeScreen() {
 	const router = useRouter();
 	const params = useLocalSearchParams<{ collection?: string; recipient?: string; category?: string }>();
 	const { setVisible } = useBottomBarVisibility();
-	
+
 	// Contexts
 	const { products, collections, loading, refreshProducts, refreshCollections } = useProducts();
 	const { unreadCount } = useNotifications();
-	const { categories } = useCategories();
-	const { recipients } = useRecipients();
-	
+	const { categories, refreshCategories } = useCategories();
+	const { recipients, refreshRecipients } = useRecipients();
+
 	// Filter collections to only show bundles with products
 	const bundlesWithProducts = useMemo(() => {
 		return collections.filter(collection => collection.products && collection.products.length > 0);
 	}, [collections]);
-	
+
 	// State
 	const [refreshing, setRefreshing] = useState(false);
 	const [selectedCategory, setSelectedCategory] = useState<string | null>(params.category || null);
@@ -108,12 +108,12 @@ export default function MarketplaceHomeScreen() {
 		priceRange: { min: 0, max: 1000 },
 		sortBy: 'recommended',
 	});
-	
+
 	// Ensure bottom bar is visible
 	useEffect(() => {
 		setVisible(true);
 	}, [setVisible]);
-	
+
 	// Update selected category when category param changes
 	useEffect(() => {
 		if (params.category) {
@@ -130,17 +130,22 @@ export default function MarketplaceHomeScreen() {
 	useEffect(() => {
 		setAllProductsPage(1);
 	}, [searchQuery, selectedCategory, filters]);
-	
+
 	// Refresh handler
 	const onRefresh = useCallback(async () => {
 		setRefreshing(true);
 		try {
-			await Promise.all([refreshProducts(), refreshCollections()]);
+			await Promise.all([
+				refreshProducts(),
+				refreshCollections(),
+				refreshCategories(),
+				refreshRecipients()
+			]);
 		} finally {
 			setRefreshing(false);
 		}
-	}, [refreshProducts, refreshCollections]);
-	
+	}, [refreshProducts, refreshCollections, refreshCategories, refreshRecipients]);
+
 	// Fetch vendor info for products
 	useEffect(() => {
 		const fetchVendors = async () => {
@@ -152,16 +157,16 @@ export default function MarketplaceHomeScreen() {
 				setVendorsMap(vendors);
 			}
 		};
-		
+
 		if (products.length > 0) {
 			fetchVendors();
 		}
 	}, [products]);
-	
+
 	// Filter products
 	const filteredProducts = useMemo(() => {
 		let filtered = products.filter(p => p.isActive);
-		
+
 		// Filter by search query
 		if (searchQuery.trim()) {
 			const query = searchQuery.toLowerCase();
@@ -171,14 +176,14 @@ export default function MarketplaceHomeScreen() {
 				p.tags.some(tag => tag.toLowerCase().includes(query))
 			);
 		}
-		
+
 		// Filter by categories from filter modal (database category IDs)
 		if (filters.categories.length > 0) {
-			filtered = filtered.filter(p => 
+			filtered = filtered.filter(p =>
 				filters.categories.some(catId => p.categoryIds?.includes(catId))
 			);
 		}
-		
+
 		// Filter by selected category chip (hardcoded category IDs - semantic filtering)
 		// This uses semantic matching (tags, occasionTags, etc.) and should NOT conflict with database categories
 		if (selectedCategory && filters.categories.length === 0) {
@@ -186,64 +191,64 @@ export default function MarketplaceHomeScreen() {
 				if (selectedCategory === 'deals') {
 					return p.discountPercentage > 0;
 				}
-				
+
 				// Map category IDs to product attributes
 				const categoryMap: Record<string, (p: Product) => boolean> = {
-					'birthday': (p) => 
-						p.occasionTags?.includes('birthday') || 
+					'birthday': (p) =>
+						p.occasionTags?.includes('birthday') ||
 						p.tags.some(tag => tag.toLowerCase().includes('birthday')) ||
 						(p.categoryIds || []).some(catId => catId.toLowerCase().includes('birthday')),
-					'valentine': (p) => 
-						p.occasionTags?.includes('valentine') || 
+					'valentine': (p) =>
+						p.occasionTags?.includes('valentine') ||
 						p.tags.some(tag => tag.toLowerCase().includes('valentine')) ||
 						(p.categoryIds || []).some(catId => catId.toLowerCase().includes('valentine')),
-					'mother': (p) => 
+					'mother': (p) =>
 						p.targetAudience?.includes('for-her') ||
 						p.relationshipTags?.includes('family') ||
 						p.tags.some(tag => tag.toLowerCase().includes('mother') || tag.toLowerCase().includes('mom')) ||
 						(p.categoryIds || []).some(catId => catId.toLowerCase().includes('mother')),
-					'father': (p) => 
+					'father': (p) =>
 						p.targetAudience?.includes('for-him') ||
 						p.relationshipTags?.includes('family') ||
 						p.tags.some(tag => tag.toLowerCase().includes('father') || tag.toLowerCase().includes('dad')) ||
 						(p.categoryIds || []).some(catId => catId.toLowerCase().includes('father')),
-					'christmas': (p) => 
-						p.occasionTags?.includes('christmas') || 
+					'christmas': (p) =>
+						p.occasionTags?.includes('christmas') ||
 						p.tags.some(tag => tag.toLowerCase().includes('christmas') || tag.toLowerCase().includes('holiday')) ||
 						(p.categoryIds || []).some(catId => catId.toLowerCase().includes('christmas')),
-					'couples': (p) => 
+					'couples': (p) =>
 						p.relationshipTags?.includes('romantic') ||
 						p.giftStyleTags?.includes('romantic') ||
 						p.tags.some(tag => tag.toLowerCase().includes('couple') || tag.toLowerCase().includes('romantic')) ||
 						(p.categoryIds || []).some(catId => catId.toLowerCase().includes('couple')),
-					'kids': (p) => 
+					'kids': (p) =>
 						p.ageGroupTags?.some(age => age.includes('child') || age.includes('kid')) ||
 						p.targetAudience?.includes('for-kids') ||
 						p.tags.some(tag => tag.toLowerCase().includes('kid') || tag.toLowerCase().includes('child')) ||
 						(p.categoryIds || []).some(catId => catId.toLowerCase().includes('kid') || catId.toLowerCase().includes('child')),
-					'luxury': (p) => 
+					'luxury': (p) =>
 						p.giftStyleTags?.includes('luxury') ||
 						p.priceRange === 'luxury' ||
 						p.tags.some(tag => tag.toLowerCase().includes('luxury') || tag.toLowerCase().includes('premium')) ||
 						(p.categoryIds || []).some(catId => catId.toLowerCase().includes('luxury')),
-					'handmade': (p) => 
+					'handmade': (p) =>
 						p.tags.some(tag => tag.toLowerCase().includes('handmade') || tag.toLowerCase().includes('artisan') || tag.toLowerCase().includes('craft')) ||
 						(p.categoryIds || []).some(catId => catId.toLowerCase().includes('handmade')),
 				};
-				
+
 				const filterFn = categoryMap[selectedCategory];
 				return filterFn ? filterFn(p) : false;
 			});
 		}
-		
+
 		// Filter by price range
 		filtered = filtered.filter(p => {
-			const price = p.discountPercentage > 0 
+			const price = p.discountPercentage > 0
 				? p.price * (1 - p.discountPercentage / 100)
 				: p.price;
 			return price >= filters.priceRange.min && price <= filters.priceRange.max;
 		});
-		
+
 		return filtered;
 	}, [products, searchQuery, selectedCategory, filters]);
 
@@ -260,7 +265,7 @@ export default function MarketplaceHomeScreen() {
 		const start = (allProductsPage - 1) * ALL_PRODUCTS_PER_PAGE;
 		return filteredProducts.slice(start, start + ALL_PRODUCTS_PER_PAGE);
 	}, [filteredProducts, allProductsPage]);
-	
+
 	// Get featured products (with discounts)
 	const saleProducts = useMemo(() => {
 		const isOnSale = (p: Product) => {
@@ -292,7 +297,7 @@ export default function MarketplaceHomeScreen() {
 						return p.imageUrl;
 					}
 				})() : undefined;
-				
+
 				return {
 					...p,
 					vendorName: vendor?.storeName,
@@ -300,7 +305,7 @@ export default function MarketplaceHomeScreen() {
 				};
 			});
 	}, [products, vendorsMap]);
-	
+
 	// Get personalized picks for each recipient
 	// Helper function to normalize and extract keywords from text
 	const extractKeywords = (text: string): string[] => {
@@ -317,7 +322,7 @@ export default function MarketplaceHomeScreen() {
 		if (!text || !keyword) return 0;
 		const lowerText = text.toLowerCase();
 		const lowerKeyword = keyword.toLowerCase();
-		
+
 		if (lowerText === lowerKeyword) return 10;
 		const wordBoundaryRegex = new RegExp(`\\b${lowerKeyword}\\b`, 'i');
 		if (wordBoundaryRegex.test(lowerText)) return 8;
@@ -357,7 +362,7 @@ export default function MarketplaceHomeScreen() {
 		return recipients.map(recipient => {
 			// Collect preferences with their types and weights
 			const preferences: Array<{ keyword: string; type: keyof typeof PREFERENCE_WEIGHTS; weight: number }> = [];
-			
+
 			if (recipient.hobbies) {
 				extractKeywords(recipient.hobbies).forEach(kw => {
 					preferences.push({ keyword: kw, type: 'hobbies', weight: PREFERENCE_WEIGHTS.hobbies });
@@ -455,7 +460,7 @@ export default function MarketplaceHomeScreen() {
 
 				// Build a comprehensive explanation
 				let explanation = `This product is an excellent match for ${recipient.firstName}`;
-				
+
 				if (matchReasons.length === 1) {
 					explanation += ` because ${matchReasons[0].toLowerCase()}.`;
 				} else if (matchReasons.length === 2) {
@@ -465,7 +470,7 @@ export default function MarketplaceHomeScreen() {
 					const firstReason = matchReasons[0].toLowerCase();
 					const middleReasons = matchReasons.slice(1, -1).map(r => r.toLowerCase()).join(', ');
 					const lastReason = matchReasons[matchReasons.length - 1].toLowerCase();
-					
+
 					if (matchReasons.length === 3) {
 						explanation += ` because ${firstReason}, ${lastReason}, and it aligns with their preferences.`;
 					} else {
@@ -476,7 +481,7 @@ export default function MarketplaceHomeScreen() {
 						explanation += `, and ${lastReason}. This combination makes it a perfect personalized gift.`;
 					}
 				}
-				
+
 				return explanation;
 			};
 
@@ -487,8 +492,8 @@ export default function MarketplaceHomeScreen() {
 					const productName = product.name?.toLowerCase() || '';
 					const productDescription = product.description?.toLowerCase() || '';
 					const productTags = product.tags?.join(' ').toLowerCase() || '';
-					const categoryName = (product.categoryId 
-						? categories.find((c: any) => c.id === product.categoryId)?.name?.toLowerCase() 
+					const categoryName = (product.categoryId
+						? categories.find((c: any) => c.id === product.categoryId)?.name?.toLowerCase()
 						: '') || '';
 
 					let totalScore = 0;
@@ -503,7 +508,7 @@ export default function MarketplaceHomeScreen() {
 						const categoryScore = semanticMatch(categoryName, pref.keyword) * 1.2;
 
 						const fieldScore = Math.max(nameScore, descriptionScore, tagsScore, categoryScore);
-						
+
 						if (fieldScore > 0) {
 							const weightedScore = fieldScore * pref.weight;
 							totalScore += weightedScore;
@@ -515,7 +520,7 @@ export default function MarketplaceHomeScreen() {
 					const relationshipLower = recipient.relationship?.toLowerCase() || '';
 					const targetAudiences = relationshipToTargetMap[relationshipLower] || [];
 					if (product.targetAudience && product.targetAudience.length > 0) {
-						const hasMatchingTarget = product.targetAudience.some(target => 
+						const hasMatchingTarget = product.targetAudience.some(target =>
 							targetAudiences.includes(target.toLowerCase())
 						);
 						if (hasMatchingTarget) {
@@ -527,7 +532,7 @@ export default function MarketplaceHomeScreen() {
 
 					// 3. Relationship tags matching
 					if (product.relationshipTags && product.relationshipTags.length > 0) {
-						const relationshipMatch = product.relationshipTags.some(tag => 
+						const relationshipMatch = product.relationshipTags.some(tag =>
 							semanticMatch(relationshipLower, tag.toLowerCase()) > 0
 						);
 						if (relationshipMatch) {
@@ -542,7 +547,7 @@ export default function MarketplaceHomeScreen() {
 					// 4. Age group matching
 					const recipientAgeGroups = ageRangeToGroupMap(recipient.ageRange);
 					if (product.ageGroupTags && product.ageGroupTags.length > 0 && recipientAgeGroups.length > 0) {
-						const hasMatchingAgeGroup = product.ageGroupTags.some(ageTag => 
+						const hasMatchingAgeGroup = product.ageGroupTags.some(ageTag =>
 							recipientAgeGroups.includes(ageTag.toLowerCase())
 						);
 						if (hasMatchingAgeGroup) {
@@ -557,21 +562,21 @@ export default function MarketplaceHomeScreen() {
 					// 5. Interest tags matching
 					if (product.interestTags && product.interestTags.length > 0) {
 						preferences.forEach(pref => {
-							const interestMatch = product.interestTags!.some(interest => 
+							const interestMatch = product.interestTags!.some(interest =>
 								semanticMatch(interest.toLowerCase(), pref.keyword) > 0
 							);
 							if (interestMatch) {
 								totalScore += 8 * pref.weight;
 								matchCount++;
 								if (pref.type === 'hobbies' && recipient.hobbies) {
-									const hobbyMatch = extractKeywords(recipient.hobbies).find(kw => 
+									const hobbyMatch = extractKeywords(recipient.hobbies).find(kw =>
 										semanticMatch(pref.keyword, kw) > 0
 									);
 									if (hobbyMatch && !matchReasons.some(r => r.includes('hobby'))) {
 										matchReasons.push(`Matches ${recipient.firstName}'s love of ${hobbyMatch}`);
 									}
 								} else if (pref.type === 'sports' && recipient.sports) {
-									const sportMatch = extractKeywords(recipient.sports).find(kw => 
+									const sportMatch = extractKeywords(recipient.sports).find(kw =>
 										semanticMatch(pref.keyword, kw) > 0
 									);
 									if (sportMatch && !matchReasons.some(r => r.includes('sport'))) {
@@ -585,13 +590,13 @@ export default function MarketplaceHomeScreen() {
 					// 6. Lifestyle tags matching
 					if (product.lifestyleTags && product.lifestyleTags.length > 0 && recipient.personalityLifestyle) {
 						const lifestyleKeywords = extractKeywords(recipient.personalityLifestyle);
-						const lifestyleMatch = product.lifestyleTags.some(lifestyle => 
+						const lifestyleMatch = product.lifestyleTags.some(lifestyle =>
 							lifestyleKeywords.some(kw => semanticMatch(lifestyle.toLowerCase(), kw) > 0)
 						);
 						if (lifestyleMatch) {
 							totalScore += 10;
 							matchCount++;
-							const matchedLifestyle = lifestyleKeywords.find(kw => 
+							const matchedLifestyle = lifestyleKeywords.find(kw =>
 								product.lifestyleTags!.some(lt => semanticMatch(lt.toLowerCase(), kw) > 0)
 							);
 							if (matchedLifestyle && !matchReasons.some(r => r.includes('personality'))) {
@@ -603,13 +608,13 @@ export default function MarketplaceHomeScreen() {
 					// 7. Gift style tags matching
 					if (product.giftStyleTags && product.giftStyleTags.length > 0 && recipient.giftTypePreference) {
 						const giftStyleKeywords = extractKeywords(recipient.giftTypePreference);
-						const giftStyleMatch = product.giftStyleTags.some(style => 
+						const giftStyleMatch = product.giftStyleTags.some(style =>
 							giftStyleKeywords.some(kw => semanticMatch(style.toLowerCase(), kw) > 0)
 						);
 						if (giftStyleMatch) {
 							totalScore += 12;
 							matchCount++;
-							const matchedStyle = giftStyleKeywords.find(kw => 
+							const matchedStyle = giftStyleKeywords.find(kw =>
 								product.giftStyleTags!.some(gs => semanticMatch(gs.toLowerCase(), kw) > 0)
 							);
 							if (matchedStyle && !matchReasons.some(r => r.includes('style'))) {
@@ -621,13 +626,13 @@ export default function MarketplaceHomeScreen() {
 					// 8. Occasion tags matching
 					if (product.occasionTags && product.occasionTags.length > 0 && recipient.recentLifeEvents) {
 						const eventKeywords = extractKeywords(recipient.recentLifeEvents);
-						const occasionMatch = product.occasionTags.some(occasion => 
+						const occasionMatch = product.occasionTags.some(occasion =>
 							eventKeywords.some(kw => semanticMatch(occasion.toLowerCase(), kw) > 0)
 						);
 						if (occasionMatch) {
 							totalScore += 14;
 							matchCount++;
-							const matchedOccasion = eventKeywords.find(kw => 
+							const matchedOccasion = eventKeywords.find(kw =>
 								product.occasionTags!.some(oc => semanticMatch(oc.toLowerCase(), kw) > 0)
 							);
 							if (matchedOccasion && !matchReasons.some(r => r.includes('occasion'))) {
@@ -643,7 +648,7 @@ export default function MarketplaceHomeScreen() {
 							const tagsScore = semanticMatch(productTags, pref.keyword);
 							return nameScore > 0 || tagsScore > 0;
 						}).slice(0, 2);
-						
+
 						if (matchedPreferences.length > 0) {
 							const prefText = matchedPreferences.map(p => {
 								if (p.type === 'hobbies') return recipient.hobbies?.split(/[,\s]+/)[0] || 'interests';
@@ -679,18 +684,18 @@ export default function MarketplaceHomeScreen() {
 				.filter(item => item.score > 0)
 				.sort((a, b) => b.score - a.score)
 				.slice(0, 4);
-			
+
 			const topProducts = topProductsWithScores.map(item => item.product);
 
 			// If no matches or not enough matches, supplement with fallback
 			let products = topProducts;
 			let productsWithScores = topProductsWithScores;
-			
+
 			if (products.length < 4) {
 				const remainingProducts = availableProducts.filter(
 					p => !products.some(selected => selected.id === p.id)
 				);
-				
+
 				const fallbackProducts = remainingProducts
 					.sort((a, b) => {
 						if (a.discountPercentage > 0 && b.discountPercentage === 0) return -1;
@@ -701,7 +706,7 @@ export default function MarketplaceHomeScreen() {
 						return 0;
 					})
 					.slice(0, 4 - products.length);
-				
+
 				// Add fallback products with score 0
 				const fallbackWithScores = fallbackProducts.map(p => ({
 					product: p,
@@ -709,7 +714,7 @@ export default function MarketplaceHomeScreen() {
 					matchCount: 0,
 					recommendationReason: `A thoughtful gift for ${recipient.firstName}`,
 				}));
-				
+
 				products = [...products, ...fallbackProducts];
 				productsWithScores = [...productsWithScores, ...fallbackWithScores];
 			}
@@ -725,10 +730,10 @@ export default function MarketplaceHomeScreen() {
 						return p.imageUrl;
 					}
 				})() : undefined;
-				
+
 				// Find the score for this product
 				const productScore = productsWithScores.find(item => item.product.id === p.id);
-				
+
 				return {
 					...p,
 					vendorName: vendor?.storeName,
@@ -747,11 +752,11 @@ export default function MarketplaceHomeScreen() {
 			};
 		});
 	}, [filteredProducts, vendorsMap, recipients, saleProducts, categories]);
-	
+
 	// Get vendors with their products
 	const featuredVendors = useMemo(() => {
 		const vendorProductsMap = new Map<string, Product[]>();
-		
+
 		filteredProducts.forEach(product => {
 			if (product.vendorId) {
 				if (!vendorProductsMap.has(product.vendorId)) {
@@ -760,17 +765,17 @@ export default function MarketplaceHomeScreen() {
 				vendorProductsMap.get(product.vendorId)!.push(product);
 			}
 		});
-		
+
 		return Array.from(vendorProductsMap.entries())
 			.slice(0, 5)
 			.map(([vendorId, vendorProducts]) => {
 				const vendor = vendorsMap.get(vendorId);
-		return {
+				return {
 					vendor: vendor || { id: vendorId, storeName: undefined, profileImageUrl: undefined },
 					products: vendorProducts.slice(0, 3).map(p => ({
 						id: p.id,
 						name: p.name,
-						price: p.discountPercentage > 0 
+						price: p.discountPercentage > 0
 							? p.price * (1 - p.discountPercentage / 100)
 							: p.price,
 						image: p.imageUrl ? (() => {
@@ -786,7 +791,7 @@ export default function MarketplaceHomeScreen() {
 			})
 			.filter(v => v.vendor.storeName); // Only show vendors with names
 	}, [filteredProducts, vendorsMap]);
-	
+
 	// Promotional banners
 	const banners = useMemo(() => {
 		return [
@@ -856,7 +861,7 @@ export default function MarketplaceHomeScreen() {
 			},
 		];
 	}, [router]);
-	
+
 	const headerPaddingTop = top + 6;
 	// Calculate responsive header height: safe area top + padding + search box height + bottom padding
 	const headerHeight = headerPaddingTop + 44 + 12; // 44 = searchBox height, 12 = paddingBottom
@@ -883,7 +888,7 @@ export default function MarketplaceHomeScreen() {
 						<IconSymbol name="magnifyingglass" size={18} color={GIFTYY_THEME.colors.gray400} />
 						<Text style={styles.searchPlaceholder}>Search gifts, vendors, categories...</Text>
 					</Pressable>
-					
+
 					{/* Filter Button */}
 					<Pressable
 						style={styles.filterButton}
@@ -892,31 +897,31 @@ export default function MarketplaceHomeScreen() {
 						<IconSymbol name="slider.horizontal.3" size={20} color={GIFTYY_THEME.colors.gray700} />
 					</Pressable>
 
-				{/* Notifications */}
+					{/* Notifications */}
 					<Pressable
 						style={styles.notificationButton}
 						onPress={() => router.push('/(buyer)/notifications')}
 					>
 						<IconSymbol name="bell" size={20} color={GIFTYY_THEME.colors.gray700} />
-					{unreadCount > 0 && (
+						{unreadCount > 0 && (
 							<View style={styles.notificationBadge}>
 								<Text style={styles.notificationBadgeText}>
 									{unreadCount > 9 ? '9+' : unreadCount}
 								</Text>
-						</View>
-					)}
-				</Pressable>
-			</View>
+							</View>
+						)}
+					</Pressable>
+				</View>
 			</Animated.View>
-			
+
 			{/* Main Content */}
 			<ScrollView
 				style={styles.scrollView}
 				contentContainerStyle={[
 					styles.scrollContent,
-					{ 
+					{
 						paddingTop: headerHeight + GIFTYY_THEME.spacing.sm, // Responsive padding based on header height
-						paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 24 
+						paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 24
 					},
 				]}
 				showsVerticalScrollIndicator={false}
@@ -937,7 +942,7 @@ export default function MarketplaceHomeScreen() {
 					<>
 						{/* Category Filter Active - Show Only Filtered Products */}
 						<View style={styles.categoryHeader}>
-							<Pressable 
+							<Pressable
 								style={styles.clearFilterButton}
 								onPress={() => setSelectedCategory(null)}
 							>
@@ -950,7 +955,7 @@ export default function MarketplaceHomeScreen() {
 								{filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'}
 							</Text>
 						</View>
-						
+
 						{filteredProducts.length > 0 ? (
 							<View style={styles.dealsGrid}>
 								{filteredProducts.map((product, index) => {
@@ -963,19 +968,19 @@ export default function MarketplaceHomeScreen() {
 											return product.imageUrl;
 										}
 									})() : undefined;
-									
+
 									// Ensure 3-column layout - remove marginRight from last item in each row
 									const isLastInRow = (index + 1) % 3 === 0;
 									// Use 3-column width from theme
 									const threeColumnWidth = GIFTYY_THEME.layout.cardWidth3Col;
-									
+
 									return (
 										<Animated.View
 											key={product.id}
 											entering={FadeInUp.duration(400).delay(100 + index * 30)}
-											style={{ 
-												marginRight: isLastInRow ? 0 : 10, 
-												marginBottom: 10 
+											style={{
+												marginRight: isLastInRow ? 0 : 10,
+												marginBottom: 10
 											}}
 										>
 											<MarketplaceProductCard
@@ -1003,7 +1008,7 @@ export default function MarketplaceHomeScreen() {
 								<Text style={styles.emptyStateSubtitle}>
 									Try selecting a different category
 								</Text>
-								<Pressable 
+								<Pressable
 									style={styles.clearFilterButtonLarge}
 									onPress={() => setSelectedCategory(null)}
 								>
@@ -1020,15 +1025,15 @@ export default function MarketplaceHomeScreen() {
 								<PromotionalBanner banners={banners} />
 							</Animated.View>
 						)}
-						
+
 						{/* Categories */}
 						<AnimatedSectionHeader
 							title="Shop by Category"
 							icon="square.grid.2x2"
 						/>
-                                            <ScrollView 
-                                                horizontal
-                                                showsHorizontalScrollIndicator={false} 
+						<ScrollView
+							horizontal
+							showsHorizontalScrollIndicator={false}
 							contentContainerStyle={styles.categoriesContainer}
 							nestedScrollEnabled={true}
 							scrollEventThrottle={16}
@@ -1060,7 +1065,7 @@ export default function MarketplaceHomeScreen() {
 								</Animated.View>
 							))}
 						</ScrollView>
-						
+
 						{/* Deals Section */}
 						{saleProducts.length > 0 && (
 							<>
@@ -1104,7 +1109,7 @@ export default function MarketplaceHomeScreen() {
 								</ScrollView>
 							</>
 						)}
-						
+
 						{/* Vendor Spotlight */}
 						{featuredVendors.length > 0 && (
 							<>
@@ -1115,9 +1120,9 @@ export default function MarketplaceHomeScreen() {
 									actionText="See All"
 									onActionPress={() => router.push('/(buyer)/vendors')}
 								/>
-                                        <ScrollView 
-                                            horizontal
-                                            showsHorizontalScrollIndicator={false}
+								<ScrollView
+									horizontal
+									showsHorizontalScrollIndicator={false}
 									contentContainerStyle={styles.vendorsContainer}
 									nestedScrollEnabled={true}
 									scrollEventThrottle={16}
@@ -1143,7 +1148,7 @@ export default function MarketplaceHomeScreen() {
 								</ScrollView>
 							</>
 						)}
-						
+
 						{/* Personalized Picks for Recipients */}
 						{recipientCards.length > 0 && (
 							<>
@@ -1152,8 +1157,8 @@ export default function MarketplaceHomeScreen() {
 									subtitle={`Gifts curated for ${recipientCards.length} ${recipientCards.length === 1 ? 'recipient' : 'recipients'}`}
 									icon="sparkles"
 								/>
-								<ScrollView 
-									horizontal 
+								<ScrollView
+									horizontal
 									showsHorizontalScrollIndicator={false}
 									contentContainerStyle={styles.recipientCardsContainer}
 									nestedScrollEnabled={true}
@@ -1187,8 +1192,8 @@ export default function MarketplaceHomeScreen() {
 											</View>
 
 											{/* Products Grid */}
-											<ScrollView 
-												horizontal 
+											<ScrollView
+												horizontal
 												showsHorizontalScrollIndicator={false}
 												contentContainerStyle={styles.recipientProductsContainer}
 												nestedScrollEnabled={true}
@@ -1215,8 +1220,8 @@ export default function MarketplaceHomeScreen() {
 																style={styles.recipientProductCard}
 															>
 																{product.imageUrl ? (
-																	<Image 
-																		source={{ uri: product.imageUrl }} 
+																	<Image
+																		source={{ uri: product.imageUrl }}
 																		style={styles.recipientProductImage}
 																		resizeMode="cover"
 																		onError={() => {
@@ -1241,7 +1246,7 @@ export default function MarketplaceHomeScreen() {
 																	</Text>
 																	<View style={styles.recipientProductPriceRow}>
 																		<Text style={styles.recipientProductPrice}>
-																			${typeof product.price === 'number' && !isNaN(product.price) 
+																			${typeof product.price === 'number' && !isNaN(product.price)
 																				? (product.discountPercentage && product.discountPercentage > 0
 																					? (product.price * (1 - product.discountPercentage / 100)).toFixed(2)
 																					: product.price.toFixed(2))
@@ -1270,7 +1275,7 @@ export default function MarketplaceHomeScreen() {
 								</ScrollView>
 							</>
 						)}
-						
+
 						{/* Giftyy Bundles */}
 						{bundlesWithProducts.length > 0 && (
 							<>
@@ -1281,9 +1286,9 @@ export default function MarketplaceHomeScreen() {
 									actionText="See All"
 									onActionPress={() => router.push('/(buyer)/bundles')}
 								/>
-                                        <ScrollView 
-                                            horizontal 
-                                            showsHorizontalScrollIndicator={false} 
+								<ScrollView
+									horizontal
+									showsHorizontalScrollIndicator={false}
 									contentContainerStyle={styles.collectionsContainer}
 									nestedScrollEnabled={true}
 									scrollEventThrottle={16}
@@ -1291,27 +1296,27 @@ export default function MarketplaceHomeScreen() {
 									{bundlesWithProducts.slice(0, 5).map((collection, index) => {
 										const collectionProducts = collection.products.map(productToSimpleProduct);
 										const firstProductImage = collectionProducts[0]?.image ? (() => {
-							try {
-								const parsed = JSON.parse(collectionProducts[0].image);
-								return Array.isArray(parsed) ? parsed[0] : collectionProducts[0].image;
-							} catch {
-								return collectionProducts[0].image;
-							}
-						})() : undefined;
-						
+											try {
+												const parsed = JSON.parse(collectionProducts[0].image);
+												return Array.isArray(parsed) ? parsed[0] : collectionProducts[0].image;
+											} catch {
+												return collectionProducts[0].image;
+											}
+										})() : undefined;
+
 										return (
 											<Animated.View
 												key={collection.id}
 												entering={FadeInRight.duration(400).delay(350 + index * 100)}
 												style={{ marginRight: 16 }}
 											>
-											<Pressable
-												style={[styles.collectionCard, { backgroundColor: collection.color }]}
-												onPress={() => router.push({
-													pathname: '/(buyer)/bundle/[id]',
-													params: { id: collection.id },
-												})}
-											>
+												<Pressable
+													style={[styles.collectionCard, { backgroundColor: collection.color }]}
+													onPress={() => router.push({
+														pathname: '/(buyer)/bundle/[id]',
+														params: { id: collection.id },
+													})}
+												>
 													<LinearGradient
 														colors={[collection.color, collection.color + 'DD']}
 														style={styles.collectionGradient}
@@ -1333,7 +1338,7 @@ export default function MarketplaceHomeScreen() {
 															<Text style={styles.collectionProductCount}>
 																{collectionProducts.length} products
 															</Text>
-                    </View>
+														</View>
 													</LinearGradient>
 												</Pressable>
 											</Animated.View>
@@ -1342,7 +1347,7 @@ export default function MarketplaceHomeScreen() {
 								</ScrollView>
 							</>
 						)}
-						
+
 						{/* All Products Grid */}
 						{filteredProducts.length > 0 && (
 							<>
@@ -1367,8 +1372,8 @@ export default function MarketplaceHomeScreen() {
 										const gridGap = 10;
 										const gridPadding = GIFTYY_THEME.spacing.lg;
 										const threeColumnWidth = (SCREEN_WIDTH - gridPadding * 2 - gridGap * 2) / 3;
-										
-							return (
+
+										return (
 											<Animated.View
 												key={product.id}
 												entering={FadeInUp.duration(400).delay(400 + index * 30)}
@@ -1389,9 +1394,9 @@ export default function MarketplaceHomeScreen() {
 													})}
 												/>
 											</Animated.View>
-							);
-						})}
-					</View>
+										);
+									})}
+								</View>
 								{allProductsTotalPages > 1 && (
 									<View style={styles.paginationContainer}>
 										<Pressable
@@ -1426,7 +1431,7 @@ export default function MarketplaceHomeScreen() {
 					</>
 				)}
 			</ScrollView>
-			
+
 			{/* Filters Modal */}
 			<FilterModal
 				visible={showFilters}
@@ -1437,13 +1442,13 @@ export default function MarketplaceHomeScreen() {
 					if (newFilters.categories.length > 0) {
 						setSelectedCategory(null);
 					}
-					
+
 					setFilters(newFilters);
 					// Navigate to search page with filters applied
-					const hasActiveFilters = newFilters.categories.length > 0 || 
-						newFilters.priceRange.min > 0 || 
+					const hasActiveFilters = newFilters.categories.length > 0 ||
+						newFilters.priceRange.min > 0 ||
 						newFilters.priceRange.max < 1000;
-					
+
 					if (hasActiveFilters) {
 						// Encode filters as URL parameters
 						const params: Record<string, string> = {};
@@ -1459,7 +1464,7 @@ export default function MarketplaceHomeScreen() {
 						if (newFilters.sortBy !== 'recommended') {
 							params.sortBy = newFilters.sortBy;
 						}
-						
+
 						setShowFilters(false);
 						router.push({
 							pathname: '/(buyer)/(tabs)/search',
@@ -1519,10 +1524,10 @@ export default function MarketplaceHomeScreen() {
 					</Pressable>
 				</Pressable>
 			</Modal>
-			
+
 			{/* Gift suggestion explanation removed for a cleaner personalized section */}
-        </View>
-    );
+		</View>
+	);
 }
 
 const styles = StyleSheet.create({
@@ -1544,8 +1549,8 @@ const styles = StyleSheet.create({
 		...GIFTYY_THEME.shadows.sm,
 	},
 	searchContainer: {
-		flexDirection: 'row', 
-		alignItems: 'center', 
+		flexDirection: 'row',
+		alignItems: 'center',
 	},
 	searchBox: {
 		flex: 1,

@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import { supabase } from './supabase';
 
 export type Recipient = {
     firstName: string;
@@ -20,6 +21,7 @@ type CheckoutState = {
     setRecipient: (r: Recipient) => void;
     cardPrice: number;
     setCardPrice: (p: number) => void;
+    defaultGiftyyCardPrice: number; // Dynamic price from database
     notifyRecipient: boolean;
     setNotifyRecipient: (v: boolean) => void;
     cardType: CardType;
@@ -79,6 +81,36 @@ export function CheckoutProvider({ children }: { children: React.ReactNode }) {
     const [memoryText, setMemoryText] = useState<string | undefined>(undefined);
     const [memoryType, setMemoryType] = useState<'photo' | 'text' | null | undefined>(undefined);
     const [payment, setPayment] = useState<Payment>(initialPayment);
+    const [defaultGiftyyCardPrice, setDefaultGiftyyCardPrice] = useState<number>(5.0); // Default fallback
+
+    // Fetch dynamic Giftyy card price from database on mount
+    useEffect(() => {
+        const fetchGiftyyCardPrice = async () => {
+            try {
+                const { data, error } = await supabase
+                    .from('global_vendor_settings')
+                    .select('value')
+                    .eq('key', 'giftyy_card_price')
+                    .single();
+
+                if (error) {
+                    console.warn('Could not fetch Giftyy card price from database, using default:', error);
+                    return;
+                }
+
+                if (data?.value) {
+                    const price = parseFloat(data.value);
+                    if (!isNaN(price) && price > 0) {
+                        setDefaultGiftyyCardPrice(price);
+                    }
+                }
+            } catch (err) {
+                console.error('Unexpected error fetching Giftyy card price:', err);
+            }
+        };
+
+        fetchGiftyyCardPrice();
+    }, []); // Run once on mount
 
     const reset = () => {
         setRecipient(initialRecipient);
@@ -98,12 +130,13 @@ export function CheckoutProvider({ children }: { children: React.ReactNode }) {
     };
 
     const value = useMemo(
-        () => ({ 
-            recipient, setRecipient, 
-            cardPrice, setCardPrice, 
-            notifyRecipient, setNotifyRecipient, 
-            cardType, setCardType, 
-            videoUri, setVideoUri, 
+        () => ({
+            recipient, setRecipient,
+            cardPrice, setCardPrice,
+            defaultGiftyyCardPrice,
+            notifyRecipient, setNotifyRecipient,
+            cardType, setCardType,
+            videoUri, setVideoUri,
             videoTitle, setVideoTitle,
             localVideoUri, setLocalVideoUri,
             videoDurationMs, setVideoDurationMs,
@@ -112,10 +145,10 @@ export function CheckoutProvider({ children }: { children: React.ReactNode }) {
             memoryCaption, setMemoryCaption,
             memoryText, setMemoryText,
             memoryType, setMemoryType,
-            payment, setPayment, 
-            reset 
+            payment, setPayment,
+            reset
         }),
-        [recipient, cardPrice, notifyRecipient, cardType, videoUri, videoTitle, localVideoUri, videoDurationMs, sharedMemoryId, localMemoryPhotoUri, memoryCaption, memoryText, memoryType, payment]
+        [recipient, cardPrice, notifyRecipient, cardType, videoUri, videoTitle, localVideoUri, videoDurationMs, sharedMemoryId, localMemoryPhotoUri, memoryCaption, memoryText, memoryType, payment, defaultGiftyyCardPrice]
     );
     return <CheckoutContext.Provider value={value}>{children}</CheckoutContext.Provider>;
 }

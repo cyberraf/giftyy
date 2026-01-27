@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     const WHITE = '#ffffff';
     const TEXT_DARK = '#111827';
     const TEXT_LIGHT = '#64748b';
-    
+
     // Logo URL - Must be publicly accessible
     // To use your logo from assets/images/logo.png:
     // 1. Upload logo.png to Supabase Storage (public bucket) or your CDN
@@ -57,10 +57,10 @@ Deno.serve(async (req) => {
 
     const recipientName = payload.recipientName || 'there';
     const customMessage = payload.message ? `<div style="margin: 0 0 24px 0; padding: 20px; background-color: #fef7f0; border-left: 4px solid ${BRAND_ORANGE}; border-radius: 8px;"><p style="margin: 0; font-size: 15px; color: ${TEXT_DARK}; line-height: 1.6;">${payload.message}</p></div>` : '';
-    
+
     // Extract first name from recipient name
     const firstName = recipientName.split(' ')[0] || recipientName;
-    
+
     // Format full shipping address
     const addressParts: string[] = [];
     if (payload.street) addressParts.push(payload.street);
@@ -70,10 +70,10 @@ Deno.serve(async (req) => {
     if (payload.zip) addressParts.push(payload.zip);
     if (payload.country) addressParts.push(payload.country);
     const fullShippingAddress = addressParts.length > 0 ? addressParts.join(', ') : '';
-    
+
     // Format estimated days
     const estimatedDays = payload.estimatedArrival || '3-5 business days';
-    
+
     const html = `
       <!DOCTYPE html>
       <html lang="en">
@@ -81,142 +81,84 @@ Deno.serve(async (req) => {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>A Surprise is on its Way!</title>
+        <style>
+          body { margin: 0; padding: 0; background-color: #f9fafb; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+          .button { background-color: ${BRAND_ORANGE}; color: #ffffff !important; padding: 14px 32px; border-radius: 8px; text-decoration: none; font-weight: 600; font-size: 16px; display: inline-block; }
+        </style>
       </head>
-      <body style="margin: 0; padding: 0; background-color: ${WHITE}; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;">
-        <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="background-color: ${WHITE};">
+      <body>
+        <table width="100%" cellpadding="0" cellspacing="0" role="presentation">
           <tr>
-            <td align="center" style="padding: 0;">
-              <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="max-width: 600px; background-color: ${WHITE};">
+            <td align="center" style="padding: 20px 0;">
+              <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); margin-top: 40px; margin-bottom: 40px;">
                 
-                <!-- ========== HEADER ========== -->
-                <tr>
-                  <td style="padding: 40px 32px 32px 32px; border-bottom: 1px solid #e2e8f0;">
-                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
-                      <tr>
-                        <td align="center">
-                          <a href="https://giftyy.store" style="text-decoration: none; display: inline-block;">
-                            <img src="${LOGO_URL}" alt="Giftyy" style="height: 56px; width: auto; display: block; margin-bottom: 12px;" />
-                          </a>
-                          <h2 style="margin: 0 0 6px 0; font-size: 32px; font-weight: 700; color: ${BRAND_ORANGE};">
-                            Giftyy
-                          </h2>
-                          <p style="margin: 0; font-size: 15px; color: ${TEXT_LIGHT}; font-style: italic;">
-                            Making Gifting fun and memorable
-                          </p>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
+                <!-- HEADER -->
+                <div style="background-color: ${BRAND_ORANGE}; padding: 32px 40px; text-align: center; border-bottom: 1px solid #f0f0f0;">
+                  <a href="https://giftyy.store" target="_blank" style="text-decoration: none;">
+                    <img src="${LOGO_URL}" width="120" alt="Giftyy" style="display: block; margin: 0 auto; border: 0; margin-bottom: 16px;">
+                  </a>
+                  <div style="color: #ffffff; font-weight: 800; font-size: 24px; margin-bottom: 4px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">Giftyy</div>
+                  <div style="color: #ffffff; font-size: 14px; opacity: 0.9; letter-spacing: 0.5px; font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;">Because Every Gift Deserves a Story</div>
+                </div>
                 
-                <!-- ========== BODY ========== -->
-                <tr>
-                  <td style="padding: 40px 32px;">
-                    <!-- Title -->
-                    <h1 style="margin: 0 0 28px 0; font-size: 32px; font-weight: 800; color: ${TEXT_DARK}; line-height: 1.2; text-align: center;">
-                      A Surprise is on its Way! 🎁
-                    </h1>
+                <!-- BODY -->
+                <div style="padding: 40px 48px;">
+                  <h1 style="color: ${TEXT_DARK}; font-size: 24px; margin-bottom: 24px; margin-top: 0; font-weight: 700; text-align: center;">A Surprise is on its Way! 🎁</h1>
+                  
+                  <p style="color: ${TEXT_DARK}; font-size: 16px; line-height: 26px; margin-bottom: 16px;">
+                    Hi ${firstName},
+                  </p>
+                  
+                  <p style="color: ${TEXT_DARK}; font-size: 16px; line-height: 26px; margin-bottom: 24px;">
+                    Someone special is sending you a surprise gift. Curious who it is? Hahaaa! It's a surprise! 😉
+                  </p>
+                  
+                  ${customMessage}
+                  
+                  <!-- Gift Snapshot -->
+                  <div style="margin: 32px 0; background-color: #f8fafc; border-radius: 12px; border: 1px solid #e2e8f0; padding: 24px;">
+                    <p style="margin: 0 0 16px 0; font-size: 12px; font-weight: 700; color: ${TEXT_LIGHT}; text-transform: uppercase; letter-spacing: 1px;">Gift Snapshot</p>
                     
-                    <!-- Message -->
-                    <p style="margin: 0 0 16px 0; font-size: 17px; color: ${TEXT_DARK}; line-height: 1.6;">
-                      Hi ${firstName},
-                    </p>
+                    ${fullShippingAddress ? `
+                      <div style="margin-bottom: 16px;">
+                        <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: 600; color: ${TEXT_LIGHT};">SHIPPING ADDRESS</p>
+                        <p style="margin: 0; font-size: 15px; color: ${TEXT_DARK}; line-height: 1.5;">${fullShippingAddress}</p>
+                      </div>
+                    ` : ''}
                     
-                    <p style="margin: 0 0 28px 0; font-size: 17px; color: ${TEXT_DARK}; line-height: 1.6;">
-                      Someone special you may know is sending you a surprise gift. Curious who it is? Hahaaa! It's a surprise! 😉
-                    </p>
-                    
-                    ${customMessage}
-                    
-                    <!-- Gift Snapshot Card -->
-                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 32px 0; background-color: #f8fafc; border-radius: 12px; overflow: hidden; border: 1px solid #e2e8f0;">
-                      <tr>
-                        <td style="padding: 24px;">
-                          <p style="margin: 0 0 20px 0; font-size: 14px; font-weight: 700; color: ${TEXT_DARK}; text-transform: uppercase; letter-spacing: 1px;">
-                            Gift Snapshot
-                          </p>
-                          
-                          ${fullShippingAddress ? `
-                            <div style="margin-bottom: 16px;">
-                              <p style="margin: 0 0 6px 0; font-size: 12px; font-weight: 600; color: ${TEXT_LIGHT}; text-transform: uppercase; letter-spacing: 0.5px;">Shipping Address</p>
-                              <p style="margin: 0; font-size: 15px; color: ${TEXT_DARK}; line-height: 1.6;">${fullShippingAddress}</p>
-                            </div>
-                          ` : ''}
-                          
-                          <div style="margin-bottom: ${fullShippingAddress ? '0' : '0'};">
-                            <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: 600; color: ${TEXT_LIGHT}; text-transform: uppercase; letter-spacing: 0.5px;">Estimated Delivery</p>
-                            <p style="margin: 0; font-size: 15px; color: ${TEXT_DARK}; line-height: 1.5;">${estimatedDays}</p>
-                          </div>
-                        </td>
-                      </tr>
-                    </table>
-                    
-                    <!-- CTA Section -->
-                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%" style="margin: 40px 0 32px 0;">
-                      <tr>
-                        <td align="center">
-                          <table role="presentation" cellspacing="0" cellpadding="0" border="0">
-                            <tr>
-                              <td align="center" style="padding-bottom: 16px;">
-                                <a href="https://giftyy.store" style="display: inline-block; padding: 16px 40px; background-color: ${BRAND_ORANGE}; color: ${WHITE}; text-decoration: none; border-radius: 10px; font-weight: 700; font-size: 16px; text-align: center;">
-                                  Visit Giftyy Website
-                                </a>
-                              </td>
-                            </tr>
-                            <tr>
-                              <td align="center">
-                                <p style="margin: 0 0 16px 0; font-size: 15px; color: ${TEXT_DARK}; font-weight: 600;">or</p>
-                                <a href="https://giftyy.store/download" style="display: inline-block; padding: 16px 40px; background-color: ${WHITE}; color: ${BRAND_ORANGE}; text-decoration: none; border-radius: 10px; font-weight: 700; font-size: 16px; text-align: center; border: 2px solid ${BRAND_ORANGE};">
-                                  Download Our App
-                                </a>
-                              </td>
-                            </tr>
-                          </table>
-                        </td>
-                      </tr>
-                    </table>
-                    
-                    <!-- Signature -->
-                    <p style="margin: 32px 0 0 0; font-size: 15px; color: ${TEXT_DARK}; line-height: 1.6;">
-                      <strong>— Team Giftyy</strong>
-                    </p>
-                  </td>
-                </tr>
+                    <div>
+                      <p style="margin: 0 0 4px 0; font-size: 12px; font-weight: 600; color: ${TEXT_LIGHT};">ESTIMATED DELIVERY</p>
+                      <p style="margin: 0; font-size: 15px; color: ${TEXT_DARK}; line-height: 1.5;">${estimatedDays}</p>
+                    </div>
+                  </div>
+                  
+                  <!-- CTAs -->
+                  <div style="text-align: center; margin-top: 40px;">
+                    <a href="https://giftyy.store" class="button" style="color: #ffffff;">Visit Giftyy Website</a>
+                    <p style="margin: 16px 0; font-size: 14px; color: ${TEXT_LIGHT};">or</p>
+                    <a href="https://giftyy.store/download" style="display: inline-block; padding: 12px 30px; background-color: #ffffff; color: ${BRAND_ORANGE}; text-decoration: none; border-radius: 8px; font-weight: 600; font-size: 16px; border: 1px solid ${BRAND_ORANGE};">Download App</a>
+                  </div>
+                  
+                  <p style="margin-top: 40px; font-size: 15px; color: ${TEXT_DARK};">
+                    <strong>— Team Giftyy</strong>
+                  </p>
+                </div>
                 
-                <!-- ========== FOOTER ========== -->
-                <tr>
-                  <td style="padding: 32px; background-color: #f8fafc; border-top: 1px solid #e2e8f0;">
-                    <table role="presentation" cellspacing="0" cellpadding="0" border="0" width="100%">
-                      <tr>
-                        <td align="center" style="padding-bottom: 20px;">
-                          <a href="https://giftyy.store" style="font-size: 16px; color: ${BRAND_ORANGE}; text-decoration: none; font-weight: 600;">
-                            giftyy.store
-                          </a>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td align="center">
-                          <table role="presentation" cellspacing="0" cellpadding="0" border="0">
-                            <tr>
-                              <td style="padding: 0 12px;">
-                                <a href="https://www.instagram.com/giftyy_llc/" style="font-size: 14px; color: ${BRAND_ORANGE}; text-decoration: none; font-weight: 500;">
-                                  Instagram
-                                </a>
-                              </td>
-                              <td style="padding: 0 12px; border-left: 1px solid #cbd5e1;">
-                                <a href="https://www.tiktok.com/@giftyy_llc" style="font-size: 14px; color: ${BRAND_ORANGE}; text-decoration: none; font-weight: 500;">
-                                  TikTok
-                                </a>
-                              </td>
-                            </tr>
-                          </table>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
+                <!-- FOOTER -->
+                <div style="background-color: #f9fafb; padding: 24px; text-align: center; border-top: 1px solid #f0f0f0;">
+                  <p style="color: #9ca3af; font-size: 12px; line-height: 18px; margin: 0 0 16px 0;">
+                    &copy; 2024 Giftyy. Because every gift deserves a story.
+                  </p>
+                  <div>
+                    <a href="https://www.instagram.com/giftyy_llc" style="color: #9ca3af; text-decoration: none; margin: 0 8px; font-size: 12px;">Instagram</a>
+                    <span style="color: #e5e7eb;">|</span>
+                    <a href="https://www.tiktok.com/@giftyy_llc" style="color: #9ca3af; text-decoration: none; margin: 0 8px; font-size: 12px;">TikTok</a>
+                    <span style="color: #e5e7eb;">|</span>
+                    <a href="https://linkedin.com/company/giftyy-store" style="color: #9ca3af; text-decoration: none; margin: 0 8px; font-size: 12px;">LinkedIn</a>
+                  </div>
+                </div>
                 
-              </table>
+              </div>
             </td>
           </tr>
         </table>
