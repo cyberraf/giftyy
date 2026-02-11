@@ -63,17 +63,17 @@ type ReactionVideoItem = MemoryVideoItem & {
 // Helper function to convert VideoMessage to MemoryVideoItem
 function videoMessageToMemoryItem(video: VideoMessage): MemoryVideoItem {
     const date = new Date(video.createdAt);
-    const formattedDate = date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric', 
-        year: 'numeric' 
+    const formattedDate = date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
     });
-    
+
     // Format duration if available
-    const duration = video.durationSeconds 
+    const duration = video.durationSeconds
         ? `${Math.floor(video.durationSeconds / 60)}:${String(video.durationSeconds % 60).padStart(2, '0')}`
         : '00:00';
-    
+
     return {
         id: video.id,
         title: video.title,
@@ -117,7 +117,7 @@ function getRememberMemories(videos: MemoryVideoItem[], videoMessages: VideoMess
     return older.slice(0, 8).map((video) => {
         const videoDate = videoDateMap.get(video.id) || new Date(video.date);
         let label = 'Older';
-        
+
         if (videoDate >= oneYearAgo) {
             label = 'Last year';
         } else if (videoDate >= twoYearsAgo) {
@@ -238,7 +238,7 @@ export default function MemoryTabScreen() {
         const weekAgo = new Date();
         weekAgo.setDate(weekAgo.getDate() - 7);
         const newCount = videoMessages.filter((v) => new Date(v.createdAt) >= weekAgo).length;
-        
+
         return {
             total: totalVideos,
             sent: sentCount,
@@ -271,7 +271,7 @@ export default function MemoryTabScreen() {
         if (Platform.OS === 'android') {
             // Small delay to allow VideoPreview cleanup before opening full-screen viewer
             setTimeout(() => {
-        setViewerVisible(true);
+                setViewerVisible(true);
             }, 250);
         } else {
             setViewerVisible(true);
@@ -409,11 +409,11 @@ export default function MemoryTabScreen() {
 
     const { bottom } = useSafeAreaInsets();
     return (
-        <View style={[styles.screen, { paddingTop: top + 6 }]}> 
+        <View style={[styles.screen, { paddingTop: top + 6 }]}>
             <View style={styles.fixedTabContainer}>
                 <Text style={styles.fixedTabTitle}>Memories</Text>
-                <ScrollView 
-                    horizontal 
+                <ScrollView
+                    horizontal
                     showsHorizontalScrollIndicator={false}
                     contentContainerStyle={styles.tabBar}
                     style={styles.tabBarContainer}
@@ -429,16 +429,16 @@ export default function MemoryTabScreen() {
                 </ScrollView>
             </View>
             {activeTab === 'Messages' ? (
-                <MessagesPanel 
-                    messageVideos={messageVideos} 
+                <MessagesPanel
+                    messageVideos={messageVideos}
                     onOpenViewer={(index) => handleOpenViewer(index, messageVideos)}
                     viewerVisible={viewerVisible}
                     refreshing={refreshing}
                     onRefresh={onRefresh}
                 />
             ) : activeTab === 'Shared memories' ? (
-                <SharedMemoriesPanel 
-                    sharedMemories={sharedMemories} 
+                <SharedMemoriesPanel
+                    sharedMemories={sharedMemories}
                     loading={sharedMemoriesLoading}
                     onUpload={handleUploadMemory}
                     refreshing={refreshing}
@@ -451,9 +451,9 @@ export default function MemoryTabScreen() {
                     onRefresh={onRefresh}
                 />
             ) : activeTab === 'Vaults' ? (
-                <VaultsPanel 
-                    vaultCollections={vaultCollections} 
-                    loading={vaultsLoading} 
+                <VaultsPanel
+                    vaultCollections={vaultCollections}
+                    loading={vaultsLoading}
                     onOpenVault={(collection, startIndex = 0) => handleOpenViewer(startIndex, collection.videos)}
                     refreshing={refreshing}
                     onRefresh={onRefresh}
@@ -487,7 +487,7 @@ export default function MemoryTabScreen() {
                                         {stats.new > 0 && (
                                             <View style={styles.heroNewBadge}>
                                                 <Text style={styles.heroNewBadgeText}>{stats.new} new</Text>
-                                    </View>
+                                            </View>
                                         )}
                                     </View>
                                     <Text style={styles.heroSubtitle}>{description}</Text>
@@ -513,7 +513,7 @@ export default function MemoryTabScreen() {
                                 <Pressable style={styles.heroActionButton} onPress={handleUploadMemory}>
                                     <IconSymbol name="plus.circle.fill" size={18} color={BRAND_COLOR} />
                                     <Text style={styles.heroActionLabel}>Upload shared memory</Text>
-                                    </Pressable>
+                                </Pressable>
                             </View>
                         </View>
                     )}
@@ -866,16 +866,16 @@ function OverviewPanel({
     const { orders } = useOrders();
     const { sharedMemories } = useSharedMemories();
     const { user } = useAuth();
-    
+
     // Create maps of videoId -> sharedMemoryType for featured and remember memories
     const [featuredSharedMemoryMap, setFeaturedSharedMemoryMap] = useState<Map<string, 'video' | 'photo'>>(new Map());
     const [rememberSharedMemoryMap, setRememberSharedMemoryMap] = useState<Map<string, 'video' | 'photo'>>(new Map());
-    
+
     // Fetch shared memory types for featured memories
     useEffect(() => {
         const fetchFeaturedSharedMemoryInfo = async () => {
             const map = new Map<string, 'video' | 'photo'>();
-            
+
             for (const memory of featuredMemories) {
                 if (memory.orderId) {
                     const order = orders.find(o => o.id === memory.orderId);
@@ -887,18 +887,18 @@ function OverviewPanel({
                     }
                 }
             }
-            
+
             setFeaturedSharedMemoryMap(map);
         };
-        
+
         fetchFeaturedSharedMemoryInfo();
     }, [featuredMemories, orders, sharedMemories]);
-    
+
     // Fetch shared memory types for remember memories
     useEffect(() => {
         const fetchRememberSharedMemoryInfo = async () => {
             const map = new Map<string, 'video' | 'photo'>();
-            
+
             for (const memory of rememberMemories) {
                 if (memory.orderId) {
                     const order = orders.find(o => o.id === memory.orderId);
@@ -910,32 +910,32 @@ function OverviewPanel({
                     }
                 }
             }
-            
+
             setRememberSharedMemoryMap(map);
         };
-        
+
         fetchRememberSharedMemoryInfo();
     }, [rememberMemories, orders, sharedMemories]);
-    
+
     return (
         <View style={styles.sectionGap}>
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Featured messages</Text>
                 {featuredMemories.length > 0 ? (
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.featuredScroll}
-                >
-                    {featuredMemories.map((memory, index) => (
-                        <FeaturedMemoryCard 
-                            key={memory.id} 
-                            {...memory} 
-                            sharedMemoryType={featuredSharedMemoryMap.get(memory.id)}
-                            onPress={() => onOpenFeatured(index)} 
-                        />
-                    ))}
-                </ScrollView>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.featuredScroll}
+                    >
+                        {featuredMemories.map((memory, index) => (
+                            <FeaturedMemoryCard
+                                key={memory.id}
+                                {...memory}
+                                sharedMemoryType={featuredSharedMemoryMap.get(memory.id)}
+                                onPress={() => onOpenFeatured(index)}
+                            />
+                        ))}
+                    </ScrollView>
                 ) : (
                     <View style={styles.sectionEmpty}>
                         <IconSymbol name="camera.fill" size={32} color="#9ba1a6" />
@@ -954,15 +954,15 @@ function OverviewPanel({
                         <Text style={styles.sectionEmptySubtext}>Hang tight while we fetch your personalized vaults.</Text>
                     </View>
                 ) : vaultCollections.length > 0 ? (
-                <View style={styles.listStack}>
+                    <View style={styles.listStack}>
                         {vaultCollections.slice(0, 4).map((collection) => (
-                            <VaultRow 
-                                key={collection.id} 
-                                collection={collection} 
-                                onPress={() => onOpenVault(collection)} 
+                            <VaultRow
+                                key={collection.id}
+                                collection={collection}
+                                onPress={() => onOpenVault(collection)}
                             />
-                    ))}
-                </View>
+                        ))}
+                    </View>
                 ) : (
                     <View style={styles.sectionEmpty}>
                         <IconSymbol name="camera.fill" size={32} color="#9ba1a6" />
@@ -975,20 +975,20 @@ function OverviewPanel({
             <View style={styles.section}>
                 <Text style={styles.sectionTitle}>Remember this?</Text>
                 {rememberMemories.length > 0 ? (
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.featuredScroll}
-                >
-                    {rememberMemories.map((memory, index) => (
-                        <RememberMemoryCard 
-                            key={memory.id} 
-                            {...memory} 
-                            sharedMemoryType={rememberSharedMemoryMap.get(memory.id)}
-                            onPress={() => onOpenRemember(index)} 
-                        />
-                    ))}
-                </ScrollView>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.featuredScroll}
+                    >
+                        {rememberMemories.map((memory, index) => (
+                            <RememberMemoryCard
+                                key={memory.id}
+                                {...memory}
+                                sharedMemoryType={rememberSharedMemoryMap.get(memory.id)}
+                                onPress={() => onOpenRemember(index)}
+                            />
+                        ))}
+                    </ScrollView>
                 ) : (
                     <View style={styles.sectionEmpty}>
                         <IconSymbol name="camera.fill" size={32} color="#9ba1a6" />
@@ -1013,7 +1013,7 @@ function MessagesPanel({ messageVideos, onOpenViewer, viewerVisible, refreshing,
 
     const visibleVideos = useMemo(() => messageVideos.slice(0, visibleCount), [messageVideos, visibleCount]);
     const canLoadMore = visibleCount < messageVideos.length;
-    
+
     // Fetch shared_memory_id for orders referenced by video messages
     // Relationship: video_messages -> orders (via order_id) -> shared_memories (via shared_memory_id)
     useEffect(() => {
@@ -1023,24 +1023,24 @@ function MessagesPanel({ messageVideos, onOpenViewer, viewerVisible, refreshing,
             if (videosWithoutOrders.length > 0) {
                 console.warn('[MessagesPanel] Found videos without orderId (unexpected):', videosWithoutOrders.map(v => ({ id: v.id, title: v.title })));
             }
-            
+
             // Get unique orderIds from video messages
             const orderIds = messageVideos
                 .filter(item => item.orderId)
                 .map(item => item.orderId!)
                 .filter((id, index, self) => self.indexOf(id) === index); // unique
-            
+
             if (orderIds.length === 0) {
                 setSharedMemoryMap(new Map());
                 return;
             }
-            
+
             try {
                 // Query database for shared_memory_id of these orders
                 // First check in-memory orders array
                 const inMemoryMap = new Map<string, 'video' | 'photo'>();
                 const videosWithMissingOrders: string[] = [];
-                
+
                 messageVideos.forEach(item => {
                     if (item.orderId) {
                         const order = orders.find(o => o.id === item.orderId);
@@ -1057,22 +1057,22 @@ function MessagesPanel({ messageVideos, onOpenViewer, viewerVisible, refreshing,
                         }
                     }
                 });
-                
+
                 // Debug: Log videos whose orders aren't found in memory
                 if (videosWithMissingOrders.length > 0) {
                     const missingOrderIds = messageVideos
                         .filter(item => videosWithMissingOrders.includes(item.id))
                         .map(item => item.orderId!);
-                    console.warn('[MessagesPanel] Videos with orders not found in memory (will query DB):', 
+                    console.warn('[MessagesPanel] Videos with orders not found in memory (will query DB):',
                         missingOrderIds.map((orderId, idx) => ({ videoId: videosWithMissingOrders[idx], orderId }))
                     );
                 }
-                
+
                 // Find orderIds that aren't in the in-memory orders
-                const missingOrderIds = orderIds.filter(orderId => 
+                const missingOrderIds = orderIds.filter(orderId =>
                     !orders.some(o => o.id === orderId)
                 );
-                
+
                 if (missingOrderIds.length > 0) {
                     // Query database for missing orders
                     // Filter by user_id to match RLS policies (users can only see their own orders)
@@ -1080,20 +1080,20 @@ function MessagesPanel({ messageVideos, onOpenViewer, viewerVisible, refreshing,
                         .from('orders')
                         .select('id, shared_memory_id')
                         .in('id', missingOrderIds);
-                    
+
                     // Add user_id filter if user is available (required for RLS)
                     if (user?.id) {
                         query = query.eq('user_id', user.id);
                     }
-                    
+
                     const { data, error } = await query;
-                    
+
                     if (error) {
                         console.error('[MessagesPanel] Error fetching order shared_memory_ids:', error);
                         setSharedMemoryMap(inMemoryMap);
                         return;
                     }
-                    
+
                     // Debug: Check if all orders were found in database
                     const foundOrderIds = new Set((data || []).map((o: any) => o.id));
                     const notFoundOrderIds = missingOrderIds.filter(id => !foundOrderIds.has(id));
@@ -1101,13 +1101,13 @@ function MessagesPanel({ messageVideos, onOpenViewer, viewerVisible, refreshing,
                         console.warn('[MessagesPanel] Orders not found in database (may be due to RLS or deleted orders):', notFoundOrderIds);
                         console.warn('[MessagesPanel] User ID:', user?.id, 'Total orders queried:', missingOrderIds.length, 'Found:', foundOrderIds.size);
                     }
-                    
+
                     // Create a map of orderId -> sharedMemoryId
                     const orderSharedMemoryMap = new Map<string, string | null>();
                     (data || []).forEach((order: any) => {
                         orderSharedMemoryMap.set(order.id, order.shared_memory_id);
                     });
-                    
+
                     // Update the map with database results
                     messageVideos.forEach(item => {
                         if (item.orderId && !inMemoryMap.has(item.id)) {
@@ -1122,14 +1122,14 @@ function MessagesPanel({ messageVideos, onOpenViewer, viewerVisible, refreshing,
                         }
                     });
                 }
-                
+
                 setSharedMemoryMap(inMemoryMap);
             } catch (err) {
                 console.error('[MessagesPanel] Unexpected error fetching shared memory info:', err);
                 setSharedMemoryMap(new Map());
             }
         };
-        
+
         fetchSharedMemoryInfo();
     }, [messageVideos, orders, user?.id, sharedMemories]);
 
@@ -1155,11 +1155,11 @@ function MessagesPanel({ messageVideos, onOpenViewer, viewerVisible, refreshing,
 
     const renderItem = useCallback(({ item, index }: { item: MessageVideoItem; index: number }) => {
         const sharedMemoryType = sharedMemoryMap.get(item.id);
-        
+
         return (
-            <MessageVideoCard 
-                videoUrl={item.videoUrl} 
-                direction={item.direction} 
+            <MessageVideoCard
+                videoUrl={item.videoUrl}
+                direction={item.direction}
                 onPress={() => onOpenViewer(index)}
                 pauseWhenViewerOpen={viewerVisible}
                 sharedMemoryType={sharedMemoryType}
@@ -1168,9 +1168,9 @@ function MessagesPanel({ messageVideos, onOpenViewer, viewerVisible, refreshing,
     }, [onOpenViewer, viewerVisible, sharedMemoryMap]);
 
     const { bottom } = useSafeAreaInsets();
-    
+
     if (messageVideos.length === 0) {
-    return (
+        return (
             <View style={[styles.emptyState, { paddingTop: 40, paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20 }]}>
                 <IconSymbol name="camera.fill" size={48} color="#9ba1a6" />
                 <Text style={styles.emptyTitle}>No messages yet</Text>
@@ -1178,43 +1178,43 @@ function MessagesPanel({ messageVideos, onOpenViewer, viewerVisible, refreshing,
             </View>
         );
     }
-    
+
     return (
         <View style={styles.messagesPanelContainer}>
-        <FlatList
-            data={visibleVideos}
-            renderItem={renderItem}
-            keyExtractor={(item) => item.id}
-            numColumns={3}
-            style={styles.messagesList}
-            contentContainerStyle={[styles.messagesListContent, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 10 }]}
-            columnWrapperStyle={styles.messageColumnWrapper}
-            showsVerticalScrollIndicator={false}
-            onEndReached={handleLoadMore}
-            onEndReachedThreshold={0.6}
-            refreshControl={
-                onRefresh ? (
-                    <RefreshControl
-                        refreshing={refreshing || false}
-                        onRefresh={onRefresh}
-                        tintColor={BRAND_COLOR}
-                        colors={[BRAND_COLOR]}
-                    />
-                ) : undefined
-            }
-            ListFooterComponent={
-                loadingMore ? (
-                    <View style={styles.loadMoreFooter}>
+            <FlatList
+                data={visibleVideos}
+                renderItem={renderItem}
+                keyExtractor={(item) => item.id}
+                numColumns={3}
+                style={styles.messagesList}
+                contentContainerStyle={[styles.messagesListContent, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 10 }]}
+                columnWrapperStyle={styles.messageColumnWrapper}
+                showsVerticalScrollIndicator={false}
+                onEndReached={handleLoadMore}
+                onEndReachedThreshold={0.6}
+                refreshControl={
+                    onRefresh ? (
+                        <RefreshControl
+                            refreshing={refreshing || false}
+                            onRefresh={onRefresh}
+                            tintColor={BRAND_COLOR}
+                            colors={[BRAND_COLOR]}
+                        />
+                    ) : undefined
+                }
+                ListFooterComponent={
+                    loadingMore ? (
+                        <View style={styles.loadMoreFooter}>
                             <ActivityIndicator color={BRAND_COLOR} size="small" />
-                        <Text style={styles.loadMoreText}>Loading more messages…</Text>
-                    </View>
-                ) : !canLoadMore ? (
-                    <View style={styles.loadMoreFooter}>
+                            <Text style={styles.loadMoreText}>Loading more messages…</Text>
+                        </View>
+                    ) : !canLoadMore ? (
+                        <View style={styles.loadMoreFooter}>
                             <Text style={styles.loadMoreText}>You're all caught up.</Text>
-                    </View>
-                ) : null
-            }
-        />
+                        </View>
+                    ) : null
+                }
+            />
         </View>
     );
 }
@@ -1261,9 +1261,9 @@ function VaultsPanel({
 
     const { bottom } = useSafeAreaInsets();
     const renderVaultCard = useCallback(({ item }: { item: VaultCollectionItem }) => (
-        <VaultCollectionCard 
-            collection={item} 
-            onOpen={() => onOpenVault(item)} 
+        <VaultCollectionCard
+            collection={item}
+            onOpen={() => onOpenVault(item)}
         />
     ), [onOpenVault]);
 
@@ -1298,65 +1298,65 @@ function VaultsPanel({
                     ) : null}
                 </View>
             ) : (
-            <FlatList
-                data={filteredVaults}
-                renderItem={renderVaultCard}
-                keyExtractor={(item) => item.id}
-                numColumns={2}
-                contentContainerStyle={[styles.vaultCollectionList, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 120 }]}
-                columnWrapperStyle={styles.vaultCollectionColumnWrapper}
-                showsVerticalScrollIndicator={false}
-                ListHeaderComponent={
-                    <View style={styles.vaultListHeader}>
-                        {filters.length > 1 && (
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.vaultFilterRow}
-            >
-                {filters.map((filter) => {
-                    const isActive = filter === activeFilter;
-                    return (
-                                        <Pressable 
-                                            key={filter} 
-                                            style={[styles.vaultFilterChip, isActive && styles.vaultFilterChipActive]} 
-                                            onPress={() => setActiveFilter(filter)}
-                                        >
-                                            <Text style={[styles.vaultFilterLabel, isActive && styles.vaultFilterLabelActive]}>
-                                                {filter}
-                                            </Text>
-                        </Pressable>
-                    );
-                })}
-            </ScrollView>
-                        )}
-                    </View>
-                }
-                ListEmptyComponent={
-                    !loading ? (
-                        <View style={styles.vaultListEmptyState}>
-                            <Text style={styles.vaultSimpleTitle}>No matches</Text>
-                            <Text style={styles.vaultSimpleText}>Try another filter.</Text>
+                <FlatList
+                    data={filteredVaults}
+                    renderItem={renderVaultCard}
+                    keyExtractor={(item) => item.id}
+                    numColumns={2}
+                    contentContainerStyle={[styles.vaultCollectionList, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 120 }]}
+                    columnWrapperStyle={styles.vaultCollectionColumnWrapper}
+                    showsVerticalScrollIndicator={false}
+                    ListHeaderComponent={
+                        <View style={styles.vaultListHeader}>
+                            {filters.length > 1 && (
+                                <ScrollView
+                                    horizontal
+                                    showsHorizontalScrollIndicator={false}
+                                    contentContainerStyle={styles.vaultFilterRow}
+                                >
+                                    {filters.map((filter) => {
+                                        const isActive = filter === activeFilter;
+                                        return (
+                                            <Pressable
+                                                key={filter}
+                                                style={[styles.vaultFilterChip, isActive && styles.vaultFilterChipActive]}
+                                                onPress={() => setActiveFilter(filter)}
+                                            >
+                                                <Text style={[styles.vaultFilterLabel, isActive && styles.vaultFilterLabelActive]}>
+                                                    {filter}
+                                                </Text>
+                                            </Pressable>
+                                        );
+                                    })}
+                                </ScrollView>
+                            )}
                         </View>
-                    ) : null
-                }
-                refreshControl={
-                    onRefresh ? (
-                        <RefreshControl
-                            refreshing={refreshing || false}
-                            onRefresh={onRefresh}
-                            tintColor={BRAND_COLOR}
-                            colors={[BRAND_COLOR]}
-                        />
-                    ) : undefined
-                }
-                ListFooterComponent={
-                    <View style={styles.vaultListFooter}>
-                        <IconSymbol name="checkmark.circle.fill" size={24} color={palette.textSecondary} />
-                        <Text style={styles.vaultListFooterText}>You're all caught up</Text>
-                    </View>
-                }
-            />
+                    }
+                    ListEmptyComponent={
+                        !loading ? (
+                            <View style={styles.vaultListEmptyState}>
+                                <Text style={styles.vaultSimpleTitle}>No matches</Text>
+                                <Text style={styles.vaultSimpleText}>Try another filter.</Text>
+                            </View>
+                        ) : null
+                    }
+                    refreshControl={
+                        onRefresh ? (
+                            <RefreshControl
+                                refreshing={refreshing || false}
+                                onRefresh={onRefresh}
+                                tintColor={BRAND_COLOR}
+                                colors={[BRAND_COLOR]}
+                            />
+                        ) : undefined
+                    }
+                    ListFooterComponent={
+                        <View style={styles.vaultListFooter}>
+                            <IconSymbol name="checkmark.circle.fill" size={24} color={palette.textSecondary} />
+                            <Text style={styles.vaultListFooterText}>You're all caught up</Text>
+                        </View>
+                    }
+                />
             )}
         </View>
     );
@@ -1365,15 +1365,15 @@ function VaultsPanel({
 // Helper function to convert SharedMemory to MemoryVideoItem format
 function sharedMemoryToMemoryItem(memory: SharedMemory): MemoryVideoItem & { mediaType: 'video' | 'photo' } {
     const date = new Date(memory.createdAt);
-    const formattedDate = date.toLocaleDateString('en-US', { 
-        month: 'short', 
-        day: 'numeric', 
-        year: 'numeric' 
+    const formattedDate = date.toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric',
+        year: 'numeric'
     });
-    
+
     // For photos, we don't have duration
     const duration = memory.mediaType === 'video' ? '00:00' : '';
-    
+
     return {
         id: memory.id,
         title: memory.title,
@@ -1435,8 +1435,8 @@ function SharedMemoriesPanel({ sharedMemories, loading, onUpload, refreshing, on
             'Are you sure you want to delete this shared memory? This action cannot be undone.',
             [
                 { text: 'Cancel', style: 'cancel' },
-                { 
-                    text: 'Delete', 
+                {
+                    text: 'Delete',
                     style: 'destructive',
                     onPress: async () => {
                         const { error } = await deleteSharedMemory(memoryId);
@@ -1449,10 +1449,10 @@ function SharedMemoriesPanel({ sharedMemories, loading, onUpload, refreshing, on
             ]
         );
     }, [deleteSharedMemory]);
-    
+
     const renderItem = useCallback(({ item, index }: { item: typeof memoryItems[0]; index: number }) => (
-        <SharedMemoryCard 
-            item={item} 
+        <SharedMemoryCard
+            item={item}
             onPress={() => handleOpenViewer(index)}
             onLongPress={() => handleDeleteSharedMemory(item.id)}
         />
@@ -1477,7 +1477,7 @@ function SharedMemoriesPanel({ sharedMemories, loading, onUpload, refreshing, on
                     <IconSymbol name="photo.fill" size={48} color={BRAND_COLOR} />
                     <Text style={styles.sharedMemoriesIntroTitle}>Create Shared Memories</Text>
                     <Text style={styles.sharedMemoriesIntroText}>
-                        Capture good moments, photos, videos, drawings, or pictures of your best times together. 
+                        Capture good moments, photos, videos, drawings, or pictures of your best times together.
                         Share these memories with your gifts to make them even more special.
                     </Text>
                 </View>
@@ -1485,9 +1485,9 @@ function SharedMemoriesPanel({ sharedMemories, loading, onUpload, refreshing, on
                     <IconSymbol name="plus.circle.fill" size={20} color="#FFFFFF" />
                     <Text style={styles.sharedMemoriesUploadButtonText}>Upload shared memory</Text>
                 </Pressable>
-        </View>
-    );
-}
+            </View>
+        );
+    }
 
     return (
         <View style={styles.messagesPanelContainer}>
@@ -1526,7 +1526,7 @@ function SharedMemoriesPanel({ sharedMemories, loading, onUpload, refreshing, on
                         </View>
                         <View style={styles.sharedMemoriesIntroSection}>
                             <Text style={styles.sharedMemoriesIntroText}>
-                                Capture good moments, photos, videos, drawings, or pictures of your best times together. 
+                                Capture good moments, photos, videos, drawings, or pictures of your best times together.
                                 Share these memories with your gifts to make them even more special.
                             </Text>
                         </View>
@@ -1604,7 +1604,7 @@ function FeaturedMemoryCard({ title, duration, date, videoUrl, direction, onPres
             console.warn(`[FeaturedMemoryCard] Featured memory "${title}" has no videoUrl`);
         }
     }, [videoUrl, title]);
-    
+
     return (
         <Pressable style={styles.featuredCard} onPress={onPress}>
             <View style={styles.featuredVideoContainer}>
@@ -1614,41 +1614,41 @@ function FeaturedMemoryCard({ title, duration, date, videoUrl, direction, onPres
                 />
                 {/* Direction indicator in top corner */}
                 <View style={[styles.featuredDirectionBadge, direction === 'received' ? styles.featuredDirectionBadgeReceived : styles.featuredDirectionBadgeSent]}>
-                    <IconSymbol 
-                        name={direction === 'received' ? 'arrow.down.circle.fill' : 'arrow.up.circle.fill'} 
-                        size={18} 
-                        color="#FFFFFF" 
+                    <IconSymbol
+                        name={direction === 'received' ? 'arrow.down.circle.fill' : 'arrow.up.circle.fill'}
+                        size={18}
+                        color="#FFFFFF"
                     />
                 </View>
-                
+
                 {/* Modern circular play button */}
                 <View style={styles.featuredPlayButton}>
                     <IconSymbol name="play.fill" size={32} color="#FFFFFF" />
-            </View>
-                
+                </View>
+
                 {/* Duration badge at bottom */}
                 <View style={styles.featuredDurationBadge}>
                     <Text style={styles.featuredDurationText}>{duration}</Text>
                 </View>
-                
+
                 {/* Shared Memory Indicator - Bottom Left */}
                 {sharedMemoryType && (
                     <View style={styles.featuredSharedMemoryBadge}>
-                        <IconSymbol 
+                        <IconSymbol
                             name={
-                                sharedMemoryType === 'photo' 
-                                    ? 'photo.fill' 
+                                sharedMemoryType === 'photo'
+                                    ? 'photo.fill'
                                     : sharedMemoryType === 'video'
-                                    ? 'video.fill'
-                                    : 'music.note'
-                            } 
-                            size={16} 
-                            color="#FFFFFF" 
+                                        ? 'video.fill'
+                                        : 'music.note'
+                            }
+                            size={16}
+                            color="#FFFFFF"
                         />
                     </View>
                 )}
             </View>
-            
+
             {/* Card content */}
             <View style={styles.featuredCardContent}>
                 <Text style={styles.featuredTitle} numberOfLines={2}>{title}</Text>
@@ -1672,7 +1672,7 @@ function VaultRow({ collection, onPress }: { collection: VaultCollectionItem; on
     const previewVideos = (collection.videos ?? []).slice(0, 4);
     const count = collection.videos?.length ?? 0;
     const secondary = collection.description || collection.categoryType?.replace(/-/g, ' ');
-    
+
     // Debug: Log video URLs to check if they're valid
     useEffect(() => {
         if (previewVideos.length > 0) {
@@ -1683,25 +1683,25 @@ function VaultRow({ collection, onPress }: { collection: VaultCollectionItem; on
             });
         }
     }, [previewVideos, collection.name]);
-    
+
     return (
         <Pressable style={styles.vaultRow} onPress={onPress}>
             <View style={styles.vaultRowImageContainer}>
                 {previewVideos.length > 0 ? (
                     <View style={styles.vaultPreviewGrid}>
-                                {previewVideos.map((video, index) => (
+                        {previewVideos.map((video, index) => (
                             <View key={video.id || index} style={styles.vaultThumbContainer}>
-                                        <MemoryThumbnail
-                                            fallbackUrl={video.videoUrl}
-                                            style={styles.vaultThumb}
-                                        />
+                                <MemoryThumbnail
+                                    fallbackUrl={video.videoUrl}
+                                    style={styles.vaultThumb}
+                                />
                             </View>
-                ))}
-            </View>
+                        ))}
+                    </View>
                 ) : (
                     <View style={[styles.vaultRowPlaceholder, { backgroundColor: palette.accent, justifyContent: 'center', alignItems: 'center' }]}>
                         <IconSymbol name="square.stack.3d.up.fill" size={28} color={BRAND_COLOR} />
-            </View>
+                    </View>
                 )}
             </View>
             <View style={styles.vaultRowContent}>
@@ -1728,7 +1728,7 @@ function VaultCollectionCard({ collection, onOpen }: { collection: VaultCollecti
     const previewVideos = (collection.videos ?? []).slice(0, 4);
     const count = collection.videos?.length ?? 0;
     const secondary = collection.description || collection.categoryType?.replace(/-/g, ' ');
-    
+
     // Debug: Log video URLs to check if they're valid
     useEffect(() => {
         if (previewVideos.length > 0) {
@@ -1739,7 +1739,7 @@ function VaultCollectionCard({ collection, onOpen }: { collection: VaultCollecti
             });
         }
     }, [previewVideos, collection.name]);
-    
+
     return (
         <Pressable style={styles.vaultCollectionCard} onPress={onOpen}>
             <View style={styles.vaultCollectionMedia}>
@@ -1802,8 +1802,8 @@ function MessageVideoCard({ videoUrl, direction, onPress, onLongPress, pauseWhen
             console.warn(`[MessageVideoCard] Message video has no videoUrl`);
         }
     }, [videoUrl]);
-    
-    
+
+
     return (
         <Pressable style={styles.messageCardWrapper} onPress={onPress} onLongPress={onLongPress}>
             <View style={styles.messageCardContainer}>
@@ -1811,38 +1811,38 @@ function MessageVideoCard({ videoUrl, direction, onPress, onLongPress, pauseWhen
                     fallbackUrl={videoUrl}
                     style={styles.messageVideoPreview}
                 />
-                
+
                 {/* Shared Memory Indicator - Bottom Left */}
                 {sharedMemoryType && (
                     <View style={styles.messageSharedMemoryBadge}>
-                        <IconSymbol 
+                        <IconSymbol
                             name={
-                                sharedMemoryType === 'photo' 
-                                    ? 'photo.fill' 
+                                sharedMemoryType === 'photo'
+                                    ? 'photo.fill'
                                     : sharedMemoryType === 'video'
-                                    ? 'video.fill'
-                                    : 'music.note'
-                            } 
-                            size={16} 
-                            color="#FFFFFF" 
+                                        ? 'video.fill'
+                                        : 'music.note'
+                            }
+                            size={16}
+                            color="#FFFFFF"
                         />
-                </View>
+                    </View>
                 )}
-                
+
                 {/* Direction indicator */}
                 <View style={[styles.messageDirectionBadge, direction === 'received' ? styles.messageDirectionBadgeReceived : styles.messageDirectionBadgeSent]}>
-                    <IconSymbol 
-                        name={direction === 'received' ? 'arrow.down.circle.fill' : 'arrow.up.circle.fill'} 
-                        size={20} 
-                        color="#FFFFFF" 
+                    <IconSymbol
+                        name={direction === 'received' ? 'arrow.down.circle.fill' : 'arrow.up.circle.fill'}
+                        size={20}
+                        color="#FFFFFF"
                     />
-        </View>
-                
+                </View>
+
                 {/* Modern play button */}
                 <View style={styles.messagePlayButton}>
                     <IconSymbol name="play.fill" size={24} color="#FFFFFF" />
                 </View>
-        </View>
+            </View>
         </Pressable>
     );
 }
@@ -1854,7 +1854,7 @@ function RememberMemoryCard({ label, title, duration, date, videoUrl, direction,
             console.warn(`[RememberMemoryCard] Remember memory "${title}" has no videoUrl`);
         }
     }, [videoUrl, title]);
-    
+
     return (
         <Pressable style={styles.rememberCard} onPress={onPress}>
             <View style={{ position: 'relative' }}>
@@ -1868,20 +1868,20 @@ function RememberMemoryCard({ label, title, duration, date, videoUrl, direction,
                 <View style={styles.rememberChip}>
                     <Text style={styles.rememberChipLabel}>{label}</Text>
                 </View>
-                
+
                 {/* Shared Memory Indicator - Bottom Left */}
                 {sharedMemoryType && (
                     <View style={styles.rememberSharedMemoryBadge}>
-                        <IconSymbol 
+                        <IconSymbol
                             name={
-                                sharedMemoryType === 'photo' 
-                                    ? 'photo.fill' 
+                                sharedMemoryType === 'photo'
+                                    ? 'photo.fill'
                                     : sharedMemoryType === 'video'
-                                    ? 'video.fill'
-                                    : 'music.note'
-                            } 
-                            size={14} 
-                            color="#FFFFFF" 
+                                        ? 'video.fill'
+                                        : 'music.note'
+                            }
+                            size={14}
+                            color="#FFFFFF"
                         />
                     </View>
                 )}
@@ -2002,10 +2002,10 @@ export function MessageVideoViewer({ visible, initialIndex, data, onClose }: { v
                                     {/* QR Code */}
                                     {qrItem && (() => {
                                         // If video has an orderId, link to the gift page; otherwise fallback to video URL
-                                        const qrUrl = qrItem.orderId 
+                                        const qrUrl = qrItem.orderId
                                             ? `https://giftyy.store/gift/${qrItem.orderId}`
                                             : qrItem.videoUrl;
-                                        
+
                                         return (
                                             <View style={styles.qrCodeContainer}>
                                                 <View style={styles.qrCodeWrapper}>
@@ -2020,8 +2020,8 @@ export function MessageVideoViewer({ visible, initialIndex, data, onClose }: { v
 
                                     {/* Footer */}
                                     <View style={styles.qrFooter}>
-                                        <Pressable 
-                                            style={styles.qrCloseButton} 
+                                        <Pressable
+                                            style={styles.qrCloseButton}
                                             onPress={() => setQrVisible(false)}
                                         >
                                             <Text style={styles.qrCloseLabel}>Done</Text>
@@ -2044,13 +2044,13 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
     const isPhoto = mediaType === 'photo';
     // Always call the hook, but only use it for videos
     const signedVideoUrl = useSignedVideoUrl(isPhoto ? null : item.videoUrl);
-    const playbackUrl = isPhoto 
+    const playbackUrl = isPhoto
         ? (item.videoUrl && typeof item.videoUrl === 'string' ? item.videoUrl : null)
         : (signedVideoUrl && typeof signedVideoUrl === 'string' ? signedVideoUrl : null);
-    
+
     // Ensure playbackUrl is valid before using it
     const isValidPlaybackUrl = playbackUrl && typeof playbackUrl === 'string' && playbackUrl.length > 0 && playbackUrl.startsWith('http');
-    
+
     // Debug logging for video URL resolution
     useEffect(() => {
         if (!isPhoto && currentIndex === index) {
@@ -2081,19 +2081,19 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
     const { orders } = useOrders();
     const { sharedMemories, deleteSharedMemory } = useSharedMemories();
     const { user } = useAuth();
-    
+
     // Find the video message to check if it's already featured (only for video messages, not shared memories/photos)
     const videoMessage = useMemo(() => {
         if (isPhoto) return null;
         return videoMessages.find(vm => vm.id === item.id);
     }, [videoMessages, item.id, isPhoto]);
-    
+
     const isFeatured = videoMessage?.isFeatured || false;
-    
+
     // Find shared memory associated with this video message (via order)
     // First check in-memory orders, then query database if needed
     const [sharedMemory, setSharedMemory] = useState<SharedMemory | null>(null);
-    
+
     useEffect(() => {
         const fetchSharedMemory = async () => {
             // Debug: Videos should always have orderIds (created during order placement)
@@ -2102,7 +2102,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                 setSharedMemory(null);
                 return;
             }
-            
+
             // First check in-memory orders
             const order = orders.find(o => o.id === item.orderId);
             if (order?.sharedMemoryId) {
@@ -2112,25 +2112,25 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                     return;
                 }
             }
-            
+
             // If not found in memory, query database for order's shared_memory_id
             if (!order) {
                 console.warn('[ViewerSlide] Order not found in memory for orderId:', item.orderId, 'videoId:', item.id, '(querying database)');
             }
-            
+
             try {
                 let query = supabase
                     .from('orders')
                     .select('shared_memory_id')
                     .eq('id', item.orderId);
-                
+
                 // Add user_id filter if user is available (required for RLS)
                 if (user?.id) {
                     query = query.eq('user_id', user.id);
                 }
-                
+
                 const { data, error } = await query.maybeSingle(); // Use maybeSingle() instead of single() to handle 0 rows gracefully
-                
+
                 if (error) {
                     // PGRST116 means 0 rows found - order doesn't exist or RLS blocked access
                     if (error.code === 'PGRST116') {
@@ -2141,19 +2141,19 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                     setSharedMemory(null);
                     return;
                 }
-                
+
                 if (!data) {
                     // Order doesn't exist (maybeSingle returns null for 0 rows) or RLS blocked access
                     console.warn('[ViewerSlide] Order not found in database (may be due to RLS or deleted order):', item.orderId, 'videoId:', item.id, 'userId:', user?.id);
                     setSharedMemory(null);
                     return;
                 }
-                
+
                 if (!data.shared_memory_id) {
                     setSharedMemory(null);
                     return;
                 }
-                
+
                 // Find the shared memory in our list
                 const memory = sharedMemories.find(sm => sm.id === data.shared_memory_id);
                 setSharedMemory(memory || null);
@@ -2162,10 +2162,10 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                 setSharedMemory(null);
             }
         };
-        
+
         fetchSharedMemory();
     }, [item.orderId, item.id, item.title, orders, sharedMemories, user?.id]);
-    
+
     // Get signed URL for shared memory video (if it's a video)
     const sharedMemorySignedUrl = useSignedVideoUrl(
         sharedMemory && sharedMemory.mediaType === 'video' ? sharedMemory.fileUrl : null
@@ -2180,7 +2180,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
         setImageError(false);
         setTitleExpanded(false);
         setTitleNeedsExpand(false);
-        
+
         // Reset video state when URL changes - only pause, don't aggressively unload
         // Unloading is handled when the component becomes inactive
         if (!isPhoto && videoRef.current) {
@@ -2189,7 +2189,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                     const video = videoRef.current;
                     if (video) {
                         // Just pause, don't unload to avoid timeout errors
-                        await video.pauseAsync().catch(() => {});
+                        await video.pauseAsync().catch(() => { });
                     }
                 } catch (error) {
                     console.warn('[ViewerSlide] Error pausing video on URL change:', error);
@@ -2208,21 +2208,21 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
         try {
             const status = await video.getStatusAsync();
             if (status?.isLoaded && status.isPlaying) {
-                await video.pauseAsync().catch(() => {});
+                await video.pauseAsync().catch(() => { });
                 setUserPaused(true);
             } else if (status?.isLoaded) {
-                await video.playAsync().catch(() => {});
+                await video.playAsync().catch(() => { });
                 setUserPaused(false);
             }
         } catch (err) {
             console.warn('[ViewerSlide] Toggle playback error:', err);
         }
     }, [currentIndex, index, isPhoto, isValidPlaybackUrl, viewerVisible]);
-    
+
     // Measure title on mount and when title changes to determine if expand is needed
     useEffect(() => {
         if (!item.title || titleExpanded) return;
-        
+
         // Use a simple heuristic: if title is longer than ~40 characters, likely needs expand
         // Or measure using a hidden text component
         const estimatedCharsPerLine = Math.floor((screenWidth - 48 - 36) / 13); // rough estimate
@@ -2237,10 +2237,10 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
         if (isPhoto || !isValidPlaybackUrl || !videoRef.current) {
             return;
         }
-        
+
         const isActive = viewerVisible && currentIndex === index;
         const isAdjacent = Math.abs(currentIndex - index) === 1;
-        
+
         if (isActive) {
             // When this video becomes active, start playing immediately
             // Video may already be preloaded from when it was adjacent
@@ -2249,11 +2249,11 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                     if (videoRef.current) {
                         // Respect user pause
                         if (userPaused) {
-                            await videoRef.current.pauseAsync().catch(() => {});
+                            await videoRef.current.pauseAsync().catch(() => { });
                             return;
                         }
                         // Try to play immediately - video may already be buffered
-                        await videoRef.current.playAsync().catch(() => {});
+                        await videoRef.current.playAsync().catch(() => { });
                     }
                 } catch (error) {
                     console.warn('[ViewerSlide] Error starting video playback:', error);
@@ -2266,7 +2266,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
             const pauseAdjacent = async () => {
                 try {
                     if (videoRef.current) {
-                        await videoRef.current.pauseAsync().catch(() => {});
+                        await videoRef.current.pauseAsync().catch(() => { });
                     }
                 } catch (error) {
                     console.warn('[ViewerSlide] Error pausing adjacent video:', error);
@@ -2279,7 +2279,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
             const pauseDistant = async () => {
                 try {
                     if (videoRef.current) {
-                        await videoRef.current.pauseAsync().catch(() => {});
+                        await videoRef.current.pauseAsync().catch(() => { });
                         setVideoReady(false);
                     }
                 } catch (error) {
@@ -2289,13 +2289,13 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
             pauseDistant();
         }
     }, [viewerVisible, currentIndex, index, isPhoto, isValidPlaybackUrl, userPaused]);
-    
+
     // Cleanup on unmount - ensure video is properly stopped and unloaded
     useEffect(() => {
         if (isPhoto) {
             return;
         }
-        
+
         return () => {
             // Cleanup function runs when component unmounts
             const video = videoRef.current;
@@ -2303,11 +2303,11 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                 // Just pause, don't aggressively unload to avoid timeout errors
                 const cleanup = async () => {
                     try {
-                        await video.pauseAsync().catch(() => {});
+                        await video.pauseAsync().catch(() => { });
                         // Only unload if we're sure the video is no longer needed
                         // Set a timeout to avoid blocking and timeout errors
                         setTimeout(() => {
-                            video.unloadAsync().catch(() => {});
+                            video.unloadAsync().catch(() => { });
                         }, 500);
                     } catch (error) {
                         console.warn('[ViewerSlide] Error during video cleanup:', error);
@@ -2321,7 +2321,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
     const handleShare = useCallback(() => {
         Share.share({
             message: `Check out this memory: ${item.title} (${item.videoUrl})`,
-        }).catch(() => {});
+        }).catch(() => { });
     }, [item.title, item.videoUrl]);
 
     const handleQrView = useCallback(() => {
@@ -2343,7 +2343,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                 } catch {
                     shouldResumeMainVideoAfterSharedModalRef.current = false;
                 } finally {
-                    videoRef.current?.pauseAsync().catch(() => {});
+                    videoRef.current?.pauseAsync().catch(() => { });
                 }
             };
             pauseMain();
@@ -2360,7 +2360,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
         if (!isPhoto && !userPaused && viewerVisible && currentIndex === index && videoRef.current) {
             if (shouldResumeMainVideoAfterSharedModalRef.current) {
                 shouldResumeMainVideoAfterSharedModalRef.current = false;
-                videoRef.current.playAsync().catch(() => {});
+                videoRef.current.playAsync().catch(() => { });
             }
         } else {
             shouldResumeMainVideoAfterSharedModalRef.current = false;
@@ -2401,10 +2401,10 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
             setShowFeatureDialog(true);
         }
     }, [isPhoto, isFeatured, handleFeature]);
-    
+
     const [showMenu, setShowMenu] = useState(false);
     const [isDeleting, setIsDeleting] = useState(false);
-    
+
     const handleDelete = useCallback(async () => {
         setIsDeleting(true);
         try {
@@ -2437,18 +2437,18 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
             setShowMenu(false);
         }
     }, [isPhoto, sharedMemory, videoMessage, deleteSharedMemory, deleteVideoMessage, onClose]);
-    
+
     const handleDeletePress = useCallback(() => {
         setShowMenu(false); // Close menu first
         Alert.alert(
             'Delete Memory',
-            isPhoto 
+            isPhoto
                 ? 'Are you sure you want to delete this shared memory? This action cannot be undone.'
                 : 'Are you sure you want to delete this video message? This action cannot be undone.',
             [
                 { text: 'Cancel', style: 'cancel' },
-                { 
-                    text: 'Delete', 
+                {
+                    text: 'Delete',
                     style: 'destructive',
                     onPress: handleDelete
                 }
@@ -2457,11 +2457,11 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
     }, [isPhoto, handleDelete]);
 
     return (
-        <View style={[styles.viewerSlide, { height: screenHeight, width: screenWidth, backgroundColor: '#000000' }]}> 
+        <View style={[styles.viewerSlide, { height: screenHeight, width: screenWidth, backgroundColor: '#000000' }]}>
             {isPhoto ? (
                 <>
                     <View style={[styles.viewerVideo, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#000000' }]}>
-            {playbackUrl ? (
+                        {playbackUrl ? (
                             <View style={{ width: '100%', height: '100%', backgroundColor: '#000000', justifyContent: 'center', alignItems: 'center' }}>
                                 <Image
                                     source={{ uri: playbackUrl }}
@@ -2492,159 +2492,168 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                 </>
             ) : (
                 <>
-            {/* NOTE: Only mount the active video to avoid decoder/network issues on some real devices. */}
-            {isValidPlaybackUrl && viewerVisible && currentIndex === index ? (
-                <Video
-                    key={`video-${item.id}-${playbackUrl.substring(0, 50)}`}
-                    ref={videoRef}
-                    style={styles.viewerVideo}
-                    source={{ uri: playbackUrl }}
-					overrideFileExtensionAndroid="mp4"
-                    resizeMode={ResizeMode.COVER}
-                    shouldPlay={currentIndex === index && !userPaused && !sharedMemoryViewerVisible}
-                    isMuted={false}
-                    isLooping={true}
-                    volume={1.0}
-                    useNativeControls={false}
-                    progressUpdateIntervalMillis={500}
-                    onLoad={() => {
-                        console.log('[ViewerSlide] Video loaded:', item.id, playbackUrl.substring(0, 50));
-                        // Mark as ready when video is loaded (has enough buffer to start playing)
-                        setVideoReady(true);
-                        // Start playing immediately when video loads if this is the active video
-                        // Video may already be partially buffered if it was preloaded as adjacent
-                        if (currentIndex === index && viewerVisible && videoRef.current && !userPaused && !sharedMemoryViewerVisible) {
-                            videoRef.current.playAsync().catch((err) => {
-                                console.warn('[ViewerSlide] Error playing video on load:', err);
-                            });
-                        }
-                    }}
-                    onError={(error) => {
-                        const errorStr = error?.toString() || '';
-                        const isCodecError = errorStr.includes('Decoder') || errorStr.includes('codec') || errorStr.includes('HEVC') || errorStr.includes('hevc');
-                        const isNetworkError = errorStr.includes('NSURLErrorDomain') || errorStr.includes('network') || errorStr.includes('connection');
-                        
-                        // Only log non-network errors (network errors are often transient and noisy)
-                        if (isCodecError) {
-                            console.error('Memory viewer video codec error (HEVC/decoder issue):', error);
-                        } else if (!isNetworkError) {
-                            console.error('Memory viewer video error:', error);
-                        } else {
-                            // Network errors are common and usually resolve themselves - just warn
-                            console.warn('[ViewerSlide] Video network error (will retry):', errorStr.substring(0, 100));
-                        }
-                        
-                        setVideoError(true);
-                        setVideoReady(false);
-                        // Don't aggressively unload on error to avoid timeout issues
-                        // Just pause the video
-                        if (videoRef.current) {
-                            videoRef.current.pauseAsync().catch(() => {});
-                        }
-                    }}
-                    onLoadStart={() => {
-                        setVideoReady(false);
-                        setVideoError(false);
-                    }}
-                    onPlaybackStatusUpdate={(status) => {
-                        // Handle playback status updates
-                        try {
-                            if (status?.isLoaded) {
-                                setIsPlaying(!!status.isPlaying);
-                                const isActive = viewerVisible && currentIndex === index;
-                                
-                                // Mark as ready as soon as video starts playing or has enough buffer
-                                // Hide loading indicator once playback begins (progressive playback)
-                                if (status.isPlaying || (status.isLoaded && !videoReady)) {
-                                    setVideoReady(true);
+                    {/* NOTE: Only mount the active video to avoid decoder/network issues on some real devices. */}
+                    {isValidPlaybackUrl && viewerVisible && currentIndex === index ? (
+                        <Video
+                            key={`video-${item.id}-${playbackUrl.substring(0, 50)}`}
+                            ref={videoRef}
+                            style={styles.viewerVideo}
+                            source={{ uri: playbackUrl }}
+                            overrideFileExtensionAndroid="mp4"
+                            resizeMode={ResizeMode.COVER}
+                            shouldPlay={currentIndex === index && !userPaused && !sharedMemoryViewerVisible}
+                            isMuted={false}
+                            isLooping={true}
+                            volume={1.0}
+                            useNativeControls={false}
+                            progressUpdateIntervalMillis={500}
+                            onLoad={() => {
+                                console.log('[ViewerSlide] Video loaded:', item.id, playbackUrl.substring(0, 50));
+                                // Mark as ready when video is loaded (has enough buffer to start playing)
+                                setVideoReady(true);
+                                // Start playing immediately when video loads if this is the active video
+                                // Video may already be partially buffered if it was preloaded as adjacent
+                                if (currentIndex === index && viewerVisible && videoRef.current && !userPaused && !sharedMemoryViewerVisible) {
+                                    videoRef.current.playAsync().catch((err) => {
+                                        console.warn('[ViewerSlide] Error playing video on load:', err);
+                                    });
                                 }
-                                
-                                // Auto-play when ready if this is the active video and not already playing
-                                // Start playing as soon as video is loaded and has enough buffer (progressive playback)
-                                if (isActive && status.isLoaded && !status.isPlaying && !status.didJustFinish && videoRef.current && !userPaused && !sharedMemoryViewerVisible) {
-                                    // Check if video has enough buffer to start playing
-                                    // If playableDuration exists and is > 0, we have enough buffer
-                                    const hasBuffer = status.playableDurationMillis 
-                                        ? status.playableDurationMillis > 0 
-                                        : status.isLoaded;
-                                    
-                                    if (hasBuffer) {
-                                        // Start playing immediately when video has enough buffer
-                                        // This enables progressive playback without waiting for full load
-                                        videoRef.current.playAsync().catch((err) => {
-                                            console.warn('[ViewerSlide] Error playing video from status update:', err);
-                                        });
-                                    }
-                                }
-                                
-                                // Handle playback errors
-                                if (status.error) {
-                                    const errorStr = status.error?.toString() || '';
-                                    const isNetworkError = errorStr.includes('NSURLErrorDomain') || errorStr.includes('network') || errorStr.includes('connection');
-                                    
-                                    // Only log non-network errors (network errors are often transient)
-                                    if (!isNetworkError) {
-                                        console.error('[ViewerSlide] Video playback status error:', status.error);
-                                    } else {
-                                        console.warn('[ViewerSlide] Video network error (will retry):', errorStr.substring(0, 100));
-                                    }
-                                    
-                                    setVideoError(true);
-                                    setVideoReady(false);
-                                    // Don't aggressively unload on error to avoid timeout issues
-                                    // Just pause the video
-                                    if (videoRef.current) {
-                                        videoRef.current.pauseAsync().catch(() => {});
-                                    }
-                                }
-                            } else if (status?.isLoaded === false && status.error) {
-                                // Handle errors even when video is not fully loaded
-                                const errorStr = status.error?.toString() || '';
+                            }}
+                            onError={(error) => {
+                                const errorStr = error?.toString() || '';
+                                const isCodecError = errorStr.includes('Decoder') || errorStr.includes('codec') || errorStr.includes('HEVC') || errorStr.includes('hevc');
                                 const isNetworkError = errorStr.includes('NSURLErrorDomain') || errorStr.includes('network') || errorStr.includes('connection');
-                                
-                                // Only log non-network errors
-                                if (!isNetworkError) {
-                                    console.error('[ViewerSlide] Video loading error:', status.error);
+
+                                // Enhanced error logging for Android debugging
+                                console.error('[Video] Playback error details:', {
+                                    error: errorStr,
+                                    url: playbackUrl?.substring(0, 100),
+                                    isCodecError,
+                                    isNetworkError,
+                                    platform: Platform.OS,
+                                });
+
+                                // Only log non-network errors (network errors are often transient and noisy)
+                                if (isCodecError) {
+                                    console.error('[Video] Codec error detected - video may be in HEVC format:', error);
+                                } else if (!isNetworkError) {
+                                    console.error('Memory viewer video error:', error);
                                 } else {
-                                    console.warn('[ViewerSlide] Video network loading error (will retry):', errorStr.substring(0, 100));
+                                    // Network errors are common and usually resolve themselves - just warn
+                                    console.warn('[ViewerSlide] Video network error (will retry):', errorStr.substring(0, 100));
                                 }
-                                
+
                                 setVideoError(true);
                                 setVideoReady(false);
-                            }
-                        } catch (error) {
-                            console.warn('[ViewerSlide] Error in playback status update:', error);
-                        }
-                    }}
-                />
-            ) : currentIndex === index ? (
-                <View style={[styles.viewerVideo, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }]}>
-                    <ActivityIndicator size="large" color="#fff" />
-                    <Text style={{ color: '#fff', marginTop: 12, fontSize: 14 }}>Loading video...</Text>
-                </View>
-            ) : null}
-            {/* Show loading indicator only if this is the active video and not ready/playing yet */}
-            {!videoReady && !videoError && isValidPlaybackUrl && currentIndex === index && (
-                <View style={[styles.viewerVideo, { justifyContent: 'center', alignItems: 'center', position: 'absolute', pointerEvents: 'none' }]}>
-                    <ActivityIndicator size="large" color="#fff" />
-                    <Text style={{ color: '#fff', marginTop: 12, fontSize: 14 }}>Loading video...</Text>
-                </View>
-            )}
-            {videoError && currentIndex === index && (
-                <View style={[styles.viewerVideo, { justifyContent: 'center', alignItems: 'center', position: 'absolute', backgroundColor: '#000', padding: 20 }]}>
-                    <IconSymbol name="play.slash.fill" size={48} color="#666" />
-                    <Text style={{ color: '#666', marginTop: 12, fontSize: 14, textAlign: 'center' }}>Failed to load video</Text>
-                    <Text style={{ color: '#666', marginTop: 8, fontSize: 12, textAlign: 'center', paddingHorizontal: 20 }}>
-                        This video format may not be supported on your device. Please try again or contact support.
-                    </Text>
-                </View>
-            )}
-            {!isValidPlaybackUrl && !isPhoto && currentIndex === index && (
-                <View style={[styles.viewerVideo, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }]}>
-                    <ActivityIndicator size="large" color="#fff" />
-                    <Text style={{ color: '#666', marginTop: 12, fontSize: 14, textAlign: 'center' }}>Loading video...</Text>
-                </View>
-            )}
+                                // Don't aggressively unload on error to avoid timeout issues
+                                // Just pause the video
+                                if (videoRef.current) {
+                                    videoRef.current.pauseAsync().catch(() => { });
+                                }
+                            }}
+                            onLoadStart={() => {
+                                setVideoReady(false);
+                                setVideoError(false);
+                            }}
+                            onPlaybackStatusUpdate={(status) => {
+                                // Handle playback status updates
+                                try {
+                                    if (status?.isLoaded) {
+                                        setIsPlaying(!!status.isPlaying);
+                                        const isActive = viewerVisible && currentIndex === index;
+
+                                        // Mark as ready as soon as video starts playing or has enough buffer
+                                        // Hide loading indicator once playback begins (progressive playback)
+                                        if (status.isPlaying || (status.isLoaded && !videoReady)) {
+                                            setVideoReady(true);
+                                        }
+
+                                        // Auto-play when ready if this is the active video and not already playing
+                                        // Start playing as soon as video is loaded and has enough buffer (progressive playback)
+                                        if (isActive && status.isLoaded && !status.isPlaying && !status.didJustFinish && videoRef.current && !userPaused && !sharedMemoryViewerVisible) {
+                                            // Check if video has enough buffer to start playing
+                                            // If playableDuration exists and is > 0, we have enough buffer
+                                            const hasBuffer = status.playableDurationMillis
+                                                ? status.playableDurationMillis > 0
+                                                : status.isLoaded;
+
+                                            if (hasBuffer) {
+                                                // Start playing immediately when video has enough buffer
+                                                // This enables progressive playback without waiting for full load
+                                                videoRef.current.playAsync().catch((err) => {
+                                                    console.warn('[ViewerSlide] Error playing video from status update:', err);
+                                                });
+                                            }
+                                        }
+
+                                        // Handle playback errors
+                                        if (status.error) {
+                                            const errorStr = status.error?.toString() || '';
+                                            const isNetworkError = errorStr.includes('NSURLErrorDomain') || errorStr.includes('network') || errorStr.includes('connection');
+
+                                            // Only log non-network errors (network errors are often transient)
+                                            if (!isNetworkError) {
+                                                console.error('[ViewerSlide] Video playback status error:', status.error);
+                                            } else {
+                                                console.warn('[ViewerSlide] Video network error (will retry):', errorStr.substring(0, 100));
+                                            }
+
+                                            setVideoError(true);
+                                            setVideoReady(false);
+                                            // Don't aggressively unload on error to avoid timeout issues
+                                            // Just pause the video
+                                            if (videoRef.current) {
+                                                videoRef.current.pauseAsync().catch(() => { });
+                                            }
+                                        }
+                                    } else if (status?.isLoaded === false && status.error) {
+                                        // Handle errors even when video is not fully loaded
+                                        const errorStr = status.error?.toString() || '';
+                                        const isNetworkError = errorStr.includes('NSURLErrorDomain') || errorStr.includes('network') || errorStr.includes('connection');
+
+                                        // Only log non-network errors
+                                        if (!isNetworkError) {
+                                            console.error('[ViewerSlide] Video loading error:', status.error);
+                                        } else {
+                                            console.warn('[ViewerSlide] Video network loading error (will retry):', errorStr.substring(0, 100));
+                                        }
+
+                                        setVideoError(true);
+                                        setVideoReady(false);
+                                    }
+                                } catch (error) {
+                                    console.warn('[ViewerSlide] Error in playback status update:', error);
+                                }
+                            }}
+                        />
+                    ) : currentIndex === index ? (
+                        <View style={[styles.viewerVideo, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }]}>
+                            <ActivityIndicator size="large" color="#fff" />
+                            <Text style={{ color: '#fff', marginTop: 12, fontSize: 14 }}>Loading video...</Text>
+                        </View>
+                    ) : null}
+                    {/* Show loading indicator only if this is the active video and not ready/playing yet */}
+                    {!videoReady && !videoError && isValidPlaybackUrl && currentIndex === index && (
+                        <View style={[styles.viewerVideo, { justifyContent: 'center', alignItems: 'center', position: 'absolute', pointerEvents: 'none' }]}>
+                            <ActivityIndicator size="large" color="#fff" />
+                            <Text style={{ color: '#fff', marginTop: 12, fontSize: 14 }}>Loading video...</Text>
+                        </View>
+                    )}
+                    {videoError && currentIndex === index && (
+                        <View style={[styles.viewerVideo, { justifyContent: 'center', alignItems: 'center', position: 'absolute', backgroundColor: '#000', padding: 20 }]}>
+                            <IconSymbol name="play.slash.fill" size={48} color="#666" />
+                            <Text style={{ color: '#666', marginTop: 12, fontSize: 14, textAlign: 'center' }}>Failed to load video</Text>
+                            <Text style={{ color: '#666', marginTop: 8, fontSize: 12, textAlign: 'center', paddingHorizontal: 20 }}>
+                                This video format may not be supported on your device. Please try again or contact support.
+                            </Text>
+                        </View>
+                    )}
+                    {!isValidPlaybackUrl && !isPhoto && currentIndex === index && (
+                        <View style={[styles.viewerVideo, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#000' }]}>
+                            <ActivityIndicator size="large" color="#fff" />
+                            <Text style={{ color: '#666', marginTop: 12, fontSize: 14, textAlign: 'center' }}>Loading video...</Text>
+                        </View>
+                    )}
                 </>
             )}
             <View style={styles.viewerSlideOverlay} pointerEvents="box-none">
@@ -2679,25 +2688,25 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                 </Pressable>
 
                 {/* Direction/Photo Indicator - Top Right (Replaces Close Button) */}
-                <Pressable 
-                    style={[styles.viewerDirectionBadge, 
-                        !isPhoto 
-                            ? (item.direction === 'received' ? styles.viewerDirectionBadgeReceived : styles.viewerDirectionBadgeSent)
-                            : styles.viewerDirectionBadgePhoto, 
-                        { right: 20, top: safeTop + 16 }]} 
+                <Pressable
+                    style={[styles.viewerDirectionBadge,
+                    !isPhoto
+                        ? (item.direction === 'received' ? styles.viewerDirectionBadgeReceived : styles.viewerDirectionBadgeSent)
+                        : styles.viewerDirectionBadgePhoto,
+                    { right: 20, top: safeTop + 16 }]}
                     onPress={onClose}
                 >
                     {!isPhoto ? (
-                        <IconSymbol 
-                            name={item.direction === 'received' ? "arrow.down.circle.fill" : "arrow.up.circle.fill"} 
-                            size={18} 
-                            color="#FFFFFF" 
+                        <IconSymbol
+                            name={item.direction === 'received' ? "arrow.down.circle.fill" : "arrow.up.circle.fill"}
+                            size={18}
+                            color="#FFFFFF"
                         />
                     ) : (
                         <IconSymbol name="photo.fill" size={18} color="#FFFFFF" />
                     )}
                 </Pressable>
-                
+
                 {/* Action Buttons Container */}
                 <View style={[styles.viewerActionsContainer, { right: 20, bottom: safeBottom + 160 }]}>
                     {/* Shared Memory Thumbnail (on top of Feature/Star button) */}
@@ -2731,52 +2740,52 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
 
                     {/* Feature Button - Most Prominent */}
                     {!isPhoto && videoMessage && (
-                        <Pressable 
+                        <Pressable
                             style={[
                                 styles.viewerActionButton,
                                 isFeatured ? styles.viewerFeatureButtonActive : styles.viewerFeatureButtonInactive
-                            ]} 
+                            ]}
                             onPress={handleFeaturePress}
                             disabled={isFeaturing}
                         >
                             {isFeaturing ? (
                                 <ActivityIndicator size="small" color="#FFFFFF" />
                             ) : (
-                                <IconSymbol 
-                                    name={isFeatured ? "star.fill" : "star"} 
-                                    size={24} 
-                                    color="#FFFFFF" 
+                                <IconSymbol
+                                    name={isFeatured ? "star.fill" : "star"}
+                                    size={24}
+                                    color="#FFFFFF"
                                 />
                             )}
                         </Pressable>
                     )}
-                    
+
                     {/* Share Button */}
-                    <Pressable 
+                    <Pressable
                         style={styles.viewerActionButton}
                         onPress={handleShare}
                     >
                         <IconSymbol name="square.and.arrow.up" size={22} color="#FFFFFF" />
                     </Pressable>
-                    
+
                     {/* QR Code Button */}
-                    <Pressable 
+                    <Pressable
                         style={styles.viewerActionButton}
                         onPress={handleQrView}
                     >
                         <IconSymbol name="qrcode.viewfinder" size={22} color="#FFFFFF" />
                     </Pressable>
-                    
+
                     {/* Menu Button (Three Dots) */}
-                    <Pressable 
+                    <Pressable
                         style={styles.viewerActionButton}
                         onPress={() => setShowMenu(true)}
                     >
                         <IconSymbol name="ellipsis.circle" size={22} color="#FFFFFF" />
-                </Pressable>
+                    </Pressable>
+                </View>
             </View>
-            </View>
-            
+
             {/* Menu Modal - Positioned next to button */}
             <Modal
                 visible={showMenu}
@@ -2784,12 +2793,12 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                 animationType="fade"
                 onRequestClose={() => setShowMenu(false)}
             >
-                <Pressable 
-                    style={styles.menuBackdrop} 
+                <Pressable
+                    style={styles.menuBackdrop}
                     onPress={() => setShowMenu(false)}
                 >
                     <View style={[styles.menuContainer, { right: 20 + 56 + 8, bottom: safeBottom + 140 }]} onStartShouldSetResponder={() => true}>
-                        <Pressable 
+                        <Pressable
                             style={styles.menuItem}
                             onPress={handleDeletePress}
                             disabled={isDeleting}
@@ -2806,7 +2815,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                     </View>
                 </Pressable>
             </Modal>
-            
+
             <LinearGradient
                 colors={['transparent', 'rgba(0,0,0,0.4)', 'rgba(0,0,0,0.85)']}
                 locations={[0, 0.6, 1]}
@@ -2814,7 +2823,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
             />
             <View style={[styles.viewerOverlayBottom, { paddingBottom: safeBottom + 60 }]}>
                 <View style={styles.viewerTitleContainer}>
-                    <Text 
+                    <Text
                         ref={titleMeasureRef}
                         style={styles.viewerTitle}
                         numberOfLines={titleExpanded ? undefined : 1}
@@ -2831,14 +2840,14 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                         {item.title}
                     </Text>
                     {titleNeedsExpand && (
-                        <Pressable 
+                        <Pressable
                             style={styles.viewerExpandButton}
                             onPress={() => setTitleExpanded(!titleExpanded)}
                         >
-                            <IconSymbol 
-                                name={titleExpanded ? "chevron.up" : "chevron.down"} 
-                                size={16} 
-                                color="rgba(255,255,255,0.8)" 
+                            <IconSymbol
+                                name={titleExpanded ? "chevron.up" : "chevron.down"}
+                                size={16}
+                                color="rgba(255,255,255,0.8)"
                             />
                         </Pressable>
                     )}
@@ -2926,8 +2935,8 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                 animationType="fade"
                 onRequestClose={() => setShowFeatureDialog(false)}
             >
-                <Pressable 
-                    style={styles.featureDialogBackdrop} 
+                <Pressable
+                    style={styles.featureDialogBackdrop}
                     onPress={() => !isFeaturing && setShowFeatureDialog(false)}
                 >
                     <View style={styles.featureDialogCard}>
@@ -3291,7 +3300,7 @@ const styles = StyleSheet.create({
         position: 'relative',
     },
     messageVideoPreview: {
-         width: '100%',
+        width: '100%',
         height: '100%',
         borderRadius: 0,
     },

@@ -22,7 +22,6 @@ type StickyBottomBarProps = {
 	price: string;
 	originalPrice?: string;
 	onAddToCart: () => void;
-	onBuyNow: () => void;
 	disabled?: boolean;
 	stockStatus?: 'in_stock' | 'low_stock' | 'out_of_stock';
 	bottomOffset?: number; // Offset from bottom (for tab bar spacing)
@@ -34,21 +33,15 @@ export function StickyBottomBar({
 	price,
 	originalPrice,
 	onAddToCart,
-	onBuyNow,
 	disabled = false,
 	stockStatus = 'in_stock',
 	bottomOffset = 0,
 }: StickyBottomBarProps) {
 	const { bottom } = useSafeAreaInsets();
 	const addToCartScale = useSharedValue(1);
-	const buyNowScale = useSharedValue(1);
 
 	const addToCartAnimatedStyle = useAnimatedStyle(() => ({
 		transform: [{ scale: addToCartScale.value }],
-	}));
-
-	const buyNowAnimatedStyle = useAnimatedStyle(() => ({
-		transform: [{ scale: buyNowScale.value }],
 	}));
 
 	const handleAddToCartPressIn = () => {
@@ -62,16 +55,7 @@ export function StickyBottomBar({
 		);
 	};
 
-	const handleBuyNowPressIn = () => {
-		buyNowScale.value = withSpring(0.95, { damping: 15, stiffness: 300 });
-	};
 
-	const handleBuyNowPressOut = () => {
-		buyNowScale.value = withSequence(
-			withSpring(1.05, { damping: 10 }),
-			withSpring(1, { damping: 15 })
-		);
-	};
 
 	const isOutOfStock = stockStatus === 'out_of_stock';
 	const isLowStock = stockStatus === 'low_stock';
@@ -101,38 +85,7 @@ export function StickyBottomBar({
 						onPressIn={handleAddToCartPressIn}
 						onPressOut={handleAddToCartPressOut}
 						disabled={disabled || isOutOfStock}
-						style={[
-							styles.addToCartButton,
-							(disabled || isOutOfStock) && styles.buttonDisabled,
-							addToCartAnimatedStyle,
-						]}
-					>
-						<IconSymbol
-							name="cart.fill"
-							size={16}
-							color={
-								disabled || isOutOfStock
-									? GIFTYY_THEME.colors.gray400
-									: GIFTYY_THEME.colors.primary
-							}
-						/>
-						<Text
-							style={[
-								styles.addToCartText,
-								(disabled || isOutOfStock) && styles.buttonTextDisabled,
-							]}
-						>
-							Cart
-						</Text>
-					</AnimatedPressable>
-
-					{/* Buy Now Button */}
-					<AnimatedPressable
-						onPress={onBuyNow}
-						onPressIn={handleBuyNowPressIn}
-						onPressOut={handleBuyNowPressOut}
-						disabled={disabled || isOutOfStock}
-						style={[buyNowAnimatedStyle, { flex: 1 }]}
+						style={[addToCartAnimatedStyle, { flex: 1 }]}
 					>
 						<LinearGradient
 							colors={
@@ -142,15 +95,20 @@ export function StickyBottomBar({
 							}
 							start={{ x: 0, y: 0 }}
 							end={{ x: 1, y: 0 }}
-							style={styles.buyNowButton}
+							style={styles.addToCartButton}
 						>
+							<IconSymbol
+								name="cart.fill"
+								size={18}
+								color={GIFTYY_THEME.colors.white}
+							/>
 							<Text
 								style={[
-									styles.buyNowText,
+									styles.addToCartText,
 									(disabled || isOutOfStock) && styles.buttonTextDisabled,
 								]}
 							>
-								{isOutOfStock ? 'Out of Stock' : 'Buy Now'}
+								{isOutOfStock ? 'Out of Stock' : 'Add to Cart'}
 							</Text>
 						</LinearGradient>
 					</AnimatedPressable>
@@ -220,33 +178,14 @@ const styles = StyleSheet.create({
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'center',
-		paddingVertical: 10,
-		paddingHorizontal: 16,
-		borderRadius: GIFTYY_THEME.radius.full,
-		backgroundColor: GIFTYY_THEME.colors.cream,
-		borderWidth: 1.5,
-		borderColor: GIFTYY_THEME.colors.primary,
-		gap: 6,
-	},
-	buttonDisabled: {
-		backgroundColor: GIFTYY_THEME.colors.gray200,
-		borderColor: GIFTYY_THEME.colors.gray300,
-	},
-	addToCartText: {
-		fontSize: GIFTYY_THEME.typography.sizes.sm,
-		fontWeight: GIFTYY_THEME.typography.weights.bold,
-		color: GIFTYY_THEME.colors.primary,
-	},
-	buyNowButton: {
-		paddingVertical: 10,
+		paddingVertical: 12,
 		paddingHorizontal: 20,
 		borderRadius: GIFTYY_THEME.radius.full,
-		alignItems: 'center',
-		justifyContent: 'center',
+		gap: 8,
 		...GIFTYY_THEME.shadows.md,
 	},
-	buyNowText: {
-		fontSize: GIFTYY_THEME.typography.sizes.sm,
+	addToCartText: {
+		fontSize: GIFTYY_THEME.typography.sizes.md,
 		fontWeight: GIFTYY_THEME.typography.weights.bold,
 		color: GIFTYY_THEME.colors.white,
 	},

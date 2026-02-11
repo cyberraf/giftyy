@@ -25,19 +25,9 @@ type CardConfig = {
     features: string[];
 };
 
-// Giftyy Card design based on admin card template
-const GIFTYY_CARD: CardConfig = {
-    label: 'Giftyy Card',
-    bg: '#f75507', // Orange brand color
-    fg: 'white',
-    accent: '#f75507',
-    features: ['QR video message', 'Personal video greeting', 'Physical card included'],
-    price: '$2.99',
-};
-
 export default function DesignScreen() {
     const router = useRouter();
-    const { cardType, setCardType, recipient, setCardPrice } = useCheckout();
+    const { cardType, setCardType, recipient, setCardPrice, defaultGiftyyCardPrice } = useCheckout();
     const { items } = useCart();
     const { refreshProducts, refreshCollections } = useProducts();
     const [pressedCard, setPressedCard] = useState<CardLabel | null>(null);
@@ -55,6 +45,16 @@ export default function DesignScreen() {
     const [refreshing, setRefreshing] = useState(false);
     const [showInfoModal, setShowInfoModal] = useState(false);
 
+    // Giftyy Card design with dynamic price from database
+    const GIFTYY_CARD: CardConfig = useMemo(() => ({
+        label: 'Giftyy Card',
+        bg: '#f75507', // Orange brand color
+        fg: 'white',
+        accent: '#f75507',
+        features: ['QR video message', 'Personal video greeting', 'Physical card included'],
+        price: `$${defaultGiftyyCardPrice.toFixed(2)}`,
+    }), [defaultGiftyyCardPrice]);
+
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
         try {
@@ -70,7 +70,7 @@ export default function DesignScreen() {
         // Select the card
         setCardType(cardLabel);
         setCardPrice(cardPrice);
-        
+
         // Flip the card
         const toValue = isFlipped ? 0 : 1;
         Animated.spring(flipAnimation, {
@@ -151,7 +151,7 @@ export default function DesignScreen() {
                 if (listRef.current) {
                     listRef.current.scrollToIndex({ index: middleIndex, animated: false });
                 }
-            } catch {}
+            } catch { }
         }, 0);
         return () => clearTimeout(id);
     }, [middleIndex]);
@@ -215,10 +215,10 @@ export default function DesignScreen() {
                         <Text style={{ color: '#6b7280', fontWeight: '800' }}>{orderedCards[currentIndex].price}</Text>
                     )}
                 </View>
-                
+
                 {/* Info Button Section */}
                 <View style={{ paddingHorizontal: sidePadding, paddingTop: 8, paddingBottom: 8 }}>
-                    <Pressable 
+                    <Pressable
                         onPress={() => setShowInfoModal(true)}
                         style={styles.infoButton}
                     >
@@ -230,154 +230,154 @@ export default function DesignScreen() {
                 </View>
 
                 <Animated.FlatList
-                ref={listRef}
-                data={orderedCards}
-                keyExtractor={(item) => String(item.label)}
-                horizontal
-                contentContainerStyle={{ paddingHorizontal: sidePadding, paddingVertical: 16 }}
-                ItemSeparatorComponent={() => <View style={{ width: gap }} />}
-                showsHorizontalScrollIndicator={false}
-                snapToInterval={cardWidth + gap}
-                snapToAlignment="center"
-                decelerationRate="fast"
-                disableIntervalMomentum
-                initialScrollIndex={middleIndex}
-                getItemLayout={(_, index) => ({
-                    length: cardWidth + gap,
-                    offset: (cardWidth + gap) * index + sidePadding,
-                    index,
-                })}
-                onScroll={Animated.event(
-                    [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-                    { useNativeDriver: true }
-                )}
-                onMomentumScrollEnd={(e) => {
-                    const interval = cardWidth + gap;
-                    const x = e.nativeEvent.contentOffset.x;
-                    let index = Math.round(x / interval);
-                    index = Math.max(0, Math.min(index, orderedCards.length - 1));
-                    const label = orderedCards[index]?.label as CardLabel;
-                    if (label && label !== cardType) {
-                        setCardType(label as CardType);
-                        setCardPrice(priceToNumber(orderedCards[index]?.price));
-                    }
-                    setCurrentIndex(index);
-                }}
-                renderItem={({ item: c, index }) => {
-                    const isActive = cardType === c.label;
-                    const isPressed = pressedCard === c.label;
-                    const centerOffset = index * (cardWidth + gap) + sidePadding;
-                    const inputRange = [centerOffset - (cardWidth + gap), centerOffset, centerOffset + (cardWidth + gap)];
-                    const scale = scrollX.interpolate({
-                        inputRange,
-                        outputRange: [0.9, 1, 0.9],
-                        extrapolate: 'clamp',
-                    });
-                    const translateY = scrollX.interpolate({
-                        inputRange,
-                        outputRange: [8, 0, 8],
-                        extrapolate: 'clamp',
-                    });
-                    const opacity = scrollX.interpolate({
-                        inputRange,
-                        outputRange: [0.85, 1, 0.85],
-                        extrapolate: 'clamp',
-                    });
-                    return (
-                        <Animated.View style={{ transform: [{ scale }, { translateY }], opacity }}>
-                        <Pressable
-                            onPress={() => handleCardFlip(c.label as CardLabel, priceToNumber(c.price))}
-                            onPressIn={() => setPressedCard(c.label as CardLabel)}
-                            onPressOut={() => setPressedCard(null)}
-                            style={[
-                                styles.cardOuter,
-                                { borderWidth: 0, backgroundColor: '#fff', width: cardWidth },
-                                isPressed && { transform: [{ scale: 0.98 }] },
-                            ]}
-                        >
-                            <View style={[styles.cardContainer, { height: isActive ? 200 : 180 }]}>
-                                {/* Giftyy Card Design - Front */}
-                                <Animated.View
+                    ref={listRef}
+                    data={orderedCards}
+                    keyExtractor={(item) => String(item.label)}
+                    horizontal
+                    contentContainerStyle={{ paddingHorizontal: sidePadding, paddingVertical: 16 }}
+                    ItemSeparatorComponent={() => <View style={{ width: gap }} />}
+                    showsHorizontalScrollIndicator={false}
+                    snapToInterval={cardWidth + gap}
+                    snapToAlignment="center"
+                    decelerationRate="fast"
+                    disableIntervalMomentum
+                    initialScrollIndex={middleIndex}
+                    getItemLayout={(_, index) => ({
+                        length: cardWidth + gap,
+                        offset: (cardWidth + gap) * index + sidePadding,
+                        index,
+                    })}
+                    onScroll={Animated.event(
+                        [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+                        { useNativeDriver: true }
+                    )}
+                    onMomentumScrollEnd={(e) => {
+                        const interval = cardWidth + gap;
+                        const x = e.nativeEvent.contentOffset.x;
+                        let index = Math.round(x / interval);
+                        index = Math.max(0, Math.min(index, orderedCards.length - 1));
+                        const label = orderedCards[index]?.label as CardLabel;
+                        if (label && label !== cardType) {
+                            setCardType(label as CardType);
+                            setCardPrice(priceToNumber(orderedCards[index]?.price));
+                        }
+                        setCurrentIndex(index);
+                    }}
+                    renderItem={({ item: c, index }) => {
+                        const isActive = cardType === c.label;
+                        const isPressed = pressedCard === c.label;
+                        const centerOffset = index * (cardWidth + gap) + sidePadding;
+                        const inputRange = [centerOffset - (cardWidth + gap), centerOffset, centerOffset + (cardWidth + gap)];
+                        const scale = scrollX.interpolate({
+                            inputRange,
+                            outputRange: [0.9, 1, 0.9],
+                            extrapolate: 'clamp',
+                        });
+                        const translateY = scrollX.interpolate({
+                            inputRange,
+                            outputRange: [8, 0, 8],
+                            extrapolate: 'clamp',
+                        });
+                        const opacity = scrollX.interpolate({
+                            inputRange,
+                            outputRange: [0.85, 1, 0.85],
+                            extrapolate: 'clamp',
+                        });
+                        return (
+                            <Animated.View style={{ transform: [{ scale }, { translateY }], opacity }}>
+                                <Pressable
+                                    onPress={() => handleCardFlip(c.label as CardLabel, priceToNumber(c.price))}
+                                    onPressIn={() => setPressedCard(c.label as CardLabel)}
+                                    onPressOut={() => setPressedCard(null)}
                                     style={[
-                                        styles.giftyyCardFront,
-                                        styles.cardSide,
-                                        frontAnimatedStyle,
-                                        {
-                                            backgroundColor: c.bg,
-                                            shadowOpacity: isActive ? 0.18 : 0.08,
-                                        },
+                                        styles.cardOuter,
+                                        { borderWidth: 0, backgroundColor: '#fff', width: cardWidth },
+                                        isPressed && { transform: [{ scale: 0.98 }] },
                                     ]}
                                 >
-                                    {/* Card Header with Logo */}
-                                    <View style={styles.cardHeader}>
-                                        <View style={styles.logoContainer}>
-                                            <LinearGradient
-                                                colors={['#f75507', '#ff8c42']}
-                                                start={{ x: 0, y: 0 }}
-                                                end={{ x: 1, y: 1 }}
-                                                style={styles.logoOuter}
-                                            >
-                                                <View style={styles.logoBox}>
-                                                    <Image 
-                                                        source={require('@/assets/images/logo.png')} 
-                                                        style={styles.logoImg}
+                                    <View style={[styles.cardContainer, { height: isActive ? 200 : 180 }]}>
+                                        {/* Giftyy Card Design - Front */}
+                                        <Animated.View
+                                            style={[
+                                                styles.giftyyCardFront,
+                                                styles.cardSide,
+                                                frontAnimatedStyle,
+                                                {
+                                                    backgroundColor: c.bg,
+                                                    shadowOpacity: isActive ? 0.18 : 0.08,
+                                                },
+                                            ]}
+                                        >
+                                            {/* Card Header with Logo */}
+                                            <View style={styles.cardHeader}>
+                                                <View style={styles.logoContainer}>
+                                                    <LinearGradient
+                                                        colors={['#f75507', '#ff8c42']}
+                                                        start={{ x: 0, y: 0 }}
+                                                        end={{ x: 1, y: 1 }}
+                                                        style={styles.logoOuter}
+                                                    >
+                                                        <View style={styles.logoBox}>
+                                                            <Image
+                                                                source={require('@/assets/images/logo.png')}
+                                                                style={styles.logoImg}
+                                                                resizeMode="contain"
+                                                            />
+                                                        </View>
+                                                    </LinearGradient>
+                                                    <Text style={styles.logoText}>Giftyy</Text>
+                                                </View>
+                                            </View>
+
+                                            {/* Card Body with Giftyy Image */}
+                                            <View style={styles.cardBody}>
+                                                <Image
+                                                    source={require('@/assets/images/giftyy.png')}
+                                                    style={styles.giftyyImage}
+                                                    resizeMode="contain"
+                                                />
+                                                <Text style={styles.cardFooter}>Something special is waiting for you.</Text>
+                                            </View>
+                                        </Animated.View>
+
+                                        {/* Giftyy Card Design - Back */}
+                                        <Animated.View
+                                            style={[
+                                                styles.giftyyCardBack,
+                                                styles.cardSide,
+                                                backAnimatedStyle,
+                                                {
+                                                    backgroundColor: c.bg,
+                                                    shadowOpacity: isActive ? 0.18 : 0.08,
+                                                },
+                                            ]}
+                                        >
+                                            {/* Back Header with Card Number */}
+                                            <View style={styles.backHeader}>
+                                                <Text style={styles.cardNumber}>GFT-XXXXXXXX</Text>
+                                            </View>
+
+                                            {/* QR Code Section */}
+                                            <View style={styles.backQRSection}>
+                                                <View style={styles.qrCodeContainer}>
+                                                    <Image
+                                                        source={{
+                                                            uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent('https://giftyy.store')}&bgcolor=ffffff&color=000000&margin=1`
+                                                        }}
+                                                        style={styles.qrCodeImage}
                                                         resizeMode="contain"
                                                     />
                                                 </View>
-                                            </LinearGradient>
-                                            <Text style={styles.logoText}>Giftyy</Text>
-                                        </View>
+                                                <Text style={styles.qrInstruction}>Scan to unlock your message</Text>
+                                                <Text style={styles.qrInstructionSupport}>A personal video and surprise were made just for you.</Text>
+                                            </View>
+                                        </Animated.View>
                                     </View>
-                                    
-                                    {/* Card Body with Giftyy Image */}
-                                    <View style={styles.cardBody}>
-                                        <Image 
-                                            source={require('@/assets/images/giftyy.png')} 
-                                            style={styles.giftyyImage}
-                                            resizeMode="contain"
-                                        />
-                                        <Text style={styles.cardFooter}>Something special is waiting for you.</Text>
-                                    </View>
-                                </Animated.View>
-
-                                {/* Giftyy Card Design - Back */}
-                                <Animated.View
-                                    style={[
-                                        styles.giftyyCardBack,
-                                        styles.cardSide,
-                                        backAnimatedStyle,
-                                        {
-                                            backgroundColor: c.bg,
-                                            shadowOpacity: isActive ? 0.18 : 0.08,
-                                        },
-                                    ]}
-                                >
-                                    {/* Back Header with Card Number */}
-                                    <View style={styles.backHeader}>
-                                        <Text style={styles.cardNumber}>GFT-XXXXXXXX</Text>
-                                    </View>
-                                    
-                                    {/* QR Code Section */}
-                                    <View style={styles.backQRSection}>
-                                        <View style={styles.qrCodeContainer}>
-                                            <Image 
-                                                source={{ 
-                                                    uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent('https://giftyy.store')}&bgcolor=ffffff&color=000000&margin=1`
-                                                }} 
-                                                style={styles.qrCodeImage}
-                                                resizeMode="contain"
-                                            />
-                                        </View>
-                                        <Text style={styles.qrInstruction}>Scan to unlock your message</Text>
-                                        <Text style={styles.qrInstructionSupport}>A personal video and surprise were made just for you.</Text>
-                                    </View>
-                                </Animated.View>
-                            </View>
-                        </Pressable>
-                        </Animated.View>
-                    );
-                }}
-            />
+                                </Pressable>
+                            </Animated.View>
+                        );
+                    }}
+                />
 
                 {/* Pagination dots */}
                 <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 6, marginTop: 4 }}>
@@ -409,7 +409,7 @@ export default function DesignScreen() {
                     >
                         <Text style={{ color: 'white', fontWeight: '800' }}>Proceed to Recipient Details</Text>
                     </Pressable>
-                    <Pressable 
+                    <Pressable
                         style={{ alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 20 }}
                         onPress={() => router.back()}
                     >
@@ -425,11 +425,11 @@ export default function DesignScreen() {
                 animationType="fade"
                 onRequestClose={() => setShowInfoModal(false)}
             >
-                <Pressable 
+                <Pressable
                     style={styles.modalOverlay}
                     onPress={() => setShowInfoModal(false)}
                 >
-                    <Pressable 
+                    <Pressable
                         style={styles.modalContent}
                         onPress={(e) => e.stopPropagation()}
                     >
@@ -438,19 +438,19 @@ export default function DesignScreen() {
                                 <IconSymbol name="info.circle.fill" size={32} color={BRAND_COLOR} />
                             </View>
                             <Text style={styles.modalTitle}>What is a Giftyy Card?</Text>
-                            <Pressable 
+                            <Pressable
                                 onPress={() => setShowInfoModal(false)}
                                 style={styles.modalCloseButton}
                             >
                                 <IconSymbol name="xmark.circle.fill" size={24} color="#9ca3af" />
                             </Pressable>
                         </View>
-                        
+
                         <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
                             <Text style={styles.modalText}>
                                 A Giftyy Card is a physical QR code card that comes with your gift order. When your recipient receives the gift, they can scan the QR code on the card to unlock your recorded video message and view their special surprise.
                             </Text>
-                            
+
                             <View style={styles.modalSection}>
                                 <Text style={styles.modalSectionTitle}>What's included:</Text>
                                 <View style={styles.modalList}>
@@ -474,7 +474,7 @@ export default function DesignScreen() {
                             </Text>
                         </ScrollView>
 
-                        <Pressable 
+                        <Pressable
                             style={styles.modalButton}
                             onPress={() => setShowInfoModal(false)}
                         >

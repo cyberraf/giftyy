@@ -24,7 +24,7 @@ export default function AuthCallbackScreen() {
 	// Get the current URL when component mounts
 	useEffect(() => {
 		let resolved = false;
-		
+
 		const processUrl = (url: string | null) => {
 			if (url && !resolved) {
 				console.log('🔵 ========================================');
@@ -106,10 +106,10 @@ export default function AuthCallbackScreen() {
 		console.log('🔵 Current URL:', currentUrl || '(not set)');
 		console.log('🔵 Params in useEffect:', JSON.stringify(params, null, 2));
 		console.log('🔵 User from auth context:', user ? 'Present' : 'None');
-		
+
 		const handleCallback = async () => {
 			console.log('=== OAuth Callback Route Handler ===');
-			
+
 			// Try to extract params from both useLocalSearchParams and the URL directly
 			let accessToken: string | undefined;
 			let refreshToken: string | undefined;
@@ -118,7 +118,7 @@ export default function AuthCallbackScreen() {
 			let state: string | undefined;
 			let error: string | undefined;
 			let errorDescription: string | undefined;
-			
+
 			// First, try to get from useLocalSearchParams
 			accessToken = params.access_token as string | undefined;
 			refreshToken = params.refresh_token as string | undefined;
@@ -127,7 +127,7 @@ export default function AuthCallbackScreen() {
 			state = params.state as string | undefined;
 			error = params.error as string | undefined;
 			errorDescription = params.error_description as string | undefined;
-			
+
 			// If params are empty, try parsing from URL directly
 			if (!accessToken && currentUrl) {
 				console.log('🔵 ========================================');
@@ -137,18 +137,18 @@ export default function AuthCallbackScreen() {
 				console.log('🔵 URL length:', currentUrl.length);
 				console.log('🔵 Has #:', currentUrl.includes('#'));
 				console.log('🔵 Has ?:', currentUrl.includes('?'));
-				
+
 				const parsed = Linking.parse(currentUrl);
 				console.log('🔵 Parsed path:', parsed.path || '(empty)');
 				console.log('🔵 Parsed queryParams:', JSON.stringify(parsed.queryParams, null, 2));
-				
+
 				// Check for hash fragment (common in OAuth)
 				const hashIndex = currentUrl.indexOf('#');
 				if (hashIndex !== -1) {
 					const hashPart = currentUrl.substring(hashIndex + 1);
 					console.log('🔵 Hash fragment found, length:', hashPart.length);
 					console.log('🔵 Hash fragment preview (first 200 chars):', hashPart.substring(0, 200));
-					
+
 					try {
 						const hashParams = new URLSearchParams(hashPart);
 						accessToken = hashParams.get('access_token') || undefined;
@@ -158,7 +158,7 @@ export default function AuthCallbackScreen() {
 						state = hashParams.get('state') || undefined;
 						error = hashParams.get('error') || undefined;
 						errorDescription = hashParams.get('error_description') || undefined;
-						
+
 						console.log('🔵 Extracted from hash:', {
 							hasAccessToken: !!accessToken,
 							hasRefreshToken: !!refreshToken,
@@ -169,7 +169,7 @@ export default function AuthCallbackScreen() {
 						console.error('🔵 Error parsing hash fragment:', err);
 					}
 				}
-				
+
 				// Fallback to query params
 				if (!accessToken && parsed.queryParams) {
 					console.log('🔵 Trying query params...');
@@ -180,7 +180,7 @@ export default function AuthCallbackScreen() {
 					state = parsed.queryParams.state as string | undefined;
 					error = parsed.queryParams.error as string | undefined;
 					errorDescription = parsed.queryParams.error_description as string | undefined;
-					
+
 					console.log('🔵 Extracted from query params:', {
 						hasAccessToken: !!accessToken,
 						hasRefreshToken: !!refreshToken,
@@ -191,7 +191,7 @@ export default function AuthCallbackScreen() {
 			} else if (!currentUrl) {
 				console.log('⚠️ No current URL available to parse');
 			}
-			
+
 			console.log('Final extracted values:', {
 				hasAccessToken: !!accessToken,
 				hasRefreshToken: !!refreshToken,
@@ -254,7 +254,7 @@ export default function AuthCallbackScreen() {
 						console.log('✅ OAuth session established successfully');
 						console.log('User ID:', data.session.user.id);
 						console.log('Email:', data.session.user.email);
-						
+
 						// Verify session was saved
 						const { data: verifySession } = await supabase.auth.getSession();
 						if (verifySession?.session) {
@@ -355,14 +355,14 @@ export default function AuthCallbackScreen() {
 		// If no URL yet, wait and check for session
 		// Supabase might have processed the callback automatically
 		console.log('🔵 No URL yet, will check for session after delay...');
-		
+
 		// Poll for session establishment (Supabase might process it automatically)
 		let attempts = 0;
-		const maxAttempts = 20; // 20 attempts * 500ms = 10 seconds
-		
+		const maxAttempts = 10; // 10 attempts * 500ms = 5 seconds (reduced from 10s)
+
 		const pollInterval = setInterval(async () => {
 			attempts++;
-			
+
 			// Check if user was set by auth state change
 			if (user && !hasProcessedRef.current) {
 				console.log('✅ User authenticated during polling!');
@@ -379,10 +379,10 @@ export default function AuthCallbackScreen() {
 				});
 				return;
 			}
-			
+
 			// Check session directly
 			const { data: { session }, error } = await supabase.auth.getSession();
-			
+
 			if (session && !hasProcessedRef.current) {
 				console.log(`✅ Session found after ${attempts * 500}ms - OAuth was successful!`);
 				hasProcessedRef.current = true;
@@ -400,16 +400,25 @@ export default function AuthCallbackScreen() {
 				});
 				return;
 			}
-			
+
 			if (attempts >= maxAttempts) {
 				clearInterval(pollInterval);
+				console.error('❌ ========================================');
+				console.error('❌ OAUTH CALLBACK TIMEOUT');
+				console.error('❌ ========================================');
 				console.error('❌ No session found after polling');
 				console.error('Attempts:', attempts);
 				console.error('Error:', error);
-				console.error('⚠️ Make sure "giftyy://auth/callback" is in Supabase Redirect URLs');
+				console.error('');
+				console.error('⚠️  TROUBLESHOOTING:');
+				console.error('1. Verify "giftyy://auth/callback" is in Supabase Redirect URLs');
+				console.error('   → Supabase Dashboard → Authentication → URL Configuration');
+				console.error('2. Check if deep link was received (look for "CALLBACK URL RECEIVED!" above)');
+				console.error('3. If no callback received, test deep linking:');
+				console.error('   → adb shell am start -a android.intent.action.VIEW -d "giftyy://auth/callback"');
 				setProcessing(false);
 				router.replace('/(auth)/login');
-			} else if (attempts % 4 === 0) {
+			} else if (attempts % 2 === 0) {
 				console.log(`🔵 Still polling for session... (${attempts * 500}ms elapsed)`);
 			}
 		}, 500);

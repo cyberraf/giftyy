@@ -346,42 +346,68 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 				// Refresh the list
 				await refreshOrders();
 
-			// Send email notification to recipient if requested
-			if (notifyRecipient && recipient.email) {
-				try {
-					console.log('[Order] Sending email notification to recipient:', recipient.email);
-					
-					// Calculate estimated arrival (3-5 business days from now)
-					const estimatedDays = '3-5 business days';
-					
-					const { data: notifyData, error: notifyError } = await supabase.functions.invoke('notify-recipient-email', {
-						body: {
-							recipientEmail: recipient.email,
-							recipientName: `${recipient.firstName} ${recipient.lastName || ''}`.trim() || 'there',
-							orderCode,
-							street: recipient.street,
-							apartment: recipient.apartment || undefined,
-							city: recipient.city,
-							state: recipient.state || undefined,
-							zip: recipient.zip,
-							country: recipient.country || undefined,
-							estimatedArrival: estimatedDays,
-						},
-					});
+				// Send email notification to recipient if requested
+				if (notifyRecipient && recipient.email) {
+					try {
+						console.log('[Order] Sending email notification to recipient:', recipient.email);
 
-					if (notifyError) {
-						console.error('[Order] Error invoking notify-recipient-email function:', notifyError);
-					} else if (notifyData) {
-						if (notifyData.error) {
-							console.error('[Order] Email notification failed:', notifyData.error, notifyData.details);
-						} else {
-							console.log('[Order] Email notification sent successfully to:', recipient.email);
-						}
+						// Calculate estimated arrival (3-5 business days from now)
+						const estimatedDays = '3-5 business days';
+
+						supabase.functions.invoke('notify-recipient-email', {
+							body: {
+								recipientEmail: recipient.email,
+								recipientName: `${recipient.firstName} ${recipient.lastName || ''}`.trim() || 'there',
+								orderCode,
+								street: recipient.street,
+								apartment: recipient.apartment || undefined,
+								city: recipient.city,
+								state: recipient.state || undefined,
+								zip: recipient.zip,
+								country: recipient.country || undefined,
+								estimatedArrival: estimatedDays,
+							},
+						});
+					} catch (notifyError) {
+						console.error('[Order] Unexpected error sending email notification:', notifyError);
 					}
-				} catch (notifyError) {
-					console.error('[Order] Unexpected error sending email notification:', notifyError);
 				}
-			}
+
+				// Send confirmation email to buyer
+				if (user.email) {
+					try {
+						console.log('[Order] Sending confirmation email to buyer:', user.email);
+						// Format address for email
+						const addressParts = [
+							recipient.street,
+							recipient.apartment,
+							recipient.city,
+							recipient.state,
+							recipient.zip,
+							recipient.country
+						].filter(Boolean);
+						const formattedAddress = addressParts.join(', ');
+
+						supabase.functions.invoke('notify-buyer-email', {
+							body: {
+								buyerEmail: user.email,
+								buyerName: user.user_metadata?.first_name || 'Valued Customer',
+								orderCode,
+								totalAmount,
+								recipientName: `${recipient.firstName} ${recipient.lastName || ''}`.trim(),
+								items: cartItems.map(item => ({
+									name: item.name,
+									quantity: item.quantity,
+									price: parseFloat(item.price.replace(/[^0-9.]/g, '')),
+								})),
+								estimatedArrival: '3-5 business days',
+								shippingAddress: formattedAddress,
+							},
+						});
+					} catch (buyerEmailError) {
+						console.error('[Order] Failed to trigger buyer confirmation email:', buyerEmailError);
+					}
+				}
 
 				return { order, error: null };
 			} catch (err: any) {

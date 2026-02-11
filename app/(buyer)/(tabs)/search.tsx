@@ -16,12 +16,12 @@ import { getVendorsInfo } from '@/lib/vendor-utils';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    Dimensions,
-    FlatList,
-    RefreshControl,
-    StyleSheet,
-    Text,
-    View,
+	Dimensions,
+	FlatList,
+	RefreshControl,
+	StyleSheet,
+	Text,
+	View,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -37,7 +37,7 @@ type FilterState = {
 
 export default function SearchResultsScreen() {
 	const router = useRouter();
-	const params = useLocalSearchParams<{ 
+	const params = useLocalSearchParams<{
 		q?: string;
 		categories?: string;
 		minPrice?: string;
@@ -45,16 +45,16 @@ export default function SearchResultsScreen() {
 		sortBy?: string;
 	}>();
 	const { top, bottom } = useSafeAreaInsets();
-	
+
 	const { products, loading: productsLoading, refreshProducts } = useProducts();
 	const { categories } = useCategories();
-	
+
 	const [searchQuery, setSearchQuery] = useState(params.q || '');
 	const [showSuggestions, setShowSuggestions] = useState(false);
 	const [showFilters, setShowFilters] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);
 	const [vendorsMap, setVendorsMap] = useState<Map<string, any>>(new Map());
-	
+
 	// Initialize filters from URL params
 	const [filters, setFilters] = useState<FilterState>(() => {
 		const initialFilters: FilterState = {
@@ -67,7 +67,7 @@ export default function SearchResultsScreen() {
 		};
 		return initialFilters;
 	});
-	
+
 	// Update filters when params change
 	useEffect(() => {
 		setFilters({
@@ -113,14 +113,14 @@ export default function SearchResultsScreen() {
 
 		// Category filter
 		if (filters.categories.length > 0) {
-			filtered = filtered.filter(p => 
+			filtered = filtered.filter(p =>
 				filters.categories.some(catId => p.categoryIds?.includes(catId))
 			);
 		}
 
 		// Price range filter
 		filtered = filtered.filter(p => {
-			const price = p.discountPercentage > 0 
+			const price = p.discountPercentage > 0
 				? p.price * (1 - p.discountPercentage / 100)
 				: p.price;
 			return price >= filters.priceRange.min && price <= filters.priceRange.max;
@@ -155,31 +155,34 @@ export default function SearchResultsScreen() {
 	// Get applied filter chips
 	const appliedFilterChips = useMemo(() => {
 		const chips: Array<{ id: string; label: string; type: string }> = [];
-		
+
 		filters.categories.forEach(catId => {
 			const cat = categories.find(c => c.id === catId);
 			if (cat) chips.push({ id: catId, label: cat.name, type: 'category' });
 		});
-		
+
 		if (filters.priceRange.min > 0 || filters.priceRange.max < 1000) {
-			chips.push({ 
-				id: 'price', 
-				label: `$${filters.priceRange.min} - $${filters.priceRange.max}`, 
-				type: 'price' 
+			chips.push({
+				id: 'price',
+				label: `$${filters.priceRange.min} - $${filters.priceRange.max}`,
+				type: 'price'
 			});
 		}
-		
+
 		return chips;
 	}, [filters, categories]);
 
 	const handleRefresh = useCallback(async () => {
 		setRefreshing(true);
 		try {
-			await refreshProducts();
+			await Promise.all([
+				refreshProducts(),
+				refreshCategories(),
+			]);
 		} finally {
 			setRefreshing(false);
 		}
-	}, [refreshProducts]);
+	}, [refreshProducts, refreshCategories]);
 
 	const handleRemoveFilter = useCallback((chipId: string, chipType: string) => {
 		setFilters(prev => {
@@ -219,7 +222,7 @@ export default function SearchResultsScreen() {
 		const imageUrl = parseProductImage(item);
 		const vendor = item.vendorId ? vendorsMap.get(item.vendorId) : undefined;
 		const productPrice = typeof item.price === 'number' ? item.price : parseFloat(String(item.price).replace('$', '')) || 0;
-		
+
 		return (
 			<Animated.View
 				entering={FadeInDown.duration(400).delay(index * 50)}

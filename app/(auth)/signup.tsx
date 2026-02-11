@@ -14,8 +14,7 @@ export default function SignupScreen() {
 	const [email, setEmail] = useState('');
 	const [password, setPassword] = useState('');
 	const [loading, setLoading] = useState(false);
-	const [googleLoading, setGoogleLoading] = useState(false);
-	const { signUp, signInWithGoogle } = useAuth();
+	const { signUp } = useAuth();
 	const { alert } = useAlert();
 	const router = useRouter();
 	const insets = useSafeAreaInsets();
@@ -44,11 +43,11 @@ export default function SignupScreen() {
 		setLoading(true);
 		try {
 			const { error } = await signUp(email.trim(), password, firstName.trim(), lastName.trim());
-			
+
 			if (error) {
 				const errorMessage = error.message || 'Unable to create account. Please try again.';
 				const errorMessageLower = errorMessage.toLowerCase();
-				
+
 				// Check if it's a duplicate user error using the utility function
 				if (
 					isDuplicateUserError(error) ||
@@ -95,7 +94,7 @@ export default function SignupScreen() {
 		} catch (err: any) {
 			console.error('Unexpected signup error:', err);
 			const errorMsg = err?.message || 'An unexpected error occurred. Please try again.';
-			
+
 			// Check if it's a network error
 			if (errorMsg.toLowerCase().includes('network')) {
 				alert(
@@ -119,15 +118,7 @@ export default function SignupScreen() {
 		}
 	};
 
-	const handleGoogleSignIn = async () => {
-		setGoogleLoading(true);
-		const { error } = await signInWithGoogle();
-		setGoogleLoading(false);
 
-		if (error) {
-			alert('Google Sign-In Failed', error.message || 'Unable to sign up with Google. Please try again.');
-		}
-	};
 
 	return (
 		<View style={[styles.container, { paddingTop: Math.max(insets.top, 20) }]}>
@@ -206,9 +197,9 @@ export default function SignupScreen() {
 
 				{/* Sign Up Button */}
 				<Pressable
-					style={[styles.primaryButton, (loading || googleLoading) && styles.buttonDisabled]}
+					style={[styles.primaryButton, loading && styles.buttonDisabled]}
 					onPress={handleSignup}
-					disabled={loading || googleLoading}
+					disabled={loading}
 				>
 					{loading ? (
 						<ActivityIndicator color="white" />
@@ -217,34 +208,7 @@ export default function SignupScreen() {
 					)}
 				</Pressable>
 
-				{/* Divider */}
-				<View style={styles.dividerContainer}>
-					<View style={styles.dividerLine} />
-					<Text style={styles.dividerText}>OR</Text>
-					<View style={styles.dividerLine} />
-				</View>
 
-				{/* Google Sign In Button */}
-				<Pressable
-					style={[styles.googleButton, (loading || googleLoading) && styles.buttonDisabled]}
-					onPress={handleGoogleSignIn}
-					disabled={loading || googleLoading}
-				>
-					{googleLoading ? (
-						<ActivityIndicator color="#4285F4" />
-					) : (
-						<>
-							<View style={styles.googleIconContainer}>
-								<Image
-									source={require('@/assets/images/google-icon.png')}
-									style={styles.googleIcon}
-									resizeMode="contain"
-								/>
-							</View>
-							<Text style={styles.googleButtonText}>Continue with Google</Text>
-						</>
-					)}
-				</Pressable>
 
 				{/* Terms and Privacy */}
 				<Text style={styles.termsText}>
@@ -255,7 +219,7 @@ export default function SignupScreen() {
 				<View style={styles.loginContainer}>
 					<Text style={styles.loginText}>Already have an account? </Text>
 					<Link href="/(auth)/login" asChild>
-						<Pressable disabled={loading || googleLoading}>
+						<Pressable disabled={loading}>
 							<Text style={styles.loginLink}>Sign in</Text>
 						</Pressable>
 					</Link>

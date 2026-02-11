@@ -2,8 +2,11 @@ import { MarketplaceProductCard } from '@/components/marketplace/ProductCard';
 import { RecipientFormModal } from '@/components/recipients/RecipientFormModal';
 import { IconSymbol, IconSymbolName } from '@/components/ui/icon-symbol';
 import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
+import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
+import { useCategories } from '@/contexts/CategoriesContext';
+import { useNotifications } from '@/contexts/NotificationsContext';
 import { useOrders } from '@/contexts/OrdersContext';
 import { useProducts } from '@/contexts/ProductsContext';
 import { useRecipients, type Recipient as RecipientType } from '@/contexts/RecipientsContext';
@@ -2036,13 +2039,7 @@ const styles = StyleSheet.create({
         color: '#FFFFFF',
         fontWeight: '800',
     },
-    modalOverlay: {
-        flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        paddingHorizontal: 24,
-    },
-    modalCardWrapper: {
+    modalContent: {
         flex: 1,
         justifyContent: 'center',
     },

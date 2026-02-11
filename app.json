@@ -22,9 +22,9 @@
     "android": {
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/giftyy.png",
+        "foregroundImage": "./assets/images/giftyy-adaptive-icon.png",
         "backgroundImage": "./assets/images/giftyy.png",
-        "monochromeImage": "./assets/images/giftyy.png"
+        "monochromeImage": "./assets/images/giftyy-adaptive-icon.png"
       },
       "versionCode": 25,
       "edgeToEdgeEnabled": true,

@@ -114,8 +114,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 							},
 							{ onConflict: 'id' }
 						)
-						.then(() => {})
-						.catch(() => {});
+						.then(() => { })
+						.catch(() => { });
 					return;
 				}
 
@@ -147,7 +147,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				// If RLS blocks insert, surface the error for debugging.
 				console.error('Error creating profile:', createError);
 				// As a last resort, clear profile but keep session.
-+				setProfile(null);
+				+				setProfile(null);
 				return;
 			}
 
@@ -336,17 +336,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 	const signInWithGoogle = useCallback(async () => {
 		try {
 			const { makeRedirectUri } = await import('expo-auth-session');
-			const { openBrowserAsync, WebBrowserPresentationStyle, WebBrowserResultType } = await import('expo-web-browser');
-			
+			const { openBrowserAsync, dismissBrowser, WebBrowserPresentationStyle } = await import('expo-web-browser');
+
 			// Create the redirect URI
-			const redirectUri = makeRedirectUri({
-				scheme: 'giftyy',
-				path: 'auth/callback',
-			});
-			
-			console.log('🔵 Google OAuth - Redirect URI:', redirectUri);
-			console.log('🔵 Make sure this URL is added to Supabase redirect URLs:', redirectUri);
-			
+			// Use 'native' scheme to automatically use exp:// in dev and giftyy:// in production
+			// Create the redirect URI
+			// FORCE 'giftyy://' scheme for stability. 
+			// This requires testing on a Development Build (not Expo Go), but eliminates Supabase whitelist issues.
+			const redirectUri = 'giftyy://auth/callback';
+
+			console.log('🔵 ========================================');
+			console.log('🔵 GOOGLE OAUTH SIGN-IN INITIATED (FORCED SCHEME)');
+			console.log('🔵 ========================================');
+			console.log('🔵 Redirect URI:', redirectUri);
+			console.log('⚠️  IMPORTANT: Ensure this URL is added to Supabase:');
+			console.log('    Authentication → URL Configuration → Redirect URLs');
+			console.log('    Add: ' + redirectUri);
+			console.log('⚠️  NOTE: You MUST use a Development Build or Production Build for this to work.');
+			console.log('    (Expo Go does not support custom schemes like giftyy://)');
+
 			// Get Supabase OAuth URL
 			const { data, error } = await supabase.auth.signInWithOAuth({
 				provider: 'google',
@@ -381,26 +389,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				};
 			}
 
-			console.log('🔵 Opening OAuth URL in browser:', data.url);
-			
+			console.log('🔵 Opening OAuth URL in browser...');
+
 			// Set up a listener for the callback URL BEFORE opening the browser
 			// This ensures we catch the deep link when the browser redirects
 			let callbackReceived = false;
 			let callbackUrl: string | null = null;
-			
+
 			const Linking = await import('expo-linking');
-			const subscription = Linking.addEventListener('url', (event) => {
+			const subscription = Linking.addEventListener('url', async (event) => {
 				if (event.url && event.url.includes('auth/callback')) {
 					console.log('🔵 ========================================');
-					console.log('🔵 CALLBACK URL RECEIVED IN AUTHCONTEXT!');
+					console.log('🔵 CALLBACK URL RECEIVED!');
 					console.log('🔵 ========================================');
 					console.log('🔵 Callback URL:', event.url.substring(0, 200));
 					callbackReceived = true;
 					callbackUrl = event.url;
+
+					// CRITICAL: Explicitly dismiss the browser when we receive the callback
+					// This ensures the app comes back to foreground
+					try {
+						await dismissBrowser();
+						console.log('✅ Browser dismissed successfully');
+					} catch (dismissError) {
+						console.warn('⚠️  Could not dismiss browser (it may have closed already):', dismissError);
+					}
+
 					subscription.remove();
 				}
 			});
-			
+
 			// Open browser and wait for the result
 			// The browser will redirect to giftyy://auth/callback when OAuth completes
 			const result = await openBrowserAsync(data.url, {
@@ -408,112 +426,126 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				enableBarCollapsing: false,
 			});
 
-			console.log('🔵 Browser closed with result type:', result.type);
-			
-			// Give a moment for the deep link to be received
-			await new Promise(resolve => setTimeout(resolve, 500));
-			
+			console.log('🔵 Browser result type:', result.type);
+
+			// Give a moment for the deep link to be received and processed
+			await new Promise(resolve => setTimeout(resolve, 800));
+
+			// Clean up listener
+			subscription.remove();
+
+			// Process the callback if we received it
 			if (callbackReceived && callbackUrl) {
-				console.log('🔵 Processing callback URL directly...');
-				// Process the callback URL immediately
+				console.log('🔵 Processing callback URL...');
 				try {
 					const url = callbackUrl;
-					// Support both implicit (tokens in hash) and PKCE (code in query/hash)
 					const parsed = Linking.parse(url);
+
+					// Extract tokens from hash fragment (most common for OAuth)
+					let accessToken: string | null = null;
+					let refreshToken: string | null = null;
+					let code: string | null = null;
+
 					const hashIndex = url.indexOf('#');
 					if (hashIndex !== -1) {
 						const hashPart = url.substring(hashIndex + 1);
 						const hashParams = new URLSearchParams(hashPart);
-						const accessToken = hashParams.get('access_token');
-						const refreshToken = hashParams.get('refresh_token');
-						const code = hashParams.get('code');
-						
-						if (accessToken && refreshToken) {
-							console.log('🔵 Setting session with tokens from callback...');
-							const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-								access_token: accessToken,
-								refresh_token: refreshToken,
-							});
-							
-							if (sessionData?.session) {
-								console.log('✅ Session established from callback URL');
-								await applySession(sessionData.session);
-								return { error: null };
-							}
-						}
+						accessToken = hashParams.get('access_token');
+						refreshToken = hashParams.get('refresh_token');
+						code = hashParams.get('code');
+					}
 
-						if (code) {
-							console.log('🔵 Exchanging OAuth code for session (hash)...');
-							const { data: exchanged, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
-							if (!exchangeError && exchanged?.session) {
-								console.log('✅ Session established from code exchange (hash)');
-								await applySession(exchanged.session);
-								return { error: null };
-							}
-							console.warn('❌ Code exchange failed (hash):', exchangeError);
+					// Fallback to query params
+					if (!accessToken && !code) {
+						accessToken = parsed.queryParams?.access_token as string | null;
+						refreshToken = parsed.queryParams?.refresh_token as string | null;
+						code = parsed.queryParams?.code as string | null;
+					}
+
+					console.log('🔵 Extracted tokens:', {
+						hasAccessToken: !!accessToken,
+						hasRefreshToken: !!refreshToken,
+						hasCode: !!code,
+					});
+
+					// Handle token-based flow (implicit)
+					if (accessToken && refreshToken) {
+						console.log('🔵 Setting session with tokens...');
+						const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
+							access_token: accessToken,
+							refresh_token: refreshToken,
+						});
+
+						if (sessionData?.session) {
+							console.log('✅ Session established successfully!');
+							await applySession(sessionData.session);
+							return { error: null };
+						} else {
+							console.error('❌ Failed to set session:', sessionError);
 						}
 					}
 
-					// If code came via query params (?code=...), exchange it.
-					const codeFromQuery = (parsed.queryParams?.code as string | undefined) || undefined;
-					if (codeFromQuery) {
-						console.log('🔵 Exchanging OAuth code for session (query)...');
-						const { data: exchanged, error: exchangeError } = await supabase.auth.exchangeCodeForSession(codeFromQuery);
+					// Handle code-based flow (PKCE)
+					if (code) {
+						console.log('🔵 Exchanging OAuth code for session...');
+						const { data: exchanged, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 						if (!exchangeError && exchanged?.session) {
-							console.log('✅ Session established from code exchange (query)');
+							console.log('✅ Session established from code exchange!');
 							await applySession(exchanged.session);
 							return { error: null };
+						} else {
+							console.error('❌ Code exchange failed:', exchangeError);
 						}
-						console.warn('❌ Code exchange failed (query):', exchangeError);
 					}
 				} catch (err) {
 					console.error('❌ Error processing callback URL:', err);
 				}
 			}
-			
-			// Clean up listener if still active
-			subscription.remove();
-			
-			// After browser closes, wait for the deep link callback to be processed
-			// The browser redirects to giftyy://auth/callback which triggers the deep link handler
-			// We need to wait for the session to be established
-			console.log('🔵 Waiting for OAuth callback to be processed...');
-			
-			// Poll for session establishment (up to 10 seconds)
+
+			// If we didn't get a callback, poll for session (fallback mechanism)
+			console.log('🔵 Polling for session...');
 			let attempts = 0;
-			const maxAttempts = 20; // 20 attempts * 500ms = 10 seconds
-			
+			const maxAttempts = 10; // 10 attempts * 500ms = 5 seconds (reduced from 10s)
+
 			while (attempts < maxAttempts) {
 				await new Promise(resolve => setTimeout(resolve, 500));
 				attempts++;
-				
-				const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+				const { data: sessionData } = await supabase.auth.getSession();
 				if (sessionData?.session) {
 					console.log(`✅ Session found after ${attempts * 500}ms`);
 					await applySession(sessionData.session);
 					return { error: null };
 				}
-				
-				if (attempts % 4 === 0) {
-					console.log(`🔵 Still waiting for session... (${attempts * 500}ms elapsed)`);
+
+				if (attempts % 2 === 0) {
+					console.log(`🔵 Still waiting... (${attempts * 500}ms)`);
 				}
 			}
-			
-			// Final check
-			const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-			if (sessionData?.session) {
-				console.log('✅ Session found on final check');
-				await applySession(sessionData.session);
-				return { error: null };
-			}
-			
-			console.error('❌ No session found after OAuth callback');
-			console.error('Session error:', sessionError);
-			console.error('⚠️ Make sure the redirect URL "giftyy://auth/callback" is added to Supabase redirect URLs');
+
+			// No session found - provide helpful error message
+			console.error('❌ ========================================');
+			console.error('❌ GOOGLE SIGN-IN FAILED');
+			console.error('❌ ========================================');
+			console.error('❌ No session established after OAuth callback');
+			console.error('');
+			console.error('⚠️  TROUBLESHOOTING STEPS:');
+			console.error('1. Check Supabase Dashboard:');
+			console.error('   → Authentication → URL Configuration → Redirect URLs');
+			console.error('   → Ensure "' + redirectUri + '" is listed');
+			console.error('');
+			console.error('2. Verify deep linking is working:');
+			console.error('   → Check if app.json has scheme: "giftyy"');
+			console.error('   → Test deep link: adb shell am start -a android.intent.action.VIEW -d "giftyy://auth/callback"');
+			console.error('');
+			console.error('3. Check console logs above for:');
+			console.error('   → "CALLBACK URL RECEIVED!" (if missing, deep link failed)');
+			console.error('   → Any error messages during token exchange');
+
 			return {
 				error: {
 					name: 'GoogleSignInError',
-					message: 'Session not established. Please check that the redirect URL is properly configured and try again.',
+					message: 'Unable to complete Google sign-in. Please ensure the redirect URL is configured in Supabase (Authentication → URL Configuration → Redirect URLs). If the issue persists, check the console logs for details.',
 				} as AuthError,
 			};
 		} catch (err: any) {
@@ -533,7 +565,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			// Check if Supabase is properly configured
 			const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 			const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-			
+
 			if (!supabaseUrl || !supabaseKey) {
 				return {
 					error: {
@@ -560,10 +592,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			} catch (signUpError: any) {
 				// This catches network errors that occur during the fetch
 				console.error('SignUp fetch error:', signUpError);
-				
+
 				// Use utility function to get proper error message
 				const errorMessage = getSupabaseErrorMessage(signUpError);
-				
+
 				// If it's a network error, provide helpful context
 				if (isNetworkError(signUpError)) {
 					return {
@@ -573,7 +605,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 						} as AuthError,
 					};
 				}
-				
+
 				return {
 					error: {
 						name: 'SignupError',
@@ -585,12 +617,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			if (error) {
 				// Use utility function to extract proper error message
 				const errorMessage = getSupabaseErrorMessage(error);
-				
-				return { 
+
+				return {
 					error: {
 						...error,
 						message: errorMessage,
-					} as AuthError 
+					} as AuthError
 				};
 			}
 
@@ -619,7 +651,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			// Handle any other unexpected errors
 			console.error('Unexpected signup error:', err);
 			const errorMessage = getSupabaseErrorMessage(err);
-			
+
 			return {
 				error: {
 					name: 'SignupError',
@@ -645,14 +677,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			// In React Native, env vars should be available, but let's verify
 			const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 			const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
-			
+
 			// Log environment variable status for debugging
 			console.log('=== Environment Variables Check ===');
 			console.log('EXPO_PUBLIC_SUPABASE_URL exists:', !!supabaseUrl);
 			console.log('EXPO_PUBLIC_SUPABASE_URL length:', supabaseUrl?.length || 0);
 			console.log('EXPO_PUBLIC_SUPABASE_ANON_KEY exists:', !!supabaseKey);
 			console.log('EXPO_PUBLIC_SUPABASE_ANON_KEY length:', supabaseKey?.length || 0);
-			
+
 			if (!supabaseUrl || !supabaseKey) {
 				console.error('❌ Supabase environment variables are missing!');
 				return {
@@ -662,7 +694,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 					} as AuthError,
 				};
 			}
-			
+
 			// Verify the Supabase client was created with valid values
 			// The client is created at module load, so if env vars weren't available then,
 			// it might have been created with empty strings
@@ -681,7 +713,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			// For React Native, try different redirect URL formats
 			// The Supabase URL should be the base URL (e.g., https://xxx.supabase.co)
 			let redirectUrl = 'giftyy://reset-password';
-			
+
 			// Clean up the Supabase URL to get the base URL
 			let baseUrl = supabaseUrl;
 			if (baseUrl.includes('/rest/v1')) {
@@ -689,7 +721,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			}
 			// Remove trailing slash
 			baseUrl = baseUrl.replace(/\/$/, '');
-			
+
 			// Try using the app scheme directly first (simplest approach)
 			// If this doesn't work, Supabase might need it whitelisted
 
@@ -720,7 +752,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				console.log('Redirect URL being sent:', redirectUrl);
 				console.log('⚠️ IMPORTANT: Make sure "giftyy://reset-password" is in Supabase Redirect URLs');
 				console.log('⚠️ IMPORTANT: Update Site URL in Supabase to "giftyy://" (not localhost:3000)');
-				
+
 				// Call resetPasswordForEmail with the custom redirect URL
 				// This ensures the email link uses the deep link scheme (giftyy://reset-password)
 				// instead of defaulting to localhost:3000
@@ -728,9 +760,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 					redirectTo: redirectUrl,
 				};
 				console.log('Calling supabase.auth.resetPasswordForEmail with options:', JSON.stringify(options, null, 2));
-				
+
 				result = await supabase.auth.resetPasswordForEmail(email.trim(), options);
-				
+
 				console.log('resetPasswordForEmail response received');
 				if (result?.error) {
 					console.error('❌ Error in resetPasswordForEmail:', result.error);
@@ -749,11 +781,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 					name: fetchError?.name,
 					stack: fetchError?.stack,
 				});
-				
+
 				// Check if it's a network error
 				const errorMsg = fetchError?.message || String(fetchError);
 				const errorName = fetchError?.name || '';
-				
+
 				if (
 					errorMsg.toLowerCase().includes('network') ||
 					errorMsg.toLowerCase().includes('fetch') ||
@@ -769,7 +801,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 						} as AuthError,
 					};
 				}
-				
+
 				// Re-throw to be caught by outer catch
 				throw fetchError;
 			}
@@ -797,12 +829,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				});
 
 				const errorMessage = getSupabaseErrorMessage(error);
-				
+
 				// Check for email sending errors (SMTP configuration issue)
-				if (error.status === 500 && 
-				    (error.message?.toLowerCase().includes('recovery email') || 
-				     error.message?.toLowerCase().includes('sending') ||
-				     error.code === 'unexpected_failure')) {
+				if (error.status === 500 &&
+					(error.message?.toLowerCase().includes('recovery email') ||
+						error.message?.toLowerCase().includes('sending') ||
+						error.code === 'unexpected_failure')) {
 					return {
 						error: {
 							name: 'EmailError',
@@ -810,10 +842,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 						} as AuthError,
 					};
 				}
-				
+
 				// Check for specific error cases
 				let finalMessage = errorMessage;
-				
+
 				// If error mentions redirect URL, provide specific guidance
 				if (
 					errorMessage.toLowerCase().includes('redirect') ||
@@ -822,7 +854,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				) {
 					finalMessage = 'Invalid redirect URL configuration. Please make sure "giftyy://reset-password" is added to your Supabase project\'s allowed redirect URLs in Authentication → URL Configuration.';
 				}
-				
+
 				return {
 					error: {
 						...error,
@@ -839,13 +871,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		} catch (err: any) {
 			console.error('Unexpected error in resetPasswordForEmail:', err);
 			const errorMessage = getSupabaseErrorMessage(err);
-			
+
 			// Provide helpful error message
 			let finalMessage = errorMessage;
 			if (errorMessage.toLowerCase().includes('network')) {
 				finalMessage = 'Network error. Please check your internet connection and verify your Supabase configuration. Make sure EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY are set correctly.';
 			}
-			
+
 			return {
 				error: {
 					name: 'ResetPasswordError',
@@ -859,7 +891,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		try {
 			// First, verify we have a valid session
 			const { data: { session: currentSession }, error: sessionError } = await supabase.auth.getSession();
-			
+
 			if (sessionError || !currentSession) {
 				return {
 					error: {
@@ -888,7 +920,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		} catch (err: any) {
 			console.error('Reset password error:', err);
 			const errorMessage = getSupabaseErrorMessage(err);
-			
+
 			// Provide more specific error message for network errors
 			if (isNetworkError(err)) {
 				return {
@@ -898,7 +930,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 					} as AuthError,
 				};
 			}
-			
+
 			return {
 				error: {
 					name: 'ResetPasswordError',
@@ -963,7 +995,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			// Password is correct, proceed with account deletion
 			// Delete user data from database tables (profile, orders, etc.)
 			// Note: RLS policies should handle cascade deletions if configured
-			
+
 			// Delete profile
 			const { error: deleteProfileError } = await supabase
 				.from('profiles')

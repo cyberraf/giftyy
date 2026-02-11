@@ -9,7 +9,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { ResizeMode, Video } from 'expo-av';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Dimensions, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
   FadeIn,
@@ -24,6 +24,7 @@ import Animated, {
 import {
   Camera,
   useCameraDevice,
+  useCameraDevices,
   useCameraFormat,
   useCameraPermission,
   useMicrophonePermission,
@@ -67,16 +68,51 @@ export function VisionCameraRecordingFlow({
   const { hasPermission: hasMicrophonePermission, requestPermission: requestMicrophonePermission } =
     useMicrophonePermission();
 
-  const device = useCameraDevice(useFrontCamera ? 'front' : 'back');
+  const devices = useCameraDevices();
+  const frontDevice = useCameraDevice('front');
+  const backDevice = useCameraDevice('back');
+
+  // Choose the best available device based on preference and availability
+  const device = useMemo(() => {
+    const preferred = useFrontCamera ? frontDevice : backDevice;
+    if (preferred) return preferred;
+
+    // Fallback logic
+    const fallback = useFrontCamera ? backDevice : frontDevice;
+    if (fallback) {
+      console.log(`[VisionCamera] Preferred camera (${useFrontCamera ? 'front' : 'back'}) not available. Falling back to ${useFrontCamera ? 'back' : 'front'}.`);
+      return fallback;
+    }
+
+    // Last resort: any available device
+    if (devices.length > 0) {
+      console.log(`[VisionCamera] No specific camera match. Using first available: ${devices[0].position}`);
+      return devices[0];
+    }
+
+    console.warn('[VisionCamera] No camera devices found at all.');
+    return undefined;
+  }, [useFrontCamera, frontDevice, backDevice, devices]);
+
+  // Configure format for video recording (codec is set in startRecording options)
   const format = useCameraFormat(device, [
     { videoResolution: { width: 1920, height: 1080 } },
     { fps: 30 },
   ]);
 
+  useEffect(() => {
+    console.log('[VisionCamera] Status:', {
+      availableDevices: devices.map(d => d.position),
+      selectedPosition: device?.position,
+      hasFormat: !!format,
+      useFrontCamera
+    });
+  }, [devices, device, format, useFrontCamera]);
+
   const cameraRef = useRef<Camera>(null);
   const previewRef = useRef<Video>(null);
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
-  const countdownRef = useRef<NodeJS.Timeout | null>(null);
+  const timerRef = useRef<any>(null);
+  const countdownRef = useRef<any>(null);
   const [isPlaying, setIsPlaying] = useState(true);
 
   // Countdown animation
@@ -155,7 +191,10 @@ export function VisionCameraRecordingFlow({
     try {
       await cameraRef.current?.startRecording({
         flash: 'off',
+        fileType: 'mp4', // Ensure MP4 container format
+        videoCodec: 'h264', // Force H.264 codec for maximum Android compatibility
         onRecordingFinished: (video) => {
+          console.log('[VisionCamera] Recording finished, video codec should be H.264');
           const uri = (video as any)?.path || (video as any)?.file?.path || (video as any)?.uri;
           if (uri) {
             setElapsedMs((currentMs) => {

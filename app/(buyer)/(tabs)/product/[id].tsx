@@ -5,7 +5,6 @@
 
 import AddedToCartDialog from '@/components/AddedToCartDialog';
 import { AccordionSection } from '@/components/pdp/AccordionSection';
-import { AddPersonalMessageButton } from '@/components/pdp/AddPersonalMessageButton';
 import { ProductMediaCarousel } from '@/components/pdp/ProductMediaCarousel';
 import { ProductVariantsSelector } from '@/components/pdp/ProductVariantsSelector';
 import { RecommendationsCarousel } from '@/components/pdp/RecommendationsCarousel';
@@ -107,10 +106,10 @@ export default function ProductDetailsScreen() {
 				lineHeight: GIFTYY_THEME.typography.sizes['3xl'] * 1.3,
 			};
 		}
-		
+
 		const titleLength = product.name.length;
 		let fontSize: number;
-		
+
 		// Estimate characters per line for different font sizes (approximate)
 		// Adjust font size based on title length to fit within 3 lines
 		if (titleLength <= 50) {
@@ -122,7 +121,7 @@ export default function ProductDetailsScreen() {
 		} else {
 			fontSize = GIFTYY_THEME.typography.sizes.lg; // 18px
 		}
-		
+
 		return {
 			fontSize,
 			lineHeight: fontSize * 1.3, // 1.3x for good readability
@@ -200,7 +199,7 @@ export default function ProductDetailsScreen() {
 			}
 		}
 
-			// Case 1: { format: "combination", attributes: [...], combinations: [...] }
+		// Case 1: { format: "combination", attributes: [...], combinations: [...] }
 		// This is the combination format with attribute definitions and their combinations
 		if (typeof value === 'object' && !Array.isArray(value) && value.format === 'combination') {
 			// For combination format, we don't normalize to a simple key-value map
@@ -285,7 +284,7 @@ export default function ProductDetailsScreen() {
 						.select('*')
 						.eq('product_id', productId)
 						.order('created_at', { ascending: true });
-					
+
 					if (!retry.error) {
 						data = retry.data;
 						error = null;
@@ -308,7 +307,7 @@ export default function ProductDetailsScreen() {
 				} else {
 					console.log('[Product] Fetched variations:', data?.length || 0, 'variations');
 					console.log('[Product] Raw variation data:', JSON.stringify(data, null, 2));
-					
+
 					const mappedVariations: ProductVariation[] = (data || []).map((row: any) => {
 						// Parse attributes if it's a JSON string
 						let attributes = row.attributes ?? {};
@@ -320,7 +319,7 @@ export default function ProductDetailsScreen() {
 								attributes = {};
 							}
 						}
-						
+
 						// Parse parsed_options if it's a JSON string
 						let parsedOptions = row.parsed_options ?? undefined;
 						if (parsedOptions && typeof parsedOptions === 'string') {
@@ -331,7 +330,7 @@ export default function ProductDetailsScreen() {
 								parsedOptions = undefined;
 							}
 						}
-						
+
 						console.log('[Product] Mapped variation:', {
 							id: row.id,
 							attributes,
@@ -339,7 +338,7 @@ export default function ProductDetailsScreen() {
 							rawAttributes: row.attributes,
 							rawParsedOptions: row.parsed_options,
 						});
-						
+
 						return {
 							id: row.id,
 							productId: row.product_id,
@@ -400,9 +399,9 @@ export default function ProductDetailsScreen() {
 		}
 
 		console.log('[Product] Building variantAttributes from', normalizedVariations.length, 'variations');
-		
+
 		const baseProductPrice = product?.price || 0;
-		
+
 		// Handle combination format variations
 		// Check if any variation uses the combination format
 		const hasCombinationFormat = normalizedVariations.some((v) => {
@@ -487,18 +486,18 @@ export default function ProductDetailsScreen() {
 		const result = normalizedVariations.map((variation) => {
 			const attributeName = variation.name || 'Option';
 			const attrs = variation.attributes;
-			
+
 			let options: Array<{ value: string; price?: number; isAvailable: boolean }> = [];
-			
+
 			// Extract options from attributes.options array
 			if (attrs && typeof attrs === 'object' && 'options' in attrs && Array.isArray((attrs as any).options)) {
 				const optionsArray = (attrs as any).options;
-				
+
 				options = optionsArray.map((opt: any) => {
 					const optionValue = String(opt?.value || '');
 					const optionStockQuantity = opt?.stockQuantity ?? opt?.stock_quantity ?? variation.stockQuantity ?? 0;
 					const optionPriceModifier = opt?.priceModifier ?? opt?.price_modifier;
-					
+
 					// Calculate price modifier
 					let priceModifier: number | undefined = undefined;
 					if (optionPriceModifier !== undefined && optionPriceModifier !== null) {
@@ -506,14 +505,14 @@ export default function ProductDetailsScreen() {
 					} else if (variation.priceModifier !== undefined && variation.priceModifier !== null) {
 						priceModifier = parseFloat(String(variation.priceModifier));
 					}
-					
+
 					return {
 						value: optionValue,
 						price: priceModifier,
 						isAvailable: optionStockQuantity > 0,
 					};
 				});
-				
+
 				console.log('[Product] Processed attribute:', {
 					attributeName,
 					variationId: variation.id,
@@ -527,18 +526,18 @@ export default function ProductDetailsScreen() {
 					attributes: attrs,
 				});
 			}
-			
+
 			return {
 				name: attributeName,
 				options,
 			};
 		}).filter(attr => attr.options.length > 0); // Only include attributes with options
-		
+
 		console.log('[Product] Final variantAttributes:', result.length, 'attributes');
 		result.forEach(attr => {
 			console.log('[Product] Attribute:', attr.name, 'with', attr.options.length, 'options');
 		});
-		
+
 		return result;
 	}, [normalizedVariations, product, selected]);
 
@@ -548,7 +547,7 @@ export default function ProductDetailsScreen() {
 	const handleVariantSelect = useCallback((attributeName: string, value: string | null) => {
 		setSelected((prev) => {
 			const newSelected = { ...prev };
-			
+
 			if (value === null) {
 				// Unselect: remove this attribute from selection
 				delete newSelected[attributeName];
@@ -625,7 +624,7 @@ export default function ProductDetailsScreen() {
 				const attrs = combinationVariation.attributes as any;
 				const attributeDefinitions = attrs.attributes || [];
 				const combinations = attrs.combinations || [];
-				
+
 				// Check if all required attributes are selected
 				const allAttributesSelected = attributeDefinitions.every((attrDef: any) => {
 					return newSelected[attrDef.name] !== undefined && newSelected[attrDef.name] !== null;
@@ -648,7 +647,7 @@ export default function ProductDetailsScreen() {
 							discountPercentage: matchingCombination.discountPercentage ?? matchingCombination.discount_percentage,
 							stock: matchingCombination.stockQuantity,
 						});
-						
+
 						// Create a variation object from the combination
 						setSelectedVariation({
 							...combinationVariation,
@@ -676,12 +675,12 @@ export default function ProductDetailsScreen() {
 			} else {
 				// Standard format: Find the variation row that contains this attribute
 				const variationRow = normalizedVariations.find((v) => v.name === attributeName);
-				
+
 				if (variationRow && variationRow.attributes && typeof variationRow.attributes === 'object' && 'options' in variationRow.attributes) {
 					// Find the specific option object that matches the selected value
 					const optionsArray = (variationRow.attributes as any).options;
 					const selectedOption = optionsArray.find((opt: any) => String(opt?.value) === value);
-					
+
 					if (selectedOption) {
 						// Create a variation-like object with the selected option's data
 						const matchingVariation: ProductVariation = {
@@ -710,7 +709,7 @@ export default function ProductDetailsScreen() {
 		if (!product) return [];
 
 		let images: string[] = [];
-		
+
 		// If a variation option is selected, use its images
 		if (selectedVariation?.images && Array.isArray(selectedVariation.images) && selectedVariation.images.length > 0) {
 			images = selectedVariation.images.filter(Boolean);
@@ -730,7 +729,7 @@ export default function ProductDetailsScreen() {
 				}
 			}
 		}
-		
+
 		// If no variation images, use product images
 		if (images.length === 0 && product.imageUrl) {
 			try {
@@ -764,23 +763,23 @@ export default function ProductDetailsScreen() {
 		// Check all variations for the lowest price
 		for (const variation of normalizedVariations) {
 			const attrs = variation.attributes || {};
-			
+
 			// Check if this is a combination format
 			if (typeof attrs === 'object' && !Array.isArray(attrs) && attrs.format === 'combination') {
 				const combinations = attrs.combinations || [];
-				
+
 				// Check each combination
 				for (const combo of combinations) {
 					// Calculate price for this combination
 					const priceModifier = combo.priceModifier ?? combo.price_modifier ?? 0;
 					const comboPrice = productBasePrice + parseFloat(String(priceModifier));
-					
+
 					// Apply discount if available
 					const discount = combo.discountPercentage ?? combo.discount_percentage ?? 0;
-					const finalPrice = discount > 0 
+					const finalPrice = discount > 0
 						? comboPrice * (1 - discount / 100)
 						: comboPrice;
-					
+
 					// Check stock availability
 					const stock = combo.stockQuantity ?? combo.stock_quantity ?? 0;
 					if (stock > 0 && finalPrice < lowest) {
@@ -805,27 +804,27 @@ export default function ProductDetailsScreen() {
 	const basePrice = useMemo(() => {
 		// Use original price for calculations if available (for variable products), otherwise use current price
 		const productBasePrice = (product?.originalPrice ?? product?.price) || 0;
-		
+
 		// If a variation option is selected, add its priceModifier
 		if (selectedVariation?.priceModifier !== undefined && selectedVariation.priceModifier !== null) {
 			return productBasePrice + parseFloat(String(selectedVariation.priceModifier));
 		}
-		
+
 		// Fallback to variation price if available
 		if (selectedVariation?.price !== undefined && selectedVariation.price !== null) {
 			return selectedVariation.price;
 		}
-		
+
 		// If no variation selected, use the lowest price from all variations
 		return lowestPrice;
 	}, [selectedVariation, product, lowestPrice]);
 
 	const discountedPrice = useMemo(() => {
 		if (!product || basePrice === 0) return 0;
-		
+
 		// Use combination's discount percentage if available, otherwise use product's discount
 		const discount = selectedVariation?.discountPercentage ?? product.discountPercentage ?? 0;
-		
+
 		if (discount > 0) {
 			return basePrice * (1 - discount / 100);
 		}
@@ -888,13 +887,13 @@ export default function ProductDetailsScreen() {
 		return relatedProducts.map((p) => {
 			const imageUrl = p.imageUrl
 				? (() => {
-						try {
-							const parsed = JSON.parse(p.imageUrl);
-							return Array.isArray(parsed) ? parsed[0] : p.imageUrl;
-						} catch {
-							return p.imageUrl;
-						}
-					})()
+					try {
+						const parsed = JSON.parse(p.imageUrl);
+						return Array.isArray(parsed) ? parsed[0] : p.imageUrl;
+					} catch {
+						return p.imageUrl;
+					}
+				})()
 				: undefined;
 
 			return {
@@ -950,10 +949,10 @@ export default function ProductDetailsScreen() {
 	const handleAddToCart = () => {
 		if (!product || currentStock === 0) return;
 
-		const itemName = selectedVariation 
+		const itemName = selectedVariation
 			? `${product.name}${Object.keys(selected).length > 0 ? ` (${Object.values(selected).join(', ')})` : ''}`
 			: product.name;
-		
+
 		addItem({
 			id: selectedVariation?.id || product.id,
 			productId: product.id,
@@ -966,18 +965,15 @@ export default function ProductDetailsScreen() {
 		setShowAdded(true);
 	};
 
-	const handleBuyNow = () => {
-		handleAddToCart();
-		router.push('/(buyer)/checkout/cart');
-	};
+
 
 	const handleAddVideoMessage = () => {
 		// Add product to cart first if not already added
 		if (product && currentStock > 0) {
-			const itemName = selectedVariation 
+			const itemName = selectedVariation
 				? `${product.name}${Object.keys(selected).length > 0 ? ` (${Object.values(selected).join(', ')})` : ''}`
 				: product.name;
-			
+
 			addItem({
 				id: selectedVariation?.id || product.id,
 				productId: product.id,
@@ -1046,8 +1042,8 @@ export default function ProductDetailsScreen() {
 				<View style={styles.carouselWrapper}>
 					<ProductMediaCarousel key={imageKey} images={imageUris} />
 					{/* Header Overlay */}
-					<Animated.View 
-						entering={FadeInDown.duration(300)} 
+					<Animated.View
+						entering={FadeInDown.duration(300)}
 						style={[styles.headerOverlay, { paddingTop: top + 6 }]}
 						pointerEvents="box-none"
 					>
@@ -1067,16 +1063,16 @@ export default function ProductDetailsScreen() {
 									size={20}
 									color={isInWishlist ? GIFTYY_THEME.colors.primary : GIFTYY_THEME.colors.white}
 								/>
-						</Pressable>
-					</View>
+							</Pressable>
+						</View>
 					</Animated.View>
 				</View>
 
 				{/* B - Product Title & Price Block */}
 				<Animated.View entering={FadeInUp.duration(400).delay(100)} style={styles.titleSection}>
 					<View style={styles.titleRow}>
-						<Text 
-							style={[styles.productTitle, titleStyle]} 
+						<Text
+							style={[styles.productTitle, titleStyle]}
 							numberOfLines={3}
 							ellipsizeMode="tail"
 						>
@@ -1100,8 +1096,8 @@ export default function ProductDetailsScreen() {
 					{stockStatus === 'out_of_stock' && (
 						<View style={styles.stockError}>
 							<Text style={styles.stockErrorText}>Out of stock</Text>
-					</View>
-				)}
+						</View>
+					)}
 				</Animated.View>
 
 				{/* C - Product Options / Variants (moved above vendor section) */}
@@ -1152,13 +1148,7 @@ export default function ProductDetailsScreen() {
 					</Animated.View>
 				)}
 
-				{/* F - Personalization Block (Giftyy's Magic) */}
-				<Animated.View entering={FadeInUp.duration(400).delay(300)}>
-					<AddPersonalMessageButton
-						onPress={handleAddVideoMessage}
-						hasMessage={!!videoUri}
-					/>
-				</Animated.View>
+
 
 				{/* H - Recommended Products */}
 				{recommendationProducts.length > 0 && (
@@ -1176,7 +1166,7 @@ export default function ProductDetailsScreen() {
 				price={formattedPrice}
 				originalPrice={formattedOriginalPrice}
 				onAddToCart={handleAddToCart}
-				onBuyNow={handleBuyNow}
+
 				disabled={variationsLoading || currentStock === 0}
 				stockStatus={stockStatus}
 				bottomOffset={TAB_BAR_HEIGHT + bottom}
@@ -1234,7 +1224,7 @@ const styles = StyleSheet.create({
 	},
 	errorButton: {
 		marginTop: 24,
-		paddingVertical: 12, 
+		paddingVertical: 12,
 		paddingHorizontal: 24,
 		backgroundColor: GIFTYY_THEME.colors.primary,
 		borderRadius: GIFTYY_THEME.radius.full,
