@@ -54,7 +54,7 @@ export default function GiftFinderScreen() {
 			router.push(`/(buyer)/(tabs)/product/${suggestion.productId}`);
 		} else {
 			// If no product ID, navigate to home or collections
-			router.push('/(buyer)/(tabs)/home');
+			router.push('/(buyer)/(tabs)');
 		}
 	}, [router]);
 

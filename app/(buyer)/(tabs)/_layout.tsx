@@ -9,7 +9,8 @@ export default function BuyerTabsLayout() {
 			screenOptions={{
 				headerShown: false,
 			}}>
-			<Tabs.Screen name="home" options={{ title: 'Home' }} />
+			<Tabs.Screen name="index" options={{ title: 'Home' }} />
+			<Tabs.Screen name="shop" options={{ title: 'Shop' }} />
 			<Tabs.Screen name="cart" options={{ title: 'Cart' }} />
 			<Tabs.Screen name="memory" options={{ title: 'Memories' }} />
 			<Tabs.Screen name="profile" options={{ title: 'Profile' }} />

@@ -15,29 +15,29 @@ import {
 	Text,
 	View,
 } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
 	FadeInDown,
 	FadeInUp,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 // Components
 import { MarketplaceProductCard } from '@/components/marketplace/ProductCard';
-import { EmptyWishlistState } from '@/components/wishlist/EmptyWishlistState';
-import { WishlistActionSheet } from '@/components/wishlist/WishlistActionSheet';
-import { RecommendationCarousel } from '@/components/wishlist/RecommendationCarousel';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { EmptyWishlistState } from '@/components/wishlist/EmptyWishlistState';
+import { RecommendationCarousel } from '@/components/wishlist/RecommendationCarousel';
+import { WishlistActionSheet } from '@/components/wishlist/WishlistActionSheet';
 
 // Contexts & Utils
 import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { useBottomBarVisibility } from '@/contexts/BottomBarVisibility';
 import { useCart } from '@/contexts/CartContext';
+import type { Product } from '@/contexts/ProductsContext';
 import { useProducts } from '@/contexts/ProductsContext';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { getVendorsInfo, type VendorInfo } from '@/lib/vendor-utils';
-import type { Product } from '@/contexts/ProductsContext';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -52,12 +52,12 @@ export default function WishlistScreen() {
 	const { top, bottom } = useSafeAreaInsets();
 	const router = useRouter();
 	const { setVisible } = useBottomBarVisibility();
-	
+
 	// Contexts
 	const { wishlist, removeFromWishlist } = useWishlist();
 	const { products, getProductById, loading: productsLoading } = useProducts();
 	const { addItem } = useCart();
-	
+
 	// State
 	const [refreshing, setRefreshing] = useState(false);
 	const [vendorsMap, setVendorsMap] = useState<Map<string, VendorInfo>>(new Map());
@@ -70,14 +70,14 @@ export default function WishlistScreen() {
 	useEffect(() => {
 		setVisible(true);
 	}, [setVisible]);
-	
+
 	// Get wishlist products
 	const wishlistProducts = useMemo(() => {
 		return wishlist
 			.map(item => {
 				const product = getProductById(item.productId);
 				if (!product || !product.isActive) return null;
-				
+
 				// Parse image URL
 				const imageUrl = product.imageUrl ? (() => {
 					try {
@@ -87,9 +87,9 @@ export default function WishlistScreen() {
 						return product.imageUrl;
 					}
 				})() : undefined;
-				
+
 				const vendor = product.vendorId ? vendorsMap.get(product.vendorId) : undefined;
-				
+
 				return {
 					...product,
 					addedAt: item.addedAt,
@@ -100,7 +100,7 @@ export default function WishlistScreen() {
 			})
 			.filter((p): p is Product & { addedAt: string; imageUrl?: string; vendorName?: string; vendorInfo?: VendorInfo } => p !== null);
 	}, [wishlist, products, vendorsMap, getProductById]);
-	
+
 	// Fetch vendor info
 	useEffect(() => {
 		const fetchVendors = async () => {
@@ -112,36 +112,36 @@ export default function WishlistScreen() {
 				setVendorsMap(vendors);
 			}
 		};
-		
+
 		if (wishlistProducts.length > 0) {
 			fetchVendors();
 		}
 	}, [wishlistProducts]);
-	
+
 	// Sort and filter wishlist products
 	const sortedAndFilteredProducts = useMemo(() => {
 		let filtered = [...wishlistProducts];
-		
+
 		// Apply filters
 		if (filterState.priceRange) {
 			filtered = filtered.filter(p => {
-				const price = p.discountPercentage > 0 
+				const price = p.discountPercentage > 0
 					? p.price * (1 - p.discountPercentage / 100)
 					: p.price;
 				return price >= filterState.priceRange!.min && price <= filterState.priceRange!.max;
 			});
 		}
-		
+
 		if (filterState.category) {
-			filtered = filtered.filter(p => 
+			filtered = filtered.filter(p =>
 				p.tags?.some(tag => tag.toLowerCase().includes(filterState.category!.toLowerCase()))
 			);
 		}
-		
+
 		if (filterState.vendor) {
 			filtered = filtered.filter(p => p.vendorId === filterState.vendor);
 		}
-		
+
 		// Apply sorting
 		filtered.sort((a, b) => {
 			switch (sortOption) {
@@ -162,18 +162,18 @@ export default function WishlistScreen() {
 					return 0;
 			}
 		});
-		
+
 		return filtered;
 	}, [wishlistProducts, sortOption, filterState]);
-	
+
 	// Get recommendations (products with same categories/subcategories, not in wishlist)
 	const recommendations = useMemo(() => {
 		const wishlistIds = new Set(wishlist.map(item => item.productId));
-		
+
 		// Collect all categoryIds and subcategories from wishlist products
 		const wishlistCategoryIds = new Set<string>();
 		const wishlistSubcategories = new Set<string>();
-		
+
 		wishlistProducts.forEach(product => {
 			if (product.categoryIds) {
 				product.categoryIds.forEach(catId => wishlistCategoryIds.add(catId));
@@ -182,43 +182,43 @@ export default function WishlistScreen() {
 				product.subcategories.forEach(sub => wishlistSubcategories.add(sub.toLowerCase()));
 			}
 		});
-		
+
 		// If no categories found in wishlist, return empty (can't make good recommendations)
 		if (wishlistCategoryIds.size === 0 && wishlistSubcategories.size === 0) {
 			return [];
 		}
-		
+
 		// Filter products that share at least one category or subcategory
 		const recommended = products
 			.filter(p => {
 				if (!p.isActive || wishlistIds.has(p.id)) return false;
-				
+
 				// Check if product shares any category
 				if (p.categoryIds && p.categoryIds.some(catId => wishlistCategoryIds.has(catId))) {
 					return true;
 				}
-				
+
 				// Check if product shares any subcategory
-				if (p.subcategories && p.subcategories.some(sub => 
+				if (p.subcategories && p.subcategories.some(sub =>
 					wishlistSubcategories.has(sub.toLowerCase())
 				)) {
 					return true;
 				}
-				
+
 				return false;
 			})
 			.slice(0, 10);
-		
+
 		return recommended;
 	}, [products, wishlist, wishlistProducts]);
-	
+
 	// Refresh handler
 	const onRefresh = useCallback(async () => {
 		setRefreshing(true);
 		// Wishlist is stored locally, so just refresh products
 		setTimeout(() => setRefreshing(false), 500);
 	}, []);
-	
+
 	// Handle add to cart
 	const handleAddToCart = useCallback((product: Product) => {
 		const imageUrl = product.imageUrl ? (() => {
@@ -229,7 +229,7 @@ export default function WishlistScreen() {
 				return product.imageUrl;
 			}
 		})() : undefined;
-		
+
 		addItem({
 			id: product.id,
 			productId: product.id,
@@ -241,16 +241,16 @@ export default function WishlistScreen() {
 			vendorId: product.vendorId,
 		});
 	}, [addItem]);
-	
+
 	// Handle action sheet
 	const handleLongPress = useCallback((product: Product) => {
 		setSelectedProduct(product);
 		setShowActionSheet(true);
 	}, []);
-	
+
 	const handleAction = useCallback((action: 'cart' | 'share' | 'remove') => {
 		if (!selectedProduct) return;
-		
+
 		switch (action) {
 			case 'cart':
 				handleAddToCart(selectedProduct);
@@ -262,13 +262,13 @@ export default function WishlistScreen() {
 				// TODO: Implement share functionality
 				break;
 		}
-		
+
 		setShowActionSheet(false);
 		setSelectedProduct(null);
 	}, [selectedProduct, handleAddToCart, removeFromWishlist]);
-	
+
 	const headerPaddingTop = top + 6;
-	
+
 	return (
 		<GestureHandlerRootView style={styles.container}>
 			{/* Header */}
@@ -284,9 +284,9 @@ export default function WishlistScreen() {
 				<View style={styles.headerContent}>
 					<View style={styles.headerLeft}>
 						<Pressable onPress={() => router.back()} style={styles.backButton}>
-							<IconSymbol 
-								name="chevron.left" 
-								size={24} 
+							<IconSymbol
+								name="chevron.left"
+								size={24}
 								color={GIFTYY_THEME.colors.gray700}
 							/>
 						</Pressable>
@@ -298,7 +298,7 @@ export default function WishlistScreen() {
 						</View>
 					</View>
 					{(sortedAndFilteredProducts.length > 0 || Object.keys(filterState).length > 0) && (
-						<Pressable 
+						<Pressable
 							onPress={() => setShowFilters(true)}
 							style={styles.filterButton}
 						>
@@ -307,11 +307,11 @@ export default function WishlistScreen() {
 					)}
 				</View>
 			</Animated.View>
-			
+
 			{/* Main Content */}
 			{sortedAndFilteredProducts.length === 0 && !productsLoading ? (
-				<EmptyWishlistState 
-					onExplore={() => router.push('/(buyer)/(tabs)/home')}
+				<EmptyWishlistState
+					onExplore={() => router.push('/(buyer)/(tabs)/shop')}
 				/>
 			) : (
 				<ScrollView
@@ -333,8 +333,8 @@ export default function WishlistScreen() {
 					{/* Sort Bar */}
 					{sortedAndFilteredProducts.length > 0 && (
 						<Animated.View entering={FadeInUp.duration(400).delay(100)} style={styles.sortBar}>
-							<ScrollView 
-								horizontal 
+							<ScrollView
+								horizontal
 								showsHorizontalScrollIndicator={false}
 								contentContainerStyle={styles.sortBarContent}
 							>
@@ -352,16 +352,16 @@ export default function WishlistScreen() {
 											sortOption === option && styles.sortChipTextActive,
 										]}>
 											{option === 'newest' ? 'Newest' :
-											 option === 'price-low' ? 'Price: Low to High' :
-											 option === 'price-high' ? 'Price: High to Low' :
-											 'Most Popular'}
+												option === 'price-low' ? 'Price: Low to High' :
+													option === 'price-high' ? 'Price: High to Low' :
+														'Most Popular'}
 										</Text>
 									</Pressable>
 								))}
 							</ScrollView>
 						</Animated.View>
 					)}
-					
+
 					{/* Wishlist Grid */}
 					{sortedAndFilteredProducts.length > 0 && (
 						<Animated.View entering={FadeInUp.duration(400).delay(200)}>
@@ -376,17 +376,17 @@ export default function WishlistScreen() {
 											return product.imageUrl;
 										}
 									})() : undefined;
-									
+
 									// Ensure 3-column layout - remove marginRight from last item in each row
 									const isLastInRow = (index + 1) % 3 === 0;
-									
+
 									return (
 										<Animated.View
 											key={product.id}
 											entering={FadeInUp.duration(400).delay(300 + index * 50)}
-											style={{ 
-												marginRight: isLastInRow ? 0 : 10, 
-												marginBottom: 10 
+											style={{
+												marginRight: isLastInRow ? 0 : 10,
+												marginBottom: 10
 											}}
 										>
 											<MarketplaceProductCard
@@ -408,7 +408,7 @@ export default function WishlistScreen() {
 							</View>
 						</Animated.View>
 					)}
-					
+
 					{/* Recommendations Section */}
 					{recommendations.length > 0 && sortedAndFilteredProducts.length > 0 && (
 						<Animated.View entering={FadeInUp.duration(400).delay(500)}>
@@ -425,7 +425,7 @@ export default function WishlistScreen() {
 					)}
 				</ScrollView>
 			)}
-			
+
 			{/* Action Sheet */}
 			<WishlistActionSheet
 				visible={showActionSheet}
@@ -436,7 +436,7 @@ export default function WishlistScreen() {
 				onAction={handleAction}
 				productName={selectedProduct?.name}
 			/>
-			
+
 			{/* Filters Modal */}
 			<Modal
 				visible={showFilters}

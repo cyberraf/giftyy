@@ -1,10 +1,10 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Pressable, View, StyleSheet, useWindowDimensions, Animated, PanResponder, Modal, TextInput, Text, Image, ScrollView, ActivityIndicator } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, usePathname } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import * as FileSystem from 'expo-file-system/legacy';
 import { useAISection } from '@/contexts/AISectionContext';
+import * as FileSystem from 'expo-file-system/legacy';
+import { usePathname, useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Image, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function FloatingAI() {
   const { bottom } = useSafeAreaInsets();
@@ -71,7 +71,7 @@ export default function FloatingAI() {
           last.current = cl;
           pan.setValue(cl);
         }
-      } catch {}
+      } catch { }
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -95,7 +95,7 @@ export default function FloatingAI() {
         Animated.spring(pan, { toValue: pos, useNativeDriver: false, bounciness: 8 }).start();
         try {
           await FileSystem.writeAsStringAsync(POS_FILE, JSON.stringify(pos));
-        } catch {}
+        } catch { }
         // Reset so next tap is treated as a click
         moved.current = false;
       },
@@ -181,7 +181,7 @@ export default function FloatingAI() {
                 setLoading(true);
                 setTimeout(() => {
                   setPromptOpen(false);
-                  router.replace({ pathname: '/(buyer)/(tabs)/home', params: { ai: aiText.trim() } });
+                  router.replace({ pathname: '/(buyer)/(tabs)/shop', params: { ai: aiText.trim() } });
                   setAiText('');
                   setLoading(false);
                 }, 500);

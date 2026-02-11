@@ -64,7 +64,7 @@ export function SearchEmptyState({ searchQuery }: SearchEmptyStateProps) {
 								<Pressable
 									style={styles.categoryCard}
 									onPress={() => router.push({
-										pathname: '/(buyer)/(tabs)/home',
+										pathname: '/(buyer)/(tabs)/shop',
 										params: { category: category.id },
 									})}
 								>

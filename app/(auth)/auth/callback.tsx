@@ -97,7 +97,7 @@ export default function AuthCallbackScreen() {
 			console.log('✅ User authenticated via auth state change!');
 			hasProcessedRef.current = true;
 			setProcessing(false);
-			router.replace('/(buyer)/(tabs)/home');
+			router.replace('/(buyer)/(tabs)');
 		}
 	}, [user, router]);
 
@@ -262,7 +262,7 @@ export default function AuthCallbackScreen() {
 							// Ensure AuthContext picks up the new session + profile immediately
 							await syncAuth();
 							// Navigate to home - the auth state change will handle profile loading
-							router.replace('/(buyer)/(tabs)/home');
+							router.replace('/(buyer)/(tabs)');
 							return;
 						} else {
 							console.error('❌ Session not found after setting');
@@ -299,10 +299,10 @@ export default function AuthCallbackScreen() {
 						// Small delay to ensure auth state has propagated
 						await new Promise(resolve => setTimeout(resolve, 300));
 						// Navigate to home - force a refresh by using push then replace
-						router.push('/(buyer)/(tabs)/home');
+						router.push('/(buyer)/(tabs)');
 						// Small delay then replace to ensure navigation completes
 						setTimeout(() => {
-							router.replace('/(buyer)/(tabs)/home');
+							router.replace('/(buyer)/(tabs)');
 						}, 100);
 						return;
 					}
@@ -317,10 +317,10 @@ export default function AuthCallbackScreen() {
 						// Small delay to ensure auth state has propagated
 						await new Promise(resolve => setTimeout(resolve, 300));
 						// Navigate to home - force a refresh by using push then replace
-						router.push('/(buyer)/(tabs)/home');
+						router.push('/(buyer)/(tabs)');
 						// Small delay then replace to ensure navigation completes
 						setTimeout(() => {
-							router.replace('/(buyer)/(tabs)/home');
+							router.replace('/(buyer)/(tabs)');
 						}, 100);
 						return;
 					}
@@ -372,9 +372,9 @@ export default function AuthCallbackScreen() {
 				// Wait for interactions and state to propagate, then navigate
 				InteractionManager.runAfterInteractions(async () => {
 					await new Promise(resolve => setTimeout(resolve, 300));
-					router.push('/(buyer)/(tabs)/home');
+					router.push('/(buyer)/(tabs)');
 					setTimeout(() => {
-						router.replace('/(buyer)/(tabs)/home');
+						router.replace('/(buyer)/(tabs)');
 					}, 100);
 				});
 				return;
@@ -393,9 +393,9 @@ export default function AuthCallbackScreen() {
 				// Wait for interactions and state to propagate, then navigate
 				InteractionManager.runAfterInteractions(async () => {
 					await new Promise(resolve => setTimeout(resolve, 300));
-					router.push('/(buyer)/(tabs)/home');
+					router.push('/(buyer)/(tabs)');
 					setTimeout(() => {
-						router.replace('/(buyer)/(tabs)/home');
+						router.replace('/(buyer)/(tabs)');
 					}, 100);
 				});
 				return;

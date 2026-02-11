@@ -40,11 +40,18 @@ type TabIcon = {
 };
 
 const TAB_ICONS: Record<string, TabIcon> = {
-	home: {
+	// "index" is the Home tab route (/(buyer)/(tabs)/index.tsx)
+	index: {
 		name: 'home',
 		inactive: 'house',
 		active: 'house.fill',
 		label: 'Home',
+	},
+	shop: {
+		name: 'shop',
+		inactive: 'bag',
+		active: 'bag.fill',
+		label: 'Shop',
 	},
 	cart: {
 		name: 'cart',
@@ -75,7 +82,7 @@ interface NavItemProps {
 
 function NavItem({ route, isFocused, onPress, totalQuantity = 0 }: NavItemProps) {
 	const iconConfig = TAB_ICONS[route.name] || TAB_ICONS.home;
-	
+
 	// Animation values
 	const scale = useSharedValue(isFocused ? 1.1 : 1);
 	const opacity = useSharedValue(isFocused ? 1 : 0.6);
@@ -98,7 +105,7 @@ function NavItem({ route, isFocused, onPress, totalQuantity = 0 }: NavItemProps)
 				damping: 12,
 				stiffness: 200,
 			});
-			
+
 			// Sparkle burst for Memories tab
 			if (route.name === 'memory') {
 				sparkleOpacity.value = withSequence(
@@ -222,9 +229,9 @@ function NavItem({ route, isFocused, onPress, totalQuantity = 0 }: NavItemProps)
 			</View>
 
 			{/* Label */}
-			<Animated.Text 
+			<Animated.Text
 				style={[
-					styles.label, 
+					styles.label,
 					{ color: isFocused ? GIFTYY_THEME.colors.primary : GIFTYY_THEME.colors.gray700 },
 					labelAnimatedStyle
 				]}
@@ -239,7 +246,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
 	const { totalQuantity } = useCart();
 	const { visible } = useBottomBarVisibility();
 	const { bottom } = useSafeAreaInsets();
-	const allowed = new Set(['home', 'cart', 'memory', 'profile']);
+	const allowed = new Set(['index', 'shop', 'cart', 'memory', 'profile']);
 	const bottomInset = Math.max(bottom, 0);
 	const barHeight = 76 + bottomInset;
 
@@ -251,7 +258,7 @@ export default function CustomTabBar({ state, descriptors, navigation }: BottomT
 
 	// Floating animation for the bar
 	const floatOffset = useSharedValue(0);
-	
+
 	useEffect(() => {
 		floatOffset.value = withRepeat(
 			withSequence(

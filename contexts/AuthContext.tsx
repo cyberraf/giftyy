@@ -316,7 +316,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				// Apply session immediately so the app can hydrate without needing a restart.
 				// (onAuthStateChange should also fire, but this avoids races.)
 				await applySession(data.session ?? null);
-				router.replace('/(buyer)/(tabs)/home');
+				router.replace('/(buyer)/(tabs)');
 			}
 
 			return { error: null };

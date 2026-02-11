@@ -1,8 +1,8 @@
-import React from 'react';
-import { View, Text, StyleSheet, Pressable } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter, useLocalSearchParams } from 'expo-router';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Lightweight full-screen AI access. It navigates back to Home with ?ai= prompt.
 export default function GiftyyAIScreen() {
@@ -38,7 +38,7 @@ export default function GiftyyAIScreen() {
             const examplePrompt = 'Romantic gift for girlfriend under $50';
             console.log('[GiftyyAI Screen] User clicked example prompt');
             console.log('[GiftyyAI Screen] Navigating to home with AI prompt:', examplePrompt);
-            router.replace({ pathname: '/(buyer)/(tabs)/home', params: { ai: examplePrompt } });
+            router.replace({ pathname: '/(buyer)/(tabs)/shop', params: { ai: examplePrompt } });
           }}
           style={{ marginTop: 12, borderRadius: 10, backgroundColor: '#f3f4f6', padding: 12 }}
         >

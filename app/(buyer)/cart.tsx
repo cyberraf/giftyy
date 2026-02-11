@@ -60,55 +60,55 @@ export default function CartScreen() {
 			<View style={[styles.container, { paddingTop: top + 8 }]}>
 				<Header />
 
-			{items.length === 0 ? (
-				<EmptyState onStart={() => router.push('/(buyer)/(tabs)/home')} />
-			) : (
-				<>
-					<FlatList
-						data={items}
-						keyExtractor={(item) => item.id}
-						renderItem={({ item }) => (
-							<CartItemCard
-								item={item}
-								onQtyChange={(q) => updateQuantity(item.id, q)}
-								onRemove={() => removeItem(item.id)}
-							/>
-						)}
-						ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
-						contentContainerStyle={{ paddingBottom: bottom + 160, paddingTop: 12 }}
-						refreshControl={
-							<RefreshControl
-								refreshing={refreshing}
-								onRefresh={onRefresh}
-								tintColor={PRIMARY}
-								colors={[PRIMARY]}
-							/>
-						}
-						ListFooterComponent={
-							<View style={{ gap: 16, marginTop: 6 }}>
-								<SummaryCard
-									subtotal={subtotal}
-									deliveryFee={deliveryFee}
-									serviceFee={serviceFee}
-									estimatedTax={estimatedTax}
-									total={total}
-									itemCount={totalQuantity}
-									onCheckout={() => router.push('/(buyer)/checkout/design')}
+				{items.length === 0 ? (
+					<EmptyState onStart={() => router.push('/(buyer)/(tabs)/shop')} />
+				) : (
+					<>
+						<FlatList
+							data={items}
+							keyExtractor={(item) => item.id}
+							renderItem={({ item }) => (
+								<CartItemCard
+									item={item}
+									onQtyChange={(q) => updateQuantity(item.id, q)}
+									onRemove={() => removeItem(item.id)}
 								/>
-								<ClearRow count={totalQuantity} onClear={clear} />
-							</View>
-						}
-						ListEmptyComponent={<EmptyState onStart={() => router.push('/(buyer)/(tabs)/home')} />}
-					/>
+							)}
+							ItemSeparatorComponent={() => <View style={{ height: 10 }} />}
+							contentContainerStyle={{ paddingBottom: bottom + 160, paddingTop: 12 }}
+							refreshControl={
+								<RefreshControl
+									refreshing={refreshing}
+									onRefresh={onRefresh}
+									tintColor={PRIMARY}
+									colors={[PRIMARY]}
+								/>
+							}
+							ListFooterComponent={
+								<View style={{ gap: 16, marginTop: 6 }}>
+									<SummaryCard
+										subtotal={subtotal}
+										deliveryFee={deliveryFee}
+										serviceFee={serviceFee}
+										estimatedTax={estimatedTax}
+										total={total}
+										itemCount={totalQuantity}
+										onCheckout={() => router.push('/(buyer)/checkout/design')}
+									/>
+									<ClearRow count={totalQuantity} onClear={clear} />
+								</View>
+							}
+							ListEmptyComponent={<EmptyState onStart={() => router.push('/(buyer)/(tabs)/shop')} />}
+						/>
 
-					<CheckoutBar
-						bottomInset={bottom}
-						total={total}
-						count={totalQuantity}
-						onCheckout={() => router.push('/(buyer)/checkout/design')}
-					/>
-				</>
-			)}
+						<CheckoutBar
+							bottomInset={bottom}
+							total={total}
+							count={totalQuantity}
+							onCheckout={() => router.push('/(buyer)/checkout/design')}
+						/>
+					</>
+				)}
 			</View>
 		</GestureHandlerRootView>
 	);

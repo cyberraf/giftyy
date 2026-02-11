@@ -293,9 +293,9 @@ export default function Index() {
 								// Wait for interactions and state to propagate, then navigate
 								await new Promise(resolve => InteractionManager.runAfterInteractions(() => resolve(undefined)));
 								await new Promise(resolve => setTimeout(resolve, 300));
-								router.push('/(buyer)/(tabs)/home');
+								router.push('/(buyer)/(tabs)');
 								setTimeout(() => {
-									router.replace('/(buyer)/(tabs)/home');
+									router.replace('/(buyer)/(tabs)');
 								}, 100);
 								return;
 							} else {
@@ -334,9 +334,9 @@ export default function Index() {
 							// Wait for interactions and state to propagate, then navigate
 							await new Promise(resolve => InteractionManager.runAfterInteractions(() => resolve(undefined)));
 							await new Promise(resolve => setTimeout(resolve, 300));
-							router.push('/(buyer)/(tabs)/home');
+							router.push('/(buyer)/(tabs)');
 							setTimeout(() => {
-								router.replace('/(buyer)/(tabs)/home');
+								router.replace('/(buyer)/(tabs)');
 							}, 100);
 							return;
 						}
@@ -406,9 +406,9 @@ export default function Index() {
 							await new Promise(resolve => InteractionManager.runAfterInteractions(() => resolve(undefined)));
 							await new Promise(resolve => setTimeout(resolve, 300));
 							// Navigate to home - force a refresh
-							router.push('/(buyer)/(tabs)/home');
+							router.push('/(buyer)/(tabs)');
 							setTimeout(() => {
-								router.replace('/(buyer)/(tabs)/home');
+								router.replace('/(buyer)/(tabs)');
 							}, 100);
 							return;
 						} else if (error) {
@@ -601,7 +601,7 @@ export default function Index() {
 		if (__DEV__) {
 			console.log('🔵 Redirecting to home');
 		}
-		return <Redirect href="/(buyer)/(tabs)/home" />;
+		return <Redirect href="/(buyer)/(tabs)" />;
 	}
 
 	if (__DEV__) {

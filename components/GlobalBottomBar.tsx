@@ -8,8 +8,8 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { useBottomBarVisibility } from '@/contexts/BottomBarVisibility';
 import { useCart } from '@/contexts/CartContext';
-import { useRouter, usePathname } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
+import { usePathname, useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
 import {
 	Pressable,
@@ -46,7 +46,7 @@ const TAB_ICONS: TabIcon[] = [
 		inactive: 'house',
 		active: 'house.fill',
 		label: 'Home',
-		route: '/(buyer)/(tabs)/home',
+		route: '/(buyer)/(tabs)', // Home index route
 	},
 	{
 		name: 'cart',
@@ -101,7 +101,7 @@ function NavItem({ iconConfig, isFocused, onPress, totalQuantity = 0 }: NavItemP
 				damping: 12,
 				stiffness: 200,
 			});
-			
+
 			// Sparkle burst for Memories tab
 			if (iconConfig.name === 'memory') {
 				sparkleOpacity.value = withSequence(
@@ -221,9 +221,9 @@ function NavItem({ iconConfig, isFocused, onPress, totalQuantity = 0 }: NavItemP
 			</View>
 
 			{/* Label */}
-			<Animated.Text 
+			<Animated.Text
 				style={[
-					styles.label, 
+					styles.label,
 					{ color: isFocused ? GIFTYY_THEME.colors.primary : GIFTYY_THEME.colors.gray700 },
 					labelAnimatedStyle
 				]}
@@ -245,7 +245,7 @@ export default function GlobalBottomBar() {
 
 	// Floating animation for the bar
 	const floatOffset = useSharedValue(0);
-	
+
 	useEffect(() => {
 		floatOffset.value = withRepeat(
 			withSequence(
@@ -264,7 +264,7 @@ export default function GlobalBottomBar() {
 
 	// Determine which tab is active based on pathname
 	const getActiveTab = () => {
-		if (pathname?.includes('/home')) return 'home';
+		if (pathname === '/(buyer)/(tabs)' || pathname === '/(buyer)/(tabs)/') return 'home';
 		if (pathname?.includes('/cart')) return 'cart';
 		if (pathname?.includes('/memory')) return 'memory';
 		if (pathname?.includes('/profile')) return 'profile';

@@ -142,12 +142,12 @@ export default function ConfirmationScreen() {
 
     const handleGoHome = () => {
         reset();
-        router.replace('/(buyer)/(tabs)/home');
+        router.replace('/(buyer)/(tabs)');
     };
 
     const handleSendAnother = () => {
         reset();
-        router.replace('/(buyer)/(tabs)/home');
+        router.replace('/(buyer)/(tabs)');
     };
 
     const handleViewOrders = () => {

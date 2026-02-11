@@ -832,8 +832,8 @@ export default function RecipientsScreen() {
 							</View>
 						</CollapsibleSection>
 
-						{/* Suggested Products */}
-						{item.products.length > 0 && (
+						{/* Suggested Products (temporarily disabled on mobile to avoid runtime text rendering issue) */}
+						{false && item.products.length > 0 && (
 							<View style={styles.productsSection}>
 								<View style={styles.productsSectionHeader}>
 									<View style={styles.productsSectionHeaderLeft}>

@@ -11,11 +11,11 @@ import * as Haptics from 'expo-haptics';
 import React, { useState } from 'react';
 import { Dimensions, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
-    useAnimatedStyle,
-    useSharedValue,
-    withSequence,
-    withSpring,
-    withTiming,
+	useAnimatedStyle,
+	useSharedValue,
+	withSequence,
+	withSpring,
+	withTiming,
 } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -82,24 +82,24 @@ export function MarketplaceProductCard({
 	const handleWishlistPress = async (e: any) => {
 		e?.stopPropagation();
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-		
+
 		const newWishlistState = !isWishlist;
 		setIsWishlist(newWishlistState);
-		
+
 		// Animate heart
 		heartScale.value = withSequence(
 			withTiming(1.4, { duration: 150 }),
 			withSpring(1, { damping: 10, stiffness: 300 })
 		);
 		wishlistOpacity.value = withTiming(newWishlistState ? 1 : 0.6, { duration: 200 });
-		
+
 		await toggleWishlist(id);
 	};
 
 	const handleAddToCart = async (e: any) => {
 		e?.stopPropagation();
 		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-		
+
 		const product = {
 			id,
 			name,
@@ -107,7 +107,7 @@ export function MarketplaceProductCard({
 			image: imageUrl,
 			vendorId,
 		};
-		
+
 		await addToCart(product);
 	};
 
@@ -120,7 +120,7 @@ export function MarketplaceProductCard({
 		}
 	})() : undefined;
 
-	const finalPrice = discountPercentage > 0 
+	const finalPrice = discountPercentage > 0
 		? price * (1 - discountPercentage / 100)
 		: price;
 
@@ -140,7 +140,7 @@ export function MarketplaceProductCard({
 						<IconSymbol name="photo" size={24} color={GIFTYY_THEME.colors.gray300} />
 					</View>
 				)}
-				
+
 				{/* Discount Badge */}
 				{discountPercentage > 0 && (
 					<View style={styles.discountBadge}>
@@ -220,9 +220,7 @@ const styles = StyleSheet.create({
 		backgroundColor: '#FFFFFF',
 		borderRadius: 12,
 		overflow: 'hidden',
-		borderWidth: 1,
-		borderColor: GIFTYY_THEME.colors.borderLight,
-		...GIFTYY_THEME.shadows.sm,
+		...GIFTYY_THEME.shadows.md,
 	},
 	imageContainer: {
 		width: '100%',

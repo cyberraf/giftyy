@@ -18,16 +18,15 @@ import {
 } from 'react-native';
 import Animated, {
 	FadeInDown,
-	FadeInUp,
-	useAnimatedStyle,
+	FadeInUp
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Components
 import { DealCategoryTabs } from '@/components/deals/DealCategoryTabs';
-import { MarketplaceProductCard } from '@/components/marketplace/ProductCard';
 import { LightningDealCard } from '@/components/deals/LightningDealCard';
 import { VendorPromotionCard } from '@/components/deals/VendorPromotionCard';
+import { MarketplaceProductCard } from '@/components/marketplace/ProductCard';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 // Contexts & Utils
@@ -58,10 +57,10 @@ export default function DealsScreen() {
 	const { top, bottom } = useSafeAreaInsets();
 	const router = useRouter();
 	const { setVisible } = useBottomBarVisibility();
-	
+
 	// Contexts
 	const { products, loading, refreshProducts } = useProducts();
-	
+
 	// State
 	const [refreshing, setRefreshing] = useState(false);
 	const [vendorsMap, setVendorsMap] = useState<Map<string, VendorInfo>>(new Map());
@@ -74,12 +73,12 @@ export default function DealsScreen() {
 		maxDiscount: null,
 		sortBy: 'discount-high',
 	});
-	
+
 	// Ensure bottom bar is visible
 	useEffect(() => {
 		setVisible(true);
 	}, [setVisible]);
-	
+
 	// Fetch vendor info for products
 	useEffect(() => {
 		const fetchVendors = async () => {
@@ -91,12 +90,12 @@ export default function DealsScreen() {
 				setVendorsMap(vendors);
 			}
 		};
-		
+
 		if (products.length > 0) {
 			fetchVendors();
 		}
 	}, [products]);
-	
+
 	// Get all products with discounts
 	const dealsProducts = useMemo(() => {
 		return products
@@ -111,7 +110,7 @@ export default function DealsScreen() {
 						return p.imageUrl;
 					}
 				})() : undefined;
-				
+
 				return {
 					...p,
 					vendorName: vendor?.storeName,
@@ -120,11 +119,11 @@ export default function DealsScreen() {
 				};
 			});
 	}, [products, vendorsMap]);
-	
+
 	// Filter deals by category and additional filters
 	const filteredDeals = useMemo(() => {
 		let filtered = [...dealsProducts];
-		
+
 		// Apply category filter
 		switch (activeCategory) {
 			case 'flash':
@@ -136,7 +135,7 @@ export default function DealsScreen() {
 				break;
 			case 'seasonal':
 				// Seasonal/occasion-based products
-				filtered = filtered.filter(p => 
+				filtered = filtered.filter(p =>
 					p.tags?.some(tag => ['birthday', 'valentine', 'christmas', 'mother', 'father', 'holiday', 'anniversary'].includes(tag.toLowerCase())) ||
 					p.occasionTags?.some(tag => ['birthday', 'valentine', 'christmas', 'mother', 'father'].includes(tag.toLowerCase()))
 				);
@@ -158,7 +157,7 @@ export default function DealsScreen() {
 				filtered = filtered.filter(p => (p.discountPercentage || 0) >= 50);
 				break;
 		}
-		
+
 		// Apply price filters
 		if (filters.minPrice !== null) {
 			filtered = filtered.filter(p => {
@@ -168,7 +167,7 @@ export default function DealsScreen() {
 				return finalPrice >= filters.minPrice!;
 			});
 		}
-		
+
 		if (filters.maxPrice !== null) {
 			filtered = filtered.filter(p => {
 				const price = p.price || 0;
@@ -177,16 +176,16 @@ export default function DealsScreen() {
 				return finalPrice <= filters.maxPrice!;
 			});
 		}
-		
+
 		// Apply discount filters
 		if (filters.minDiscount !== null) {
 			filtered = filtered.filter(p => (p.discountPercentage || 0) >= filters.minDiscount!);
 		}
-		
+
 		if (filters.maxDiscount !== null) {
 			filtered = filtered.filter(p => (p.discountPercentage || 0) <= filters.maxDiscount!);
 		}
-		
+
 		// Apply sorting
 		switch (filters.sortBy) {
 			case 'discount-high':
@@ -216,17 +215,17 @@ export default function DealsScreen() {
 				filtered.sort((a, b) => (b.name || '').localeCompare(a.name || ''));
 				break;
 		}
-		
+
 		return filtered;
 	}, [dealsProducts, activeCategory, filters]);
-	
+
 	// Get flash deals (top 6 highest discounts)
 	const flashDeals = useMemo(() => {
 		return dealsProducts
 			.sort((a, b) => (b.discountPercentage || 0) - (a.discountPercentage || 0))
 			.slice(0, 6);
 	}, [dealsProducts]);
-	
+
 	// Get lightning deals (flash deals with simulated stock)
 	const lightningDeals = useMemo(() => {
 		return flashDeals.slice(0, 3).map((deal, index) => ({
@@ -235,7 +234,7 @@ export default function DealsScreen() {
 			totalStock: 100,
 		}));
 	}, [flashDeals]);
-	
+
 	// Get vendor promotions (unique vendors)
 	const vendorPromotions = useMemo(() => {
 		const vendorMap = new Map<string, Product[]>();
@@ -247,7 +246,7 @@ export default function DealsScreen() {
 				vendorMap.get(product.vendorId)!.push(product);
 			}
 		});
-		
+
 		return Array.from(vendorMap.entries())
 			.filter(([_, products]) => products.length > 0)
 			.slice(0, 4)
@@ -258,15 +257,15 @@ export default function DealsScreen() {
 			}))
 			.filter(item => item.vendor);
 	}, [dealsProducts, vendorsMap]);
-	
+
 	// Check if filters are active (beyond default state)
 	const hasActiveFilters = useMemo(() => {
-		return filters.minPrice !== null || 
-		       filters.maxPrice !== null || 
-		       filters.minDiscount !== null || 
-		       filters.sortBy !== 'discount-high';
+		return filters.minPrice !== null ||
+			filters.maxPrice !== null ||
+			filters.minDiscount !== null ||
+			filters.sortBy !== 'discount-high';
 	}, [filters]);
-	
+
 	// Refresh handler
 	const onRefresh = useCallback(async () => {
 		setRefreshing(true);
@@ -276,12 +275,12 @@ export default function DealsScreen() {
 			setRefreshing(false);
 		}
 	}, [refreshProducts]);
-	
+
 	const headerPaddingTop = top + 6;
 	// Calculate responsive header height: original base (110) + safe area top
 	// Original was 110px (for devices without notch), now adapts to safe area
 	const headerHeight = 110 + top;
-	
+
 	return (
 		<View style={styles.container}>
 			{/* Header */}
@@ -297,9 +296,9 @@ export default function DealsScreen() {
 				<View style={styles.headerContent}>
 					<View style={styles.headerLeft}>
 						<Pressable onPress={() => router.back()} style={styles.backButton}>
-							<IconSymbol 
-								name="chevron.left" 
-								size={24} 
+							<IconSymbol
+								name="chevron.left"
+								size={24}
 								color={GIFTYY_THEME.colors.gray700}
 							/>
 						</Pressable>
@@ -310,7 +309,7 @@ export default function DealsScreen() {
 							</Text>
 						</View>
 					</View>
-					<Pressable 
+					<Pressable
 						onPress={() => setShowFilters(true)}
 						style={styles.filterButton}
 					>
@@ -330,9 +329,9 @@ export default function DealsScreen() {
 				style={styles.scrollView}
 				contentContainerStyle={[
 					styles.scrollContent,
-					{ 
+					{
 						paddingTop: headerHeight + GIFTYY_THEME.spacing.sm, // Responsive padding based on header height
-						paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 24 
+						paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 24
 					},
 				]}
 				showsVerticalScrollIndicator={false}
@@ -358,7 +357,7 @@ export default function DealsScreen() {
 						</Text>
 						<Pressable
 							style={styles.emptyCta}
-							onPress={() => router.push('/(buyer)/(tabs)/home')}
+							onPress={() => router.push('/(buyer)/(tabs)/shop')}
 						>
 							<Text style={styles.emptyCtaText}>Explore All Gifts</Text>
 						</Pressable>
@@ -370,117 +369,117 @@ export default function DealsScreen() {
 							activeCategory={activeCategory}
 							onCategoryChange={setActiveCategory}
 						/>
-						
+
 						{/* Show other sections only when no filters are active */}
 						{!hasActiveFilters && (
 							<>
 								{/* Lightning Deals Section */}
 								{lightningDeals.length > 0 && (
-							<Animated.View entering={FadeInUp.duration(400).delay(200)}>
-								<View style={styles.sectionHeader}>
-									<IconSymbol name="bolt.fill" size={20} color={GIFTYY_THEME.colors.error} />
-									<Text style={styles.sectionTitle}>Lightning Deals ⚡</Text>
-								</View>
-								<ScrollView
-									horizontal
-									showsHorizontalScrollIndicator={false}
-									contentContainerStyle={styles.lightningDealsContainer}
-								>
-									{lightningDeals.map((deal, index) => (
-										<LightningDealCard
-											key={deal.id}
-											product={deal}
-											stockClaimed={deal.stockClaimed || 0}
-											totalStock={deal.totalStock || 100}
-											onPress={() => router.push({
-												pathname: '/(buyer)/(tabs)/product/[id]',
-												params: { id: deal.id },
-											})}
-										/>
-									))}
-								</ScrollView>
-							</Animated.View>
-						)}
-						
-						{/* Vendor Promotions */}
-						{vendorPromotions.length > 0 && (
-							<Animated.View entering={FadeInUp.duration(400).delay(300)}>
-								<View style={styles.sectionHeader}>
-									<IconSymbol name="storefront.fill" size={20} color={GIFTYY_THEME.colors.primary} />
-									<Text style={styles.sectionTitle}>Vendor Specials</Text>
-								</View>
-								<ScrollView
-									horizontal
-									showsHorizontalScrollIndicator={false}
-									contentContainerStyle={styles.vendorPromotionsContainer}
-								>
-									{vendorPromotions.map((promo, index) => (
-										<VendorPromotionCard
-											key={promo.vendor?.id || index}
-											vendor={promo.vendor!}
-											discount={promo.discount}
-											productCount={promo.products.length}
-											onPress={() => router.push({
-												pathname: '/(buyer)/vendor/[id]',
-												params: { id: promo.vendor!.id },
-											})}
-										/>
-									))}
-								</ScrollView>
-							</Animated.View>
-						)}
-						
-						{/* Trending Right Now Grid (3 columns) */}
-						{filteredDeals.length > 0 && (
-							<Animated.View entering={FadeInUp.duration(400).delay(400)}>
-								<View style={styles.sectionHeader}>
-									<IconSymbol name="flame.fill" size={20} color={GIFTYY_THEME.colors.error} />
-									<Text style={styles.sectionTitle}>Trending Right Now</Text>
-								</View>
-								<View style={styles.dealsGrid}>
-									{filteredDeals.slice(0, 12).map((product, index) => {
-										const isLastInRow = (index + 1) % 3 === 0;
-										return (
-											<Animated.View
-												key={`${product.id}-trending`}
-												entering={FadeInUp.duration(400).delay(500 + index * 40)}
-												style={{
-													marginRight: isLastInRow ? 0 : 12,
-													marginBottom: 12,
-												}}
-											>
-												<MarketplaceProductCard
-													id={product.id}
-													name={product.name}
-													price={product.price}
-													originalPrice={product.originalPrice}
-													discountPercentage={product.discountPercentage}
-													image={(() => {
-														try {
-															const parsed = JSON.parse(product.imageUrl || '');
-															return Array.isArray(parsed) ? parsed[0] : product.imageUrl;
-														} catch {
-															return product.imageUrl;
-														}
-													})()}
-													vendorName={product.vendorId ? vendorsMap.get(product.vendorId)?.storeName : undefined}
-													onPress={() =>
-														router.push({
-															pathname: '/(buyer)/(tabs)/product/[id]',
-															params: { id: product.id },
-														})
-													}
-													width={CARD_WIDTH}
+									<Animated.View entering={FadeInUp.duration(400).delay(200)}>
+										<View style={styles.sectionHeader}>
+											<IconSymbol name="bolt.fill" size={20} color={GIFTYY_THEME.colors.error} />
+											<Text style={styles.sectionTitle}>Lightning Deals ⚡</Text>
+										</View>
+										<ScrollView
+											horizontal
+											showsHorizontalScrollIndicator={false}
+											contentContainerStyle={styles.lightningDealsContainer}
+										>
+											{lightningDeals.map((deal, index) => (
+												<LightningDealCard
+													key={deal.id}
+													product={deal}
+													stockClaimed={deal.stockClaimed || 0}
+													totalStock={deal.totalStock || 100}
+													onPress={() => router.push({
+														pathname: '/(buyer)/(tabs)/product/[id]',
+														params: { id: deal.id },
+													})}
 												/>
-											</Animated.View>
-										);
-									})}
-								</View>
-							</Animated.View>
+											))}
+										</ScrollView>
+									</Animated.View>
+								)}
+
+								{/* Vendor Promotions */}
+								{vendorPromotions.length > 0 && (
+									<Animated.View entering={FadeInUp.duration(400).delay(300)}>
+										<View style={styles.sectionHeader}>
+											<IconSymbol name="storefront.fill" size={20} color={GIFTYY_THEME.colors.primary} />
+											<Text style={styles.sectionTitle}>Vendor Specials</Text>
+										</View>
+										<ScrollView
+											horizontal
+											showsHorizontalScrollIndicator={false}
+											contentContainerStyle={styles.vendorPromotionsContainer}
+										>
+											{vendorPromotions.map((promo, index) => (
+												<VendorPromotionCard
+													key={promo.vendor?.id || index}
+													vendor={promo.vendor!}
+													discount={promo.discount}
+													productCount={promo.products.length}
+													onPress={() => router.push({
+														pathname: '/(buyer)/vendor/[id]',
+														params: { id: promo.vendor!.id },
+													})}
+												/>
+											))}
+										</ScrollView>
+									</Animated.View>
+								)}
+
+								{/* Trending Right Now Grid (3 columns) */}
+								{filteredDeals.length > 0 && (
+									<Animated.View entering={FadeInUp.duration(400).delay(400)}>
+										<View style={styles.sectionHeader}>
+											<IconSymbol name="flame.fill" size={20} color={GIFTYY_THEME.colors.error} />
+											<Text style={styles.sectionTitle}>Trending Right Now</Text>
+										</View>
+										<View style={styles.dealsGrid}>
+											{filteredDeals.slice(0, 12).map((product, index) => {
+												const isLastInRow = (index + 1) % 3 === 0;
+												return (
+													<Animated.View
+														key={`${product.id}-trending`}
+														entering={FadeInUp.duration(400).delay(500 + index * 40)}
+														style={{
+															marginRight: isLastInRow ? 0 : 12,
+															marginBottom: 12,
+														}}
+													>
+														<MarketplaceProductCard
+															id={product.id}
+															name={product.name}
+															price={product.price}
+															originalPrice={product.originalPrice}
+															discountPercentage={product.discountPercentage}
+															image={(() => {
+																try {
+																	const parsed = JSON.parse(product.imageUrl || '');
+																	return Array.isArray(parsed) ? parsed[0] : product.imageUrl;
+																} catch {
+																	return product.imageUrl;
+																}
+															})()}
+															vendorName={product.vendorId ? vendorsMap.get(product.vendorId)?.storeName : undefined}
+															onPress={() =>
+																router.push({
+																	pathname: '/(buyer)/(tabs)/product/[id]',
+																	params: { id: product.id },
+																})
+															}
+															width={CARD_WIDTH}
+														/>
+													</Animated.View>
+												);
+											})}
+										</View>
+									</Animated.View>
+								)}
+							</>
 						)}
-						</>
-						)}
-						
+
 						{/* Main Deals Grid */}
 						{filteredDeals.length > 0 ? (
 							<Animated.View entering={FadeInUp.duration(400).delay(hasActiveFilters ? 100 : 500)}>
@@ -488,14 +487,14 @@ export default function DealsScreen() {
 									<View style={styles.sectionTitleContainer}>
 										<IconSymbol name="tag.fill" size={20} color={GIFTYY_THEME.colors.primary} />
 										<Text style={styles.sectionTitle}>
-											{hasActiveFilters 
-												? 'Filtered Deals' 
+											{hasActiveFilters
+												? 'Filtered Deals'
 												: activeCategory === 'flash' ? 'All Flash Deals' :
-												 activeCategory === 'top-picks' ? 'Top Picks for You' :
-												 activeCategory === 'seasonal' ? 'Seasonal Gifts' :
-												 activeCategory === 'vendor-specials' ? 'Vendor Specials' :
-												 activeCategory === 'under-20' ? 'Deals Under $20' :
-												 'Last Chance Deals'}
+													activeCategory === 'top-picks' ? 'Top Picks for You' :
+														activeCategory === 'seasonal' ? 'Seasonal Gifts' :
+															activeCategory === 'vendor-specials' ? 'Vendor Specials' :
+																activeCategory === 'under-20' ? 'Deals Under $20' :
+																	'Last Chance Deals'}
 										</Text>
 									</View>
 									<Text style={styles.dealsCount}>{filteredDeals.length} {filteredDeals.length === 1 ? 'deal' : 'deals'}</Text>
@@ -507,9 +506,9 @@ export default function DealsScreen() {
 											<Animated.View
 												key={product.id}
 												entering={FadeInUp.duration(400).delay(600 + index * 50)}
-												style={{ 
-													marginRight: isLastInRow ? 0 : 12, 
-													marginBottom: 12 
+												style={{
+													marginRight: isLastInRow ? 0 : 12,
+													marginBottom: 12
 												}}
 											>
 												<MarketplaceProductCard
@@ -564,7 +563,7 @@ export default function DealsScreen() {
 					</>
 				)}
 			</ScrollView>
-			
+
 			{/* Filters Modal */}
 			<Modal
 				visible={showFilters}
@@ -620,7 +619,7 @@ export default function DealsScreen() {
 									))}
 								</View>
 							</View>
-							
+
 							{/* Price Range */}
 							<View style={styles.filterSection}>
 								<Text style={styles.filterSectionTitle}>Price Range</Text>
@@ -680,7 +679,7 @@ export default function DealsScreen() {
 									})}
 								</View>
 							</View>
-							
+
 							{/* Discount Range */}
 							<View style={styles.filterSection}>
 								<Text style={styles.filterSectionTitle}>Discount Percentage</Text>
@@ -719,7 +718,7 @@ export default function DealsScreen() {
 									})}
 								</View>
 							</View>
-							
+
 							{/* Reset Button */}
 							<Pressable
 								style={styles.resetButton}
@@ -736,7 +735,7 @@ export default function DealsScreen() {
 								<Text style={styles.resetButtonText}>Reset All Filters</Text>
 							</Pressable>
 						</ScrollView>
-						
+
 						<View style={styles.modalFooter}>
 							<Pressable
 								style={styles.modalButtonPrimary}

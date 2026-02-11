@@ -54,37 +54,37 @@ export function MarketplaceProductCard({
 	const cardWidth = width ?? DEFAULT_CARD_WIDTH;
 	const { isWishlisted: isInWishlist, toggleWishlist } = useWishlist();
 	const isWishlisted = isInWishlist(id);
-	
+
 	const [imageError, setImageError] = useState(false);
 	const scale = useSharedValue(1);
 	const heartScale = useSharedValue(1);
-	
+
 	const animatedStyle = useAnimatedStyle(() => ({
 		transform: [{ scale: scale.value }],
 	}));
-	
+
 	const heartAnimatedStyle = useAnimatedStyle(() => ({
 		transform: [{ scale: heartScale.value }],
 	}));
-	
+
 	const handlePressIn = () => {
 		scale.value = withSpring(0.96, { damping: 15, stiffness: 300 });
 	};
-	
+
 	const handlePressOut = () => {
 		scale.value = withSpring(1, { damping: 15, stiffness: 300 });
 	};
-	
+
 	const handleWishlistPress = (e: any) => {
 		e.stopPropagation();
 		heartScale.value = withSequence(
 			withSpring(1.3, { damping: 10 }),
 			withSpring(1, { damping: 10 })
 		);
-		
+
 		toggleWishlist(id);
 	};
-	
+
 	// If originalPrice is provided, it means the price is already the discounted price
 	// Otherwise, apply discountPercentage if available
 	const discountedPrice = originalPrice !== undefined && originalPrice > price
@@ -92,7 +92,7 @@ export function MarketplaceProductCard({
 		: (typeof discountPercentage === 'number' && !isNaN(discountPercentage) && discountPercentage > 0)
 			? (typeof price === 'number' && !isNaN(price) ? price * (1 - discountPercentage / 100) : 0)
 			: (typeof price === 'number' && !isNaN(price) ? price : 0);
-	
+
 	return (
 		<AnimatedPressable
 			onPress={onPress}
@@ -114,29 +114,29 @@ export function MarketplaceProductCard({
 						<IconSymbol name="photo" size={24} color={GIFTYY_THEME.colors.gray300} />
 					</View>
 				)}
-				
+
 				{/* Discount Badge */}
 				{typeof discountPercentage === 'number' && discountPercentage > 0 ? (
 					<View style={styles.discountBadge}>
 						<Text style={styles.discountText}>-{String(Math.round(discountPercentage))}%</Text>
 					</View>
 				) : null}
-				
+
 				{/* Wishlist Button */}
-				<Pressable 
+				<Pressable
 					style={styles.wishlistButton}
 					onPress={handleWishlistPress}
 				>
 					<Animated.View style={heartAnimatedStyle}>
-						<IconSymbol 
-							name={isWishlisted ? "heart.fill" : "heart"} 
-							size={18} 
-							color={isWishlisted ? GIFTYY_THEME.colors.error : GIFTYY_THEME.colors.gray400} 
+						<IconSymbol
+							name={isWishlisted ? "heart.fill" : "heart"}
+							size={18}
+							color={isWishlisted ? GIFTYY_THEME.colors.error : GIFTYY_THEME.colors.gray400}
 						/>
 					</Animated.View>
 				</Pressable>
 			</View>
-			
+
 			{/* Product Info */}
 			<View style={styles.infoContainer}>
 				{/* Vendor Name (if available) */}
@@ -145,12 +145,12 @@ export function MarketplaceProductCard({
 						{String(vendorName)}
 					</Text>
 				) : null}
-				
+
 				{/* Product Name */}
 				<Text style={styles.productName} numberOfLines={2}>
 					{String(name || '')}
 				</Text>
-				
+
 				{/* Rating (if available) */}
 				{typeof reviewCount === 'number' && reviewCount > 0 ? (
 					<View style={styles.ratingContainer}>
@@ -159,7 +159,7 @@ export function MarketplaceProductCard({
 						<Text style={styles.reviewCount}> ({String(reviewCount)})</Text>
 					</View>
 				) : null}
-				
+
 				{/* Price */}
 				<View style={styles.priceContainer}>
 					<Text style={styles.price}>${typeof discountedPrice === 'number' && !isNaN(discountedPrice) ? discountedPrice.toFixed(2) : '0.00'}</Text>
@@ -177,9 +177,7 @@ const styles = StyleSheet.create({
 		backgroundColor: GIFTYY_THEME.colors.white,
 		borderRadius: GIFTYY_THEME.radius.md,
 		overflow: 'hidden',
-		borderWidth: 1,
-		borderColor: GIFTYY_THEME.colors.gray200,
-		...GIFTYY_THEME.shadows.sm,
+		...GIFTYY_THEME.shadows.md,
 	},
 	imageContainer: {
 		width: '100%',
