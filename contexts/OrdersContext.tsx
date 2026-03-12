@@ -1,5 +1,6 @@
 import { type Recipient } from '@/lib/CheckoutContext';
 import { logProductAnalyticsEvent } from '@/lib/product-analytics';
+import { parsePrice } from '@/lib/utils/currency';
 import { supabase } from '@/lib/supabase';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './AuthContext';
@@ -258,7 +259,7 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 
 				// Create order items
 				const orderItems = cartItems.map((item) => {
-					const unitPrice = parseFloat(item.price.replace(/[^0-9.]/g, ''));
+					const unitPrice = parsePrice(item.price);
 					return {
 						order_id: orderData.id,
 						// order_items.product_id references products.id
@@ -402,7 +403,7 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 								items: cartItems.map(item => ({
 									name: item.name,
 									quantity: item.quantity,
-									price: parseFloat(item.price.replace(/[^0-9.]/g, '')),
+									price: parsePrice(item.price),
 								})),
 								estimatedArrival: '3-5 business days',
 								shippingAddress: formattedAddress,

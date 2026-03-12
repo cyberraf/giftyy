@@ -1,5 +1,6 @@
 import { CartItem } from '@/contexts/CartContext';
 import { supabase } from '@/lib/supabase';
+import { parsePrice } from './utils/currency';
 
 /**
  * Calculate shipping cost based on vendors in the cart.
@@ -28,7 +29,7 @@ export async function calculateVendorShipping(
 	const vendorSubtotals = new Map<string, number>();
 	itemsByVendor.forEach((vendorItems, vendorId) => {
 		const subtotal = vendorItems.reduce((sum, item) => {
-			const price = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
+			const price = parsePrice(item.price);
 			return sum + price * item.quantity;
 		}, 0);
 		vendorSubtotals.set(vendorId, subtotal);
@@ -110,7 +111,7 @@ export function calculateVendorShippingSync(
 
 	itemsByVendor.forEach((vendorItems, vendorId) => {
 		const subtotal = vendorItems.reduce((sum, item) => {
-			const price = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
+			const price = parsePrice(item.price);
 			return sum + price * item.quantity;
 		}, 0);
 
@@ -204,7 +205,7 @@ export async function calculateVendorShippingByZone(
 	const vendorSubtotals = new Map<string, number>();
 	itemsByVendor.forEach((vendorItems, vendorId) => {
 		const subtotal = vendorItems.reduce((sum, item) => {
-			const price = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
+			const price = parsePrice(item.price);
 			return sum + price * item.quantity;
 		}, 0);
 		vendorSubtotals.set(vendorId, subtotal);

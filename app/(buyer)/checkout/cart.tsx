@@ -1,15 +1,15 @@
 import BrandButton from '@/components/BrandButton';
 import StepBar from '@/components/StepBar';
 import { useCart } from '@/contexts/CartContext';
+import { parsePrice } from '@/lib/utils/currency';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
-function priceToNumber(p: string) { const n = parseFloat(p.replace(/[^0-9.]/g, '')); return isNaN(n) ? 0 : n; }
 
 export default function CheckoutCart() {
     const { items } = useCart();
-    const subtotal = items.reduce((s, it) => s + priceToNumber(it.price) * it.quantity, 0);
+    const subtotal = items.reduce((s, it) => s + parsePrice(it.price) * it.quantity, 0);
     const router = useRouter();
     return (
         <View style={{ flex: 1, backgroundColor: 'white' }}>

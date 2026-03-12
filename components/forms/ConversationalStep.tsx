@@ -1,6 +1,6 @@
 import { BRAND_COLOR } from '@/constants/theme';
 import React, { ReactNode } from 'react';
-import { ActivityIndicator, Image, ImageSourcePropType, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { ActivityIndicator, Image, ImageSourcePropType, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type ConversationalStepProps = {
     question: string;
@@ -52,10 +52,7 @@ export function ConversationalStep({
     };
 
     return (
-        <KeyboardAvoidingView
-            style={styles.container}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+        <View style={styles.container}>
             <ScrollView
                 style={styles.scrollView}
                 contentContainerStyle={[
@@ -136,7 +133,7 @@ export function ConversationalStep({
                     </View>
                 </View>
             )}
-        </KeyboardAvoidingView>
+        </View>
     );
 }
 

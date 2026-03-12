@@ -46,13 +46,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DEALS_ROW_CARD_WIDTH = SCREEN_WIDTH * 0.44;
 const ALL_PRODUCTS_PER_PAGE = 18;
 
-// Home "Key features" guide screenshots (bundled)
-const GUIDE_HOME = require('../../../assets/images/guide-home.png');
-const GUIDE_CARD = require('../../../assets/images/guide-card.png');
-const GUIDE_VIDEO = require('../../../assets/images/guide-video.png');
-const GUIDE_SHARED_MEMORY = require('../../../assets/images/guide-shared-memory.png');
-const GUIDE_MEMORIES = require('../../../assets/images/guide-memories.png');
-const GUIDE_REACTIONS = require('../../../assets/images/guide-reactions.png');
+// Constants
 
 // Category definitions
 const CATEGORIES = [
@@ -780,75 +774,7 @@ export default function MarketplaceHomeScreen() {
 			.filter(v => v.vendor.storeName); // Only show vendors with names
 	}, [filteredProducts, vendorsMap]);
 
-	// Promotional banners
-	const banners = useMemo(() => {
-		return [
-			{
-				id: 'guide-home',
-				title: 'Shop gifts',
-				subtitle: 'Discover and shop gifts fast',
-				backgroundColor: GIFTYY_THEME.colors.primary,
-				ctaText: 'View',
-				imageSource: GUIDE_HOME,
-				onPress: () => router.push({ pathname: '/guide', params: { start: 'home' } }),
-			},
-			{
-				id: 'guide-card',
-				title: 'Add your Giftyy Card',
-				subtitle: 'Link your gift to a memory',
-				backgroundColor: GIFTYY_THEME.colors.primaryDark,
-				ctaText: 'View',
-				imageSource: GUIDE_CARD,
-				onPress: () =>
-					setCartRequiredDialog({
-						title: 'Add a gift to your cart',
-						message:
-							'To add a Giftyy Card, first add any product to your cart, then proceed to checkout.',
-					}),
-			},
-			{
-				id: 'guide-video',
-				title: 'Record a video message',
-				subtitle: 'Make it personal',
-				backgroundColor: GIFTYY_THEME.colors.primaryLight,
-				ctaText: 'View',
-				imageSource: GUIDE_VIDEO,
-				onPress: () =>
-					setCartRequiredDialog({
-						title: 'Add a gift to your cart',
-						message:
-							'To record a video message, first add any product to your cart, then proceed to checkout.',
-					}),
-			},
-			{
-				id: 'guide-shared-memory',
-				title: 'Add shared memories',
-				subtitle: 'Attach photos & moments',
-				backgroundColor: GIFTYY_THEME.colors.warning,
-				ctaText: 'View',
-				imageSource: GUIDE_SHARED_MEMORY,
-				onPress: () => router.push({ pathname: '/(buyer)/(tabs)/memory', params: { tab: 'Shared memories' } }),
-			},
-			{
-				id: 'guide-memories',
-				title: 'View your memories',
-				subtitle: 'Revisit moments anytime',
-				backgroundColor: GIFTYY_THEME.colors.info,
-				ctaText: 'View',
-				imageSource: GUIDE_MEMORIES,
-				onPress: () => router.push({ pathname: '/(buyer)/(tabs)/memory', params: { tab: 'Overview' } }),
-			},
-			{
-				id: 'guide-reactions',
-				title: 'View recipient reactions',
-				subtitle: 'See how they reacted',
-				backgroundColor: GIFTYY_THEME.colors.success,
-				ctaText: 'View',
-				imageSource: GUIDE_REACTIONS,
-				onPress: () => router.push({ pathname: '/(buyer)/(tabs)/memory', params: { tab: 'Reactions' } }),
-			},
-		];
-	}, [router]);
+	// User guide banners removed
 
 	const headerPaddingTop = top + 6;
 	// Calculate responsive header height: safe area top + padding + search box height + bottom padding
@@ -962,12 +888,7 @@ export default function MarketplaceHomeScreen() {
 					</>
 				) : (
 					<>
-						{/* Hero Banner */}
-						{banners.length > 0 && (
-							<Animated.View entering={FadeInUp.duration(400).delay(100)}>
-								<PromotionalBanner banners={banners} />
-							</Animated.View>
-						)}
+						{/* Hero Banner removed */}
 
 						{/* Deals Section */}
 						{saleProducts.length > 0 && (

@@ -6,6 +6,7 @@ import { useCart } from '@/contexts/CartContext';
 import { useProducts } from '@/contexts/ProductsContext';
 import { useCheckout, type CardType } from '@/lib/CheckoutContext';
 import { calculateVendorShippingSync } from '@/lib/shipping-utils';
+import { parsePrice } from '@/lib/utils/currency';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, FlatList, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -138,7 +139,7 @@ export default function DesignScreen() {
         if (!cardType) {
             const chosen = (orderedCards[0]?.label as CardLabel) ?? 'Giftyy Card';
             setCardType(chosen as CardType);
-            const chosenPrice = priceToNumber(orderedCards.find((c) => String(c.label) === String(chosen))?.price);
+            const chosenPrice = parsePrice(orderedCards.find((c) => String(c.label) === String(chosen))?.price);
             setCardPrice(chosenPrice);
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -156,19 +157,14 @@ export default function DesignScreen() {
         return () => clearTimeout(id);
     }, [middleIndex]);
 
-    function priceToNumber(p?: string) {
-        if (!p) return 0;
-        const n = parseFloat(String(p).replace(/[^0-9.]/g, ''));
-        return isNaN(n) ? 0 : n;
-    }
 
     const itemsSubtotal = useMemo(
-        () => items.reduce((s, it) => s + priceToNumber(it.price) * it.quantity, 0),
+        () => items.reduce((s, it) => s + parsePrice(it.price) * it.quantity, 0),
         [items]
     );
     const selectedCardPrice = useMemo(() => {
         const found = orderedCards.find((c) => String(c.label) === String(cardType));
-        return priceToNumber(found?.price);
+        return parsePrice(found?.price);
     }, [orderedCards, cardType]);
     function getTaxRateFromState(code?: string): number {
         const state = (code || '').toUpperCase();
@@ -259,7 +255,7 @@ export default function DesignScreen() {
                         const label = orderedCards[index]?.label as CardLabel;
                         if (label && label !== cardType) {
                             setCardType(label as CardType);
-                            setCardPrice(priceToNumber(orderedCards[index]?.price));
+                            setCardPrice(parsePrice(orderedCards[index]?.price));
                         }
                         setCurrentIndex(index);
                     }}
@@ -286,7 +282,7 @@ export default function DesignScreen() {
                         return (
                             <Animated.View style={{ transform: [{ scale }, { translateY }], opacity }}>
                                 <Pressable
-                                    onPress={() => handleCardFlip(c.label as CardLabel, priceToNumber(c.price))}
+                                    onPress={() => handleCardFlip(c.label as CardLabel, parsePrice(c.price))}
                                     onPressIn={() => setPressedCard(c.label as CardLabel)}
                                     onPressOut={() => setPressedCard(null)}
                                     style={[

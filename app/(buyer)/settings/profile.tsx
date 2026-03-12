@@ -15,7 +15,7 @@ import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, FlatList, Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, FlatList, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Generate a unique ID using expo-crypto (compatible with React Native)
@@ -227,7 +227,7 @@ export default function ProfilePreferencesScreen() {
     };
 
     return (
-        <KeyboardAvoidingView style={styles.screen} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={top}>
+        <View style={styles.screen}>
             <View style={[styles.screen, { paddingTop: top + GIFTYY_THEME.layout.headerHeight }]}>
 
                 <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 80 }]} showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
@@ -399,7 +399,7 @@ export default function ProfilePreferencesScreen() {
 
             <DatePickerSheet visible={isDatePickerOpen} selectedDate={profile.dateOfBirth ? formatDateForDatabase(profile.dateOfBirth) || '' : ''} onSelect={(ymd) => updateProfile({ dateOfBirth: formatDateFromDatabase(ymd) })} onClose={() => setDatePickerOpen(false)} />
             <GlassDialog visible={showSuccessModal} title="Success" description="Updated!" onClose={() => setShowSuccessModal(false)} singleButton={true} />
-        </KeyboardAvoidingView>
+        </View>
     );
 }
 

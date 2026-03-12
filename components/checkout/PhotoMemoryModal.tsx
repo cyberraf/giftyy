@@ -11,7 +11,9 @@ import {
 	ActivityIndicator,
 	Dimensions,
 	Image,
+	KeyboardAvoidingView,
 	Modal,
+	Platform,
 	Pressable,
 	StyleSheet,
 	Text,
@@ -153,14 +155,18 @@ export function PhotoMemoryModal({
 		>
 			<Pressable style={styles.overlay} onPress={onClose}>
 				<Animated.View style={[styles.backdrop, backdropStyle]} />
-				<Animated.View
-					style={[
-						styles.modal,
-						{ paddingTop: top + 20, paddingBottom: bottom + 20 },
-						modalStyle,
-					]}
-					onStartShouldSetResponder={() => true}
+				<KeyboardAvoidingView
+					style={{ flex: 1 }}
+					behavior={Platform.OS === 'ios' ? 'padding' : undefined}
 				>
+					<Animated.View
+						style={[
+							styles.modal,
+							{ paddingTop: top + 20, paddingBottom: bottom + 20 },
+							modalStyle,
+						]}
+						onStartShouldSetResponder={() => true}
+					>
 					{/* Header */}
 					<View style={styles.header}>
 						<Text style={styles.headerTitle}>Upload a Photo Memory</Text>
@@ -252,7 +258,8 @@ export function PhotoMemoryModal({
 							</LinearGradient>
 						</AnimatedPressable>
 					)}
-				</Animated.View>
+					</Animated.View>
+				</KeyboardAvoidingView>
 			</Pressable>
 		</Modal>
 	);

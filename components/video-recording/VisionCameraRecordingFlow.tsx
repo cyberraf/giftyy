@@ -45,6 +45,8 @@ export type VideoRecordingFlowProps = {
   initialDurationMs?: number;
   /** Called when user chooses to retake and discard the video */
   onRetake?: () => void;
+  /** Called when user chooses to skip recording */
+  onSkip?: () => void;
   /** First name of the recipient for personalized copy */
   recipientName?: string;
 };
@@ -55,6 +57,7 @@ export function VisionCameraRecordingFlow({
   initialVideoUri,
   initialDurationMs,
   onRetake,
+  onSkip,
   recipientName,
 }: VideoRecordingFlowProps) {
   const didApplyInitialRef = useRef(false);
@@ -367,11 +370,18 @@ export function VisionCameraRecordingFlow({
             <IconSymbol name="video.fill" size={20} color="#fff" />
             <Text style={styles.darkStartButtonText}>Start Recording</Text>
           </Pressable>
-          {onCancel && (
-            <Pressable onPress={onCancel} style={styles.darkCancelButton}>
-              <Text style={styles.darkCancelButtonText}>Back</Text>
-            </Pressable>
-          )}
+          <View style={styles.darkButtonsRow}>
+            {onCancel && (
+              <Pressable onPress={onCancel} style={styles.darkCancelButton}>
+                <Text style={styles.darkCancelButtonText}>Back</Text>
+              </Pressable>
+            )}
+            {onSkip && (
+              <Pressable onPress={onSkip} style={styles.darkCancelButton}>
+                <Text style={styles.darkCancelButtonText}>Skip</Text>
+              </Pressable>
+            )}
+          </View>
         </Animated.View>
       </View>
     );
@@ -509,13 +519,13 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  welcomeContentDark: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
-  darkCameraIconOuter: { width: 220, height: 220, borderRadius: 110, backgroundColor: 'rgba(255, 255, 255, 0.05)', justifyContent: 'center', alignItems: 'center', marginBottom: 24, marginTop: 40 },
+  welcomeContentDark: { flex: 1, alignItems: 'center', justifyContent: 'flex-start', paddingHorizontal: 28, paddingTop: 80 },
+  darkCameraIconOuter: { width: 220, height: 220, borderRadius: 110, backgroundColor: 'rgba(255, 255, 255, 0.05)', justifyContent: 'center', alignItems: 'center', marginBottom: 24, marginTop: 20 },
   darkCameraIconInner: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', shadowColor: '#F97316', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 6 },
   darkStepText: { fontSize: 11, fontWeight: '800', color: '#F97316', letterSpacing: 2.5, marginBottom: 12 },
   darkWelcomeTitle: { fontSize: 36, fontWeight: '900', color: '#fff', textAlign: 'center', marginBottom: 20, lineHeight: 42, letterSpacing: -0.5 },
   darkWelcomeSubtext: { fontSize: 16, color: '#A1A1AA', textAlign: 'center', marginBottom: 40, paddingHorizontal: 10, lineHeight: 24 },
-  darkFeaturesRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1C1C1E', borderRadius: 20, paddingVertical: 18, paddingHorizontal: 20, marginBottom: 48, width: '100%', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)' },
+  darkFeaturesRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1C1C1E', borderRadius: 20, paddingVertical: 18, paddingHorizontal: 20, marginBottom: 24, width: '100%', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)' },
   darkFeatureItem: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
   darkFeatureText: { color: '#E4E4E7', fontSize: 13, fontWeight: '600' },
   darkFeatureDivider: { width: 1, height: 20, backgroundColor: '#3F3F46' },
@@ -523,6 +533,7 @@ const styles = StyleSheet.create({
   darkStartButtonText: { color: '#fff', fontSize: 18, fontWeight: '800' },
   darkCancelButton: { paddingVertical: 14, paddingHorizontal: 24 },
   darkCancelButtonText: { color: '#A1A1AA', fontSize: 16, fontWeight: '600' },
+  darkButtonsRow: { flexDirection: 'row', gap: 24, justifyContent: 'center', width: '100%' },
   countdownContainer: { flex: 1, backgroundColor: '#000' },
   countdownOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0, 0, 0, 0.5)' },
   countdownNumber: { fontSize: 120, fontWeight: '900', color: PRIMARY },

@@ -9,7 +9,9 @@ import {
     ActivityIndicator,
     FlatList,
     Image,
+    KeyboardAvoidingView,
     Modal,
+    Platform,
     Pressable,
     StyleSheet,
     Text,
@@ -144,7 +146,10 @@ export function FindFriendsModal({ visible, onClose, onConnect, onInvite }: Find
             presentationStyle="pageSheet"
             onRequestClose={onClose}
         >
-            <View style={[styles.container, { paddingTop: insets.top }]}>
+            <KeyboardAvoidingView
+                style={[styles.container, { paddingTop: insets.top }]}
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            >
                 {/* Header */}
                 <View style={styles.header}>
                     <Text style={styles.title}>Find Friends</Text>
@@ -205,7 +210,7 @@ export function FindFriendsModal({ visible, onClose, onConnect, onInvite }: Find
                     title={`How do you know ${selectedContact?.name?.split(' ')[0]}?`}
                     targetName={selectedContact?.name}
                 />
-            </View>
+            </KeyboardAvoidingView>
         </Modal>
     );
 }

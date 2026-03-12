@@ -48,7 +48,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 
 const BRAND_COLOR = '#E07B39';
-const RECIPIENT_FORM_URL = 'https://giftyy.store/invite';
+/** Invite link - Universal Links open app when installed; otherwise users get web fallback. */
+const INVITE_BASE_URL = 'https://giftyy.store/invite';
 
 // ============================================
 // SHARED CONSTANTS
@@ -107,7 +108,7 @@ export function Step0_Search({ formData, updateFormData, onNext, ...props }: Ste
             }
         }
 
-        const inviteLink = finalProfileId ? `https://giftyy.store/invite/${finalProfileId}` : `https://giftyy.store`;
+        const inviteLink = finalProfileId ? `${INVITE_BASE_URL}/${finalProfileId}` : 'https://giftyy.store';
         const senderName = profile?.first_name || "your friend";
 
         const message = `Hey there! It's ${senderName} 👋\n\nI want to make sure every gift and celebration between us is truly special 🎁\n\nJoin my private gifting network on Giftyy — tell me what you love and what you're into so I can nail it every time! ✨\n\nTap here to join me in the app:\n${inviteLink}`;

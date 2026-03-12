@@ -27,6 +27,7 @@ export type HomeGiftSuggestion = {
 type UseHomeResult = {
 	recipients: Recipient[];
 	recipientsLoading: boolean;
+	initialLoading: boolean;
 	activeRecipient: Recipient | null;
 	activeRecipientNextOccasion: UpcomingOccasion | null;
 	upcomingOccasions: UpcomingOccasion[];
@@ -79,6 +80,9 @@ function getNextBirthdayOccasion(recipient: Recipient): UpcomingOccasion | null 
 export function useHome(): UseHomeResult {
 	const { recipients, loading: recipientsLoading, refreshRecipients } = useRecipients();
 	const { activeRecipientId } = useAppStore();
+	const [initialLoading, setInitialLoading] = useState(true);
+	const [profileLoading, setProfileLoading] = useState(true);
+	const [circleOccasionsLoading, setCircleOccasionsLoading] = useState(true);
 	const [myProfileId, setMyProfileId] = useState<string | null>(null);
 
 	const [myProfileOccasions, setMyProfileOccasions] = useState<any[]>([]);
@@ -87,8 +91,12 @@ export function useHome(): UseHomeResult {
 
 	// Fetch current user's profile, occasions, and preferences
 	const fetchMyData = useCallback(async () => {
+		setProfileLoading(true);
 		const { data: { user } } = await supabase.auth.getUser();
-		if (!user) return;
+		if (!user) {
+			setProfileLoading(false);
+			return;
+		}
 
 		// 1. Get profile ID
 		const { data: rp, error: rpError } = await supabase
@@ -126,10 +134,16 @@ export function useHome(): UseHomeResult {
 				setMyPreferences(dbRowToPreferences(prefs));
 			}
 		}
+		setProfileLoading(false);
 	}, []);
 
 	useEffect(() => {
-		fetchMyData();
+		async function init() {
+			await fetchMyData();
+			// If recipients are already loaded or not needed, we can potentially flip initialLoading here
+			// But it's safer to do it in the next effect where we have both recipients and circle occasions
+		}
+		init();
 	}, [fetchMyData]);
 
 	// Restrict Occasion access logic:
@@ -154,6 +168,7 @@ export function useHome(): UseHomeResult {
 	//   - Occasions belonging to connected members' profiles (covers shared circle occasions)
 	useEffect(() => {
 		const fetchCircleOccasions = async () => {
+			setCircleOccasionsLoading(true);
 			const { data: { user: currentUser } } = await supabase.auth.getUser();
 			if (!currentUser) return;
 
@@ -190,10 +205,24 @@ export function useHome(): UseHomeResult {
 			}
 
 			setCircleOccasions(allOccs);
+			setCircleOccasionsLoading(false);
 		};
+
 
 		fetchCircleOccasions();
 	}, [visibleRecipients, myProfileId]);
+
+	// Master loading state tracker
+	useEffect(() => {
+		// Only flip initialLoading to false once ALL critical data sources have finished their first fetch.
+		if (!recipientsLoading && !profileLoading && !circleOccasionsLoading) {
+			// Small delay to ensure all state updates have settled
+			const timer = setTimeout(() => {
+				setInitialLoading(false);
+			}, 100);
+			return () => clearTimeout(timer);
+		}
+	}, [recipientsLoading, profileLoading, circleOccasionsLoading]);
 
 	const upcomingOccasions = useMemo<UpcomingOccasion[]>(() => {
 		const all: UpcomingOccasion[] = [];
@@ -328,6 +357,7 @@ export function useHome(): UseHomeResult {
 		activeRecipient,
 		activeRecipientNextOccasion,
 		upcomingOccasions,
+		initialLoading,
 		suggestions,
 		suggestionsLoading,
 		myProfileId,

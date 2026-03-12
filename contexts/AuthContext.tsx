@@ -26,6 +26,7 @@ type AuthContextType = {
 	session: Session | null;
 	profile: Profile | null;
 	loading: boolean;
+	isOffline: boolean;
 	syncAuth: () => Promise<void>;
 	signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
 	signInWithGoogle: () => Promise<{ error: AuthError | null }>;
@@ -46,6 +47,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 	const [session, setSession] = useState<Session | null>(null);
 	const [profile, setProfile] = useState<Profile | null>(null);
 	const [loading, setLoading] = useState(true);
+	const [isOffline, setIsOffline] = useState(false);
 
 	const isEmailVerified = useCallback((u?: User | null) => {
 		const anyUser = u as any;
@@ -163,8 +165,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			}
 
 			setProfile(created as Profile);
-		} catch (error) {
+		} catch (error: any) {
 			console.error('Error fetching profile:', error);
+			if (isNetworkError(error)) {
+				setIsOffline(true);
+			}
 		}
 	}, [extractNamesFromUser]);
 
@@ -211,14 +216,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			if (__DEV__) console.log('[AuthContext] syncSessionFromSupabase starting...');
 			try {
 				if (__DEV__) console.log('[AuthContext] calling supabase.auth.getSession()...');
+				// Use a promise-based timeout for getSession
+				const sessionPromise = supabase.auth.getSession();
+				const timeoutPromise = new Promise<{ data: { session: null }; error: any }>((_, reject) =>
+					setTimeout(() => reject(new Error('Network request timed out')), 10000)
+				);
+
 				const {
 					data: { session: currentSession },
 					error,
-				} = await supabase.auth.getSession();
+				} = await Promise.race([sessionPromise, timeoutPromise]) as { data: { session: Session | null }; error: AuthError | null };
+				
+				// Clear offline state if request succeeds
+				setIsOffline(false);
 				if (__DEV__) console.log('[AuthContext] getSession returned, session:', !!currentSession, 'error:', error?.message);
 
-				// Handle invalid refresh token errors (can happen after returning from OAuth or on stale tokens)
 				if (error) {
+					console.warn('Error getting session:', error.message);
+					if (isNetworkError(error)) {
+						setIsOffline(true);
+						setLoading(false);
+						return;
+					}
+					
 					const errorMessage = error.message?.toLowerCase() || '';
 					if (errorMessage.includes('refresh token') || errorMessage.includes('token not found')) {
 						console.log('Invalid refresh token detected, clearing session...');
@@ -226,13 +246,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 						await applySession(null, cancelled);
 						return;
 					}
-					// For other errors, log but continue with whatever session we got (often null).
-					console.warn('Error getting session:', error.message);
 				}
 
 				await applySession(currentSession ?? null, cancelled);
 			} catch (err: any) {
 				const errorMessage = err?.message?.toLowerCase() || '';
+				if (isNetworkError(err)) {
+					setIsOffline(true);
+					setLoading(false);
+					return;
+				}
 				if (errorMessage.includes('refresh token') || errorMessage.includes('token not found')) {
 					console.log('Invalid refresh token detected in catch block, clearing session...');
 					await supabase.auth.signOut();
@@ -453,7 +476,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			if (callbackReceived && callbackUrl) {
 				console.log('🔵 Processing callback URL...');
 				try {
-					const url = callbackUrl;
+					const url = callbackUrl as string;
 					const parsed = Linking.parse(url);
 
 					// Extract tokens from hash fragment (most common for OAuth)
@@ -629,6 +652,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 					email,
 					password,
 					options: {
+						emailRedirectTo: 'https://giftyy.store/auth/confirm',
 						data: {
 							first_name: firstName,
 							last_name: lastName,
@@ -1082,6 +1106,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				updateProfile,
 				refreshProfile,
 				deleteAccount,
+				isOffline,
 			}}
 		>
 			{children}

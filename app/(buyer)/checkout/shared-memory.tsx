@@ -10,21 +10,22 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
 	FlatList,
 	Image,
-	KeyboardAvoidingView,
-	Platform,
+	Modal,
 	Pressable,
 	RefreshControl,
 	StyleSheet,
 	Text,
-	View
+	View,
+	ActivityIndicator
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import Animated, {
 	FadeInDown,
 	FadeInUp,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-import StepBar from '@/components/StepBar';
+import { MemoryThumbnail } from '@/components/memory/MemoryThumbnail';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { useSharedMemories } from '@/contexts/SharedMemoriesContext';
@@ -148,20 +149,17 @@ export default function SharedMemoryScreen() {
 	}, [sharedMemories, selectedId]);
 
 	return (
-		<KeyboardAvoidingView
-			style={styles.container}
-			behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-			keyboardVerticalOffset={0}
-		>
-			<StepBar current={4} total={7} label="Add a Shared Memory" />
+		<View style={styles.container}>
+
 
 			<FlatList
-				key="single-column"
+				key="gallery-grid"
 				style={styles.scrollView}
 				contentContainerStyle={[
 					styles.scrollContent,
 					{ paddingBottom: bottom + 120 },
 				]}
+				columnWrapperStyle={styles.columnWrapper}
 				showsVerticalScrollIndicator={false}
 				refreshControl={
 					<RefreshControl
@@ -173,29 +171,21 @@ export default function SharedMemoryScreen() {
 				}
 				data={memoryItems}
 				keyExtractor={(item) => item.id}
-				numColumns={1}
-				ItemSeparatorComponent={() => <View style={{ height: 20 }} />}
+				numColumns={3}
 				ListHeaderComponent={
 					<>
-						{/* Intro Block */}
-						<Animated.View style={styles.introBlock} entering={FadeInDown.duration(400)}>
-							<View style={styles.introIconContainer}>
-								<IconSymbol name="heart.fill" size={64} color={GIFTYY_THEME.colors.primary} />
-							</View>
-							<Text style={styles.introTitle}>
-								Choose a shared memory from your vault.
-							</Text>
-							<Text style={styles.introSubtitle}>
-								Attach one of your memories to their Celebration Wall. You can also upload a new one right here.
-							</Text>
-						</Animated.View>
 
 						{/* Library of memories */}
 						<View style={styles.libraryHeader}>
-							<Text style={styles.libraryTitle}>Your Shared Memories</Text>
-							<Text style={styles.librarySubtitle}>
-								Pick one to include, or upload a new memory.
-							</Text>
+							<Text style={styles.libraryTitle}>Your Memories</Text>
+							<Pressable
+								style={styles.headerUploadButton}
+								onPress={handleUploadNewMemory}
+								disabled={uploading}
+							>
+								<IconSymbol name="plus" size={16} color={GIFTYY_THEME.colors.primary} />
+								<Text style={styles.headerUploadText}>Add New</Text>
+							</Pressable>
 						</View>
 					</>
 				}
@@ -217,38 +207,39 @@ export default function SharedMemoryScreen() {
 					) : null
 				}
 				renderItem={({ item, index }) => (
-					<Animated.View entering={FadeInUp.duration(300).delay(index * 50)} style={{ flex: 1, marginHorizontal: 0 }}>
 						<MemoryLibraryCard
 							memory={item}
 							isSelected={item.isSelected}
+							index={index}
 							onSelect={() =>
 								handleSelectMemory(item.id, item.mediaType, item.title, item.fileUrl)
 							}
 						/>
-					</Animated.View>
 				)}
 			/>
 
 			{/* Floating Bottom CTA */}
 			<View style={[styles.stickyBar, { bottom: bottom > 0 ? bottom + 8 : 24 }]}>
-				<View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+				<View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
 					<Pressable
-						style={{ paddingVertical: 12, paddingRight: 16 }}
+						style={{ paddingVertical: 12, paddingHorizontal: 16 }}
 						onPress={() => router.back()}
 					>
 						<Text style={{ color: '#64748b', fontWeight: '800', fontSize: 13 }}>Back</Text>
 					</Pressable>
 					<Pressable
-						style={{ flex: 1, backgroundColor: GIFTYY_THEME.colors.primary, paddingVertical: 14, borderRadius: 999, alignItems: 'center' }}
+						style={{ flex: 1, backgroundColor: GIFTYY_THEME.colors.primary, paddingVertical: 16, borderRadius: 20, alignItems: 'center', shadowColor: GIFTYY_THEME.colors.primary, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 6 }}
 						onPress={handleContinue}
 					>
-						<Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>
+						<Text style={{ color: '#fff', fontWeight: '800', fontSize: 16 }}>
 							{continueButtonText}
 						</Text>
 					</Pressable>
 				</View>
 			</View>
-		</KeyboardAvoidingView>
+
+			<UploadingModal visible={uploading} />
+		</View>
 	);
 }
 
@@ -264,35 +255,45 @@ type LibraryCardProps = {
 	onSelect: () => void;
 };
 
-function MemoryLibraryCard({ memory, isSelected, onSelect }: LibraryCardProps) {
-	const preview = memory.fileUrl;
-
+const MemoryLibraryCard = React.memo(({ memory, isSelected, onSelect, index }: LibraryCardProps & { index: number }) => {
 	return (
-		<Pressable onPress={onSelect} style={[styles.card, isSelected && styles.cardSelected]}>
-			<View style={styles.cardMedia}>
-				{preview ? (
-					<Image source={{ uri: preview }} style={styles.cardImage} />
-				) : (
-					<View style={styles.cardPlaceholder}>
-						<IconSymbol name="photo" size={28} color={GIFTYY_THEME.colors.gray400} />
-					</View>
-				)}
-				{isSelected && (
-					<View style={styles.selectedOverlay} />
-				)}
-				{isSelected && (
-					<View style={styles.checkCircle}>
-						<IconSymbol name="checkmark" size={16} color="#fff" />
-					</View>
-				)}
+		<Animated.View 
+			entering={FadeInUp.duration(400).delay(index * 30)} 
+			style={styles.gridItem}
+		>
+			<Pressable onPress={onSelect} style={[styles.card, isSelected && styles.cardSelected]}>
+				<View style={styles.cardMedia}>
+					{memory.mediaType === 'video' ? (
+						<MemoryThumbnail fallbackUrl={memory.fileUrl} style={styles.cardImage} showPlay={false} />
+					) : (
+						<Image source={{ uri: memory.fileUrl }} style={styles.cardImage} />
+					)}
+					
+					{isSelected && (
+						<View style={styles.selectedOverlay}>
+							<View style={styles.checkCircle}>
+								<IconSymbol name="checkmark" size={12} color="#fff" />
+							</View>
+						</View>
+					)}
+				</View>
+			</Pressable>
+		</Animated.View>
+	);
+});
+
+function UploadingModal({ visible }: { visible: boolean }) {
+	return (
+		<Modal visible={visible} transparent animationType="fade">
+			<View style={styles.modalOverlay}>
+				<BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+				<Animated.View entering={FadeInDown.duration(300)} style={styles.modalContent}>
+					<ActivityIndicator size="large" color={GIFTYY_THEME.colors.primary} />
+					<Text style={styles.modalTitle}>Uploading Memory...</Text>
+					<Text style={styles.modalSubtitle}>This will just take a moment.</Text>
+				</Animated.View>
 			</View>
-			<View style={styles.cardBody}>
-				<Text style={styles.cardTitle} numberOfLines={2}>
-					{memory.title || 'Untitled memory'}
-				</Text>
-				<Text style={styles.cardSubtitle}>Tap to attach to this gift</Text>
-			</View>
-		</Pressable>
+		</Modal>
 	);
 }
 
@@ -306,74 +307,25 @@ const styles = StyleSheet.create({
 	},
 	scrollContent: {
 		padding: GIFTYY_THEME.spacing.xl,
-		paddingTop: GIFTYY_THEME.spacing['2xl'],
+		paddingTop: 140, // Extra space for global header
 	},
-	introBlock: {
-		alignItems: 'center',
-		marginBottom: GIFTYY_THEME.spacing['3xl'],
-		paddingVertical: GIFTYY_THEME.spacing.xl,
-	},
-	introIconContainer: {
-		marginBottom: GIFTYY_THEME.spacing.xl,
-		shadowColor: GIFTYY_THEME.colors.primary,
-		shadowOffset: { width: 0, height: 8 },
-		shadowOpacity: 0.3,
-		shadowRadius: 16,
-		elevation: 10,
-	},
-	introTitle: {
-		fontSize: 32,
-		fontWeight: '900',
-		color: GIFTYY_THEME.colors.gray900,
-		textAlign: 'center',
-		marginBottom: GIFTYY_THEME.spacing.md,
-		lineHeight: 38,
-		letterSpacing: -0.5,
-	},
-	introSubtitle: {
-		fontSize: 16,
-		color: GIFTYY_THEME.colors.gray600,
-		textAlign: 'center',
-		lineHeight: 24,
-		paddingHorizontal: GIFTYY_THEME.spacing.md,
-	},
-	libraryHeader: {
-		marginBottom: GIFTYY_THEME.spacing.xl,
-	},
-	libraryTitle: {
-		fontSize: 22,
-		fontWeight: '900',
-		color: GIFTYY_THEME.colors.gray900,
-		marginBottom: 6,
-		letterSpacing: -0.3,
-	},
-	librarySubtitle: {
-		fontSize: 15,
-		color: GIFTYY_THEME.colors.gray600,
-	},
+
+
 	card: {
 		flex: 1,
-		borderRadius: 24,
-		borderWidth: 2,
-		borderColor: 'transparent',
+		borderRadius: 16,
 		overflow: 'hidden',
-		backgroundColor: '#fff',
-		shadowColor: '#000',
-		shadowOffset: { width: 0, height: 6 },
-		shadowOpacity: 0.1,
-		shadowRadius: 12,
-		elevation: 4,
-		marginBottom: 4,
+		backgroundColor: GIFTYY_THEME.colors.gray50,
 	},
 	cardSelected: {
-		borderColor: GIFTYY_THEME.colors.primary,
-		transform: [{ scale: 0.98 }],
+		backgroundColor: GIFTYY_THEME.colors.primary,
 	},
 	cardMedia: {
+		flex: 1,
 		position: 'relative',
-		width: '100%',
-		aspectRatio: 4 / 3, // Premium landscape ratio
 		backgroundColor: GIFTYY_THEME.colors.gray100,
+		borderRadius: 16,
+		overflow: 'hidden',
 	},
 	cardImage: {
 		width: '100%',
@@ -386,36 +338,92 @@ const styles = StyleSheet.create({
 	},
 	selectedOverlay: {
 		...StyleSheet.absoluteFillObject,
-		backgroundColor: 'rgba(247, 85, 7, 0.15)',
+		backgroundColor: 'rgba(247, 85, 7, 0.4)',
+		alignItems: 'center',
+		justifyContent: 'center',
 	},
 	checkCircle: {
-		position: 'absolute',
-		top: 16,
-		right: 16,
-		width: 32,
-		height: 32,
-		borderRadius: 16,
+		width: 24,
+		height: 24,
+		borderRadius: 12,
 		backgroundColor: GIFTYY_THEME.colors.primary,
 		alignItems: 'center',
 		justifyContent: 'center',
 		shadowColor: '#000',
-		shadowOffset: { width: 0, height: 4 },
+		shadowOffset: { width: 0, height: 2 },
 		shadowOpacity: 0.2,
-		shadowRadius: 6,
-		elevation: 4,
+		shadowRadius: 4,
+		elevation: 3,
 	},
-	cardBody: {
-		padding: 20,
-		gap: 4,
+	gridItem: {
+		flex: 1 / 3,
+		aspectRatio: 1,
+		padding: 4,
 	},
-	cardTitle: {
-		fontSize: 18,
-		fontWeight: '800',
+	columnWrapper: {
+		justifyContent: 'flex-start',
+	},
+	libraryHeader: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+		marginBottom: GIFTYY_THEME.spacing.lg,
+		marginTop: GIFTYY_THEME.spacing.md,
+	},
+	libraryTitle: {
+		fontSize: 20,
+		fontWeight: '900',
 		color: GIFTYY_THEME.colors.gray900,
+		letterSpacing: -0.3,
 	},
-	cardSubtitle: {
-		fontSize: 14,
+	headerUploadButton: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		backgroundColor: '#fff',
+		paddingVertical: 8,
+		paddingHorizontal: 12,
+		borderRadius: 12,
+		gap: 6,
+		borderWidth: 1,
+		borderColor: 'rgba(0,0,0,0.05)',
+	},
+	headerUploadText: {
+		fontSize: 13,
+		fontWeight: '800',
+		color: GIFTYY_THEME.colors.primary,
+	},
+	modalOverlay: {
+		flex: 1,
+		backgroundColor: 'rgba(0,0,0,0.3)',
+		justifyContent: 'center',
+		alignItems: 'center',
+		padding: 32,
+	},
+	modalContent: {
+		backgroundColor: '#fff',
+		borderRadius: 32,
+		padding: 32,
+		alignItems: 'center',
+		width: '100%',
+		maxWidth: 320,
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 10 },
+		shadowOpacity: 0.1,
+		shadowRadius: 20,
+		elevation: 10,
+	},
+	modalTitle: {
+		fontSize: 20,
+		fontWeight: '900',
+		color: GIFTYY_THEME.colors.gray900,
+		marginTop: 20,
+		marginBottom: 8,
+		letterSpacing: -0.5,
+	},
+	modalSubtitle: {
+		fontSize: 15,
 		color: GIFTYY_THEME.colors.gray500,
+		textAlign: 'center',
 	},
 	emptyState: {
 		alignItems: 'center',

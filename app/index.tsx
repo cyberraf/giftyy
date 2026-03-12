@@ -11,36 +11,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 const HAS_SEEN_GUIDE_KEY = 'giftyy_has_seen_guide_v1';
 
 export default function Index() {
-	const { user, loading, syncAuth } = useAuth();
+	const { user, loading, isOffline, syncAuth } = useAuth();
 	const router = useRouter();
 	const { top } = useSafeAreaInsets();
 	const { alert } = useAlert();
 	const [isHandlingDeepLink, setIsHandlingDeepLink] = React.useState(false);
 	const [hasCheckedInitialUrl, setHasCheckedInitialUrl] = React.useState(false);
-	const [hasSeenGuide, setHasSeenGuide] = React.useState<boolean | null>(null);
-	const [bypassGuide, setBypassGuide] = React.useState(false);
-
-	// Load onboarding/guide completion flag
-	useEffect(() => {
-		let cancelled = false;
-		if (__DEV__) console.log('[Index] Loading hasSeenGuide from AsyncStorage...');
-		(async () => {
-			try {
-				const v = await AsyncStorage.getItem(HAS_SEEN_GUIDE_KEY);
-				if (cancelled) return;
-				if (__DEV__) console.log('[Index] hasSeenGuide loaded:', v);
-				setHasSeenGuide(v === '1');
-			} catch (e) {
-				if (__DEV__) console.error('[Index] Error loading hasSeenGuide:', e);
-				// If storage fails, do not block users.
-				if (cancelled) return;
-				setHasSeenGuide(true);
-			}
-		})();
-		return () => {
-			cancelled = true;
-		};
-	}, []);
+	// User guide has been removed.
 
 	// Log component render for debugging
 	React.useEffect(() => {
@@ -62,8 +39,7 @@ export default function Index() {
 
 		// Handle deep links for password reset and OAuth callbacks
 		const handleDeepLink = async (url: string) => {
-			// If the app was opened via deep link, do not interrupt with onboarding.
-			setBypassGuide(true);
+			// If the app was opened via deep link, do not interrupt.
 			if (__DEV__) {
 				console.log('🔵 ========================================');
 				console.log('🔵 handleDeepLink called with URL:', url);
@@ -507,7 +483,6 @@ export default function Index() {
 
 					// Only handle if it's not the Expo dev client URL
 					if (url && !url.includes('expo-development-client')) {
-						setBypassGuide(true);
 						if (__DEV__) {
 							console.log('🔴 Processing deep link...');
 						}
@@ -555,7 +530,6 @@ export default function Index() {
 
 			// Only handle if it's not the Expo dev client URL
 			if (event.url && !event.url.includes('expo-development-client')) {
-				setBypassGuide(true);
 				if (__DEV__) {
 					console.log('🔴 Processing URL event...');
 				}
@@ -574,7 +548,7 @@ export default function Index() {
 	}, [router]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	// Show loading while checking initial URL or handling deep link
-	if (loading || isHandlingDeepLink || !hasCheckedInitialUrl || hasSeenGuide === null) {
+	if ((loading || isHandlingDeepLink || !hasCheckedInitialUrl) && !isOffline) {
 		if (__DEV__) {
 			console.log('🔵 Showing loading screen - loading:', loading, 'isHandlingDeepLink:', isHandlingDeepLink, 'hasCheckedInitialUrl:', hasCheckedInitialUrl);
 		}
@@ -590,11 +564,6 @@ export default function Index() {
 				)}
 			</View>
 		);
-	}
-
-	// First-time users: show guide slides after splash (unless app was opened via deep link).
-	if (!bypassGuide && hasSeenGuide === false) {
-		return <Redirect href="/guide" />;
 	}
 
 	if (__DEV__) {

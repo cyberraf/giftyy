@@ -178,20 +178,15 @@ export default function VideoScreen() {
 
 	return (
 		<View style={styles.container} collapsable={false}>
-			<StepBar current={3} total={7} label="Video message" />
+
 			<View style={styles.videoFlowContainer} collapsable={false}>
-				<Pressable
-					onPress={handleSkip}
-					style={styles.skipButtonOverlay}
-					hitSlop={20}
-				>
-					<Text style={styles.skipButtonText}>Skip</Text>
-				</Pressable>
+
 				{isScreenFocused && (isMounted || recordedVideoUri || localVideoUri) ? (
 					<VideoRecordingFlow
 						key={flowKey}
 						onVideoRecorded={handleVideoRecorded}
 						onCancel={handleCancel}
+						onSkip={handleSkip}
 						onRetake={() => {
 							// Discard saved checkout video so it doesn't come back
 							setLocalVideoUri(undefined);

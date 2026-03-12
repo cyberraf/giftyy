@@ -3,6 +3,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useAlert } from '@/contexts/AlertContext';
 import { useCart } from '@/contexts/CartContext';
 import { useProducts } from '@/contexts/ProductsContext';
+import { parsePrice } from '@/lib/utils/currency';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
 import {
@@ -25,10 +26,6 @@ const SOFT = '#f9fafb';
 
 const VIDEO_CARD_WIDTH = 80; // Small compact video cards
 
-function parsePriceToNumber(price: string): number {
-	const n = parseFloat(price.replace(/[^0-9.]/g, ''));
-	return isNaN(n) ? 0 : n;
-}
 
 export default function CartScreen() {
 	const { items, removeItem, updateQuantity, clear, totalQuantity } = useCart();
@@ -38,7 +35,7 @@ export default function CartScreen() {
 	const [refreshing, setRefreshing] = useState(false);
 
 	const subtotal = useMemo(
-		() => items.reduce((sum, it) => sum + parsePriceToNumber(it.price) * it.quantity, 0),
+		() => items.reduce((sum, it) => sum + parsePrice(it.price) * it.quantity, 0),
 		[items]
 	);
 

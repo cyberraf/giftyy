@@ -36,6 +36,7 @@ export type VideoRecordingFlowProps = {
   initialVideoUri?: string | null;
   initialDurationMs?: number;
   onRetake?: () => void;
+  onSkip?: () => void;
   recipientFirstName?: string;
 };
 
@@ -45,6 +46,7 @@ export function ExpoCameraRecordingFlow({
   initialVideoUri,
   initialDurationMs,
   onRetake,
+  onSkip,
   recipientFirstName,
 }: VideoRecordingFlowProps) {
   const didApplyInitialRef = useRef(false);
@@ -329,11 +331,18 @@ export function ExpoCameraRecordingFlow({
             </LinearGradient>
           </Pressable>
 
-          {onCancel && (
-            <Pressable onPress={onCancel} style={styles.cancelButton}>
-              <Text style={styles.cancelButtonText}>Back</Text>
-            </Pressable>
-          )}
+          <View style={styles.bottomButtonsRow}>
+            {onCancel && (
+              <Pressable onPress={onCancel} style={styles.cancelButton}>
+                <Text style={styles.cancelButtonText}>Back</Text>
+              </Pressable>
+            )}
+            {onSkip && (
+              <Pressable onPress={onSkip} style={styles.cancelButton}>
+                <Text style={styles.cancelButtonText}>Skip</Text>
+              </Pressable>
+            )}
+          </View>
         </Animated.View>
       </View>
     );
@@ -477,8 +486,9 @@ const styles = StyleSheet.create({
   welcomeContent: {
     flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     paddingHorizontal: 28,
+    paddingTop: 80,
     paddingBottom: 40,
   },
   welcomeIconRing: {
@@ -539,7 +549,7 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     paddingVertical: 14,
     paddingHorizontal: 20,
-    marginBottom: 36,
+    marginBottom: 20,
     gap: 0,
   },
   featureChip: {
@@ -581,6 +591,7 @@ const styles = StyleSheet.create({
   startButtonText: { color: '#fff', fontSize: 17, fontWeight: '800', letterSpacing: 0.3 },
   cancelButton: { paddingVertical: 12, paddingHorizontal: 24 },
   cancelButtonText: { color: 'rgba(255,255,255,0.45)', fontSize: 15, fontWeight: '600' },
+  bottomButtonsRow: { flexDirection: 'row', gap: 24, justifyContent: 'center', width: '100%' },
   // ── Permission screen ─────────────────────────────────────────
   sparkleContainer: { marginBottom: 24 },
   permissionContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },

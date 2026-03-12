@@ -11,9 +11,10 @@ import { useRecipients } from '@/contexts/RecipientsContext';
 import { useCheckout } from '@/lib/CheckoutContext';
 import { calculateVendorShippingByZone } from '@/lib/shipping-utils';
 import { supabase } from '@/lib/supabase';
+import { parsePrice } from '@/lib/utils/currency';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function RecipientScreen() {
@@ -96,8 +97,9 @@ export default function RecipientScreen() {
         }
     }, [refreshProducts, refreshCollections, refreshRecipients, items]);
 
+
     const subtotal = useMemo(
-        () => items.reduce((s, it) => s + (parseFloat(it.price.replace(/[^0-9.]/g, '')) || 0) * it.quantity, 0),
+        () => items.reduce((s, it) => s + parsePrice(it.price) * it.quantity, 0),
         [items]
     );
 
@@ -185,7 +187,7 @@ export default function RecipientScreen() {
 
                 itemsByVendor.forEach((vendorItems, vendorId) => {
                     const vendorSubtotal = vendorItems.reduce((sum, item) => {
-                        const price = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
+                        const price = parsePrice(item.price);
                         return sum + price * item.quantity;
                     }, 0);
 
@@ -241,7 +243,7 @@ export default function RecipientScreen() {
 
                 itemsByVendor.forEach((vendorItems, vendorId) => {
                     const vendorSubtotal = vendorItems.reduce((sum, item) => {
-                        const price = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
+                        const price = parsePrice(item.price);
                         return sum + price * item.quantity;
                     }, 0);
 
@@ -332,7 +334,7 @@ export default function RecipientScreen() {
     return (
         <View style={{ flex: 1, backgroundColor: 'white' }}>
             <StepBar current={2} total={7} label="Recipient details" />
-            <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+            <View style={{ flex: 1 }}>
                 <ScrollView
                     keyboardShouldPersistTaps="handled"
                     contentContainerStyle={{ paddingBottom: 20 + bottom + BOTTOM_BAR_TOTAL_SPACE }}
@@ -511,7 +513,7 @@ export default function RecipientScreen() {
                     </View>
                 </View>
 
-            </KeyboardAvoidingView>
+            </View>
 
             <RecipientFormModal
                 visible={addRecipientVisible}

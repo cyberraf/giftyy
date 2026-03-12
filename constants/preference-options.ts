@@ -1,4 +1,8 @@
-export const RECIPIENT_FORM_URL = 'https://giftyy.store/recipient/preferences';
+/** App store URLs - recipients use the mobile app only (no web recipient flow). */
+export const APP_STORE_URL = 'https://apps.apple.com/app/id6739556270';
+export const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=com.giftyy.app';
+/** @deprecated Use APP_STORE_URL / PLAY_STORE_URL - web recipient preferences deprecated */
+export const RECIPIENT_FORM_URL = APP_STORE_URL;
 
 // ============================================
 // CATEGORY 1: Demographics & Identity

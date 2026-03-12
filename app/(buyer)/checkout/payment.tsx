@@ -11,10 +11,11 @@ import { useCheckout } from '@/lib/CheckoutContext';
 import { calculateVendorShippingByZone } from '@/lib/shipping-utils';
 import { SafeCardField, useSafeStripe } from '@/lib/stripe-safe';
 import { supabase } from '@/lib/supabase';
+import { parsePrice } from '@/lib/utils/currency';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function PaymentScreen() {
@@ -97,12 +98,6 @@ export default function PaymentScreen() {
         loadVendorNames();
     }, [items]);
 
-    const parsePrice = (value?: string) => {
-        if (!value) return 0;
-        const cleaned = value.replace(/[^0-9.]/g, '');
-        const amount = parseFloat(cleaned);
-        return Number.isNaN(amount) ? 0 : amount;
-    };
 
     const itemsSubtotal = useMemo(() => items.reduce((sum, item) => sum + parsePrice(item.price) * item.quantity, 0), [items]);
     const cardAddOn = cardPrice || 0;
@@ -143,7 +138,7 @@ export default function PaymentScreen() {
 
                 itemsByVendor.forEach((vendorItems, vendorId) => {
                     const vendorSubtotal = vendorItems.reduce((sum, item) => {
-                        const price = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
+                        const price = parsePrice(item.price);
                         return sum + price * item.quantity;
                     }, 0);
 
@@ -198,7 +193,7 @@ export default function PaymentScreen() {
 
                 itemsByVendor.forEach((vendorItems, vendorId) => {
                     const vendorSubtotal = vendorItems.reduce((sum, item) => {
-                        const price = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
+                        const price = parsePrice(item.price);
                         return sum + price * item.quantity;
                     }, 0);
 
@@ -394,7 +389,7 @@ export default function PaymentScreen() {
     return (
         <View style={{ flex: 1, backgroundColor: '#fff' }}>
             <StepBar current={6} total={7} label="Payment" />
-            <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <View style={{ flex: 1 }}>
                 <ScrollView
                     contentContainerStyle={styles.content}
                     refreshControl={
@@ -476,7 +471,7 @@ export default function PaymentScreen() {
                         </Pressable>
                     </View>
                 </View>
-            </KeyboardAvoidingView>
+            </View>
         </View>
     );
 }

@@ -131,7 +131,7 @@ const GiftyyThinking = ({ recipientName }: { recipientName: string }) => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 export default function RecipientDetailScreen() {
-    const { id } = useLocalSearchParams<{ id: string }>();
+    const { id, occasionId } = useLocalSearchParams<{ id: string; occasionId?: string }>();
     const { top, bottom } = useSafeAreaInsets();
     const router = useRouter();
     const navigation = useNavigation();
@@ -270,6 +270,9 @@ export default function RecipientDetailScreen() {
     const [categorizedRecommendations, setCategorizedRecommendations] = useState<{ occasion: any; products: Product[]; reasons: Record<string, AIRecommendation> }[]>([]);
     const [aiInsights, setAiInsights] = useState<Record<string, string>>({});
     const [aiLoading, setAiLoading] = useState(false);
+    const scrollRef = React.useRef<ScrollView>(null);
+    const [sectionLayouts, setSectionLayouts] = useState<Record<string, number>>({});
+    const [hasScrolled, setHasScrolled] = useState(false);
 
     // Fetch AI Recommendations
     useEffect(() => {
@@ -347,6 +350,17 @@ export default function RecipientDetailScreen() {
 
         fetchAIRecommendations();
     }, [recipientOccasions, recipient?.profileId]);
+
+    // Automatic scroll to specific occasion
+    useEffect(() => {
+        if (occasionId && !hasScrolled && categorizedRecommendations.length > 0 && sectionLayouts[occasionId]) {
+            const y = sectionLayouts[occasionId];
+            setTimeout(() => {
+                scrollRef.current?.scrollTo({ y, animated: true });
+                setHasScrolled(true);
+            }, 500); // Small delay to ensure rendering completion
+        }
+    }, [occasionId, hasScrolled, categorizedRecommendations, sectionLayouts]);
 
     // Giftyy's personalised thought
     const giftyyThought = useMemo(() => {
@@ -489,6 +503,7 @@ export default function RecipientDetailScreen() {
     return (
         <View style={styles.screen}>
             <ScrollView
+                ref={scrollRef}
                 contentContainerStyle={{ paddingBottom: bottom + 240 }}
                 showsVerticalScrollIndicator={false}
             >
@@ -664,7 +679,14 @@ export default function RecipientDetailScreen() {
                 {/* ── Personalised AI Recommendations per Occasion ── */}
                 {categorizedRecommendations.length > 0 ? (
                     categorizedRecommendations.map(({ occasion, products: groupProducts, reasons }) => (
-                        <View key={occasion.id} style={styles.section}>
+                        <View
+                            key={occasion.id}
+                            style={styles.section}
+                            onLayout={(event) => {
+                                const { y } = event.nativeEvent.layout;
+                                setSectionLayouts(prev => ({ ...prev, [occasion.id]: y }));
+                            }}
+                        >
                             <View style={styles.recHeaderContainer}>
                                 <View style={styles.recTitleWrapper}>
                                     <Text style={styles.recOccasionLabel} numberOfLines={1}>{occasion.label}</Text>

@@ -2,7 +2,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { RecommendedProduct } from '@/lib/api/ai-sessions';
 import React, { useState } from 'react';
-import { Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
+import { Image, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
 
 interface Product {
     id: string;
@@ -301,7 +301,10 @@ export function RecommendationCard({ suggestion, product, onPress, onFeedback, s
                     style={styles.modalOverlay}
                     onPress={() => setShowDislikeReasons(false)}
                 >
-                    <View style={styles.modalContent}>
+                    <KeyboardAvoidingView
+                        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                        style={styles.modalContent}
+                    >
                         <View style={styles.modalHeader}>
                             <Text style={styles.dislikeTitle}>Why isn't this right?</Text>
                             <Pressable onPress={() => setShowDislikeReasons(false)} hitSlop={10}>
@@ -367,7 +370,7 @@ export function RecommendationCard({ suggestion, product, onPress, onFeedback, s
                                 <Text style={styles.modalSubmitText}>Submit Feedback</Text>
                             </Pressable>
                         </View>
-                    </View>
+                    </KeyboardAvoidingView>
                 </Pressable>
             </Modal>
         </Pressable >

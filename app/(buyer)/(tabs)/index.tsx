@@ -10,7 +10,7 @@ import { useHome } from '@/lib/hooks/useHome';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, View } from 'react-native';
 
 /**
  * Buyer Home: AI Chat Interface with Upcoming Celebrations & Onboarding
@@ -20,6 +20,7 @@ export default function BuyerHomeIndexScreen() {
 		recipients,
 		upcomingOccasions,
 		recipientsLoading,
+		initialLoading,
 		myPreferences,
 		myProfileOccasions,
 	} = useHome();
@@ -28,11 +29,29 @@ export default function BuyerHomeIndexScreen() {
 	const router = useRouter();
 	const { setVisible } = useBottomBarVisibility();
 	const { profile, user } = useAuth();
-	const { orders } = useOrders();
-	const { videoMessages } = useVideoMessages();
-	const { sharedMemories } = useSharedMemories();
+	const { sharedMemories, refreshSharedMemories } = useSharedMemories();
+	const { orders, refreshOrders } = useOrders();
+	const { videoMessages, refreshVideoMessages } = useVideoMessages();
+	const { refreshOccasions } = useHome();
 
 	const [hasReactions, setHasReactions] = useState(false);
+	const [refreshing, setRefreshing] = useState(false);
+
+	const handleRefresh = useCallback(async () => {
+		setRefreshing(true);
+		try {
+			await Promise.all([
+				refreshOccasions(),
+				refreshOrders(),
+				refreshVideoMessages(),
+				refreshSharedMemories(),
+			]);
+		} catch (error) {
+			console.error('Error refreshing home data:', error);
+		} finally {
+			setRefreshing(false);
+		}
+	}, [refreshOccasions, refreshOrders, refreshVideoMessages, refreshSharedMemories]);
 
 	useEffect(() => {
 		async function checkReactions() {
@@ -60,10 +79,10 @@ export default function BuyerHomeIndexScreen() {
 	};
 
 	const handlePressOccasion = useCallback(
-		(recipientId: string) => {
+		(recipientId: string, occasionId: string) => {
 			router.push({
-				pathname: '/(buyer)/(tabs)/shop',
-				params: { recipient: recipientId },
+				pathname: '/(buyer)/recipient/[id]',
+				params: { id: recipientId, occasionId }
 			});
 		},
 		[router],
@@ -179,22 +198,33 @@ export default function BuyerHomeIndexScreen() {
 				recipients={recipients}
 				occasions={homeOccasions}
 				onSearch={handleSearch}
+				refreshing={refreshing}
+				onRefresh={handleRefresh}
 			>
-				{/* Upcoming Celebrations */}
-				<OccasionList
-					occasions={homeOccasions}
-					loading={recipientsLoading}
-					onPressOccasion={handlePressOccasion}
-					onAddOccasion={handleAddOccasion}
-				/>
-
-				{/* Onboarding Steps (hide once fully complete) */}
-				{!isOnboardingComplete && (
-					<View style={styles.onboardingWrapper}>
-						<OnboardingSection
-							percentage={onboardingPercentage}
-							steps={onboardingSteps}
+				{/* Loading skeleton wrapper or empty container while initial data is loading */}
+				{!initialLoading ? (
+					<>
+						{/* Upcoming Celebrations */}
+						<OccasionList
+							occasions={homeOccasions}
+							loading={recipientsLoading}
+							onPressOccasion={handlePressOccasion}
+							onAddOccasion={handleAddOccasion}
 						/>
+
+						{/* Onboarding Steps (hide once fully complete) */}
+						{!isOnboardingComplete && (
+							<View style={styles.onboardingWrapper}>
+								<OnboardingSection
+									percentage={onboardingPercentage}
+									steps={onboardingSteps}
+								/>
+							</View>
+						)}
+					</>
+				) : (
+					<View style={{ height: 300, justifyContent: 'center', alignItems: 'center' }}>
+						<ActivityIndicator size="small" color="#f75507" />
 					</View>
 				)}
 			</HomeAIInterface>

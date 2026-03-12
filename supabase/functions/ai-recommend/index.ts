@@ -167,6 +167,7 @@ function serializeCandidates(products: any[]): string {
       in_stock: p.in_stock, // Added in_stock for serialization
       product_text: p.product_text,
       similarity_distance: Number((p.similarity_distance ?? 0).toFixed(4)),
+      is_over_budget: p.is_over_budget ?? false,
     }))
   );
 }
@@ -194,10 +195,9 @@ const SYSTEM_PROMPT = `1. PERSONALITY: You are Giftyy, a super cute, encouraging
    - Gift Styles (e.g., Minimalist, Luxury, Practical, Playful, Sentimental)
 
 4. WIZARD RULES:
-   - SINGLE QUESTION: You MUST ask exactly ONE question per turn. Focus on one piece of info.
-   - NO GUESSING: If you don't have basic demographics (Age/Gender) or Interests, keep "recommendations" EMPTY.
-   - VALIDATE: Acknowledge what the user just told you before asking the next question.
-   - TRANSITION: Once you have at least 80% of the checklist (especially demographics and interests), you can move to the recommendation phase.
+   - PROACTIVE: Always provide recommendations if you have even a basic idea of what the user wants. 
+   - TARGET: Aim for 6-8 recommendations in every response.
+   - GUIDANCE: Acknowledge user input warmly ("Oh, that's lovely! ✨") and ask for more info only if truly needed to improve the matches.
 
 5. WEIGHTING SYSTEM (CRITICAL):
    - Positive Weights (100, 90, 80...): "Must Fit". HIGHEST priority.
@@ -212,18 +212,38 @@ const SYSTEM_PROMPT = `1. PERSONALITY: You are Giftyy, a super cute, encouraging
 8. QUICK REPLIES (CONTEXT-BASED):
    - You MUST provide exactly 3-5 "quick_replies".
    - CRITICAL: These MUST be direct, relevant answers to the ONE question you just asked in "chat_followup".
-   - Example: If you ask for their favorite hobby, suggestions should be specific hobbies like "Knitting", "Tech gadgets", "Reading".
+   - If you are recommending products, provide quick replies like "More options", "Try up to $[Amount]", "Check details".
    - Keep them short (1-2 words).
 
-9. RECOMMENDATIONS:
-   - Once the Discovery Phase is 80%+ complete, you MUST provide exactly 6-8 "recommendations".
+9. PROACTIVE GUIDANCE & BUDGET FLEXIBILITY:
+   - You are a reasoning-first assistant. You will always receive a mix of "In-Budget" and "Over-Budget" products.
+   - If no good "In-Budget" matches exist, do NOT give up. Instead, use the "Over-Budget" items to explain what's available and guide the user.
+   - If you show over-budget items, explain it warmly: "I couldn't find exactly that under your $100 budget, but I found these beautiful options that are a bit more premium. Shall we explore them?"
+   - Providing "quick_replies" that suggest new specific budget limits (e.g., "Try up to $200", "Try up to $500") is HIGHLY ENCOURAGED if you are showing over-budget items or if search result quality is low.
+   - If the user says "increase the budget", "more expensive", or similar, they are giving you permission to promote the "is_over_budget" products.
+
+10. RECOMMENDATIONS:
+   - You MUST provide recommendations in EVERY turn where interests are present.
+   - QUANTITY: Recommend UP TO 6-8 gifts, but ONLY if they are truly excellent matches. If no excellent matches exist, provide fewer or even ZERO.
+   - STRICT GROUNDING: You MUST ONLY recommend products from the provided 'CANDIDATE PRODUCTS' list. 
+   - ABSOLUTELY FORBIDDEN: Do NOT invent, hallucinate, or create new products. Do NOT make up product IDs. If the 'CANDIDATE PRODUCTS' list is empty, return an empty 'recommendations' array.
    - Each recommendation MUST have a clear "spark_joy_reason" explaining why it fits.
 
 10. OUTPUT FORMAT — respond with a single JSON object only:
 {
   "clarifying_questions": ["Question 1"], 
   "quick_replies": ["Suggestion for user reply"],
-  "recommendations": [],
+  "recommendations": [
+    {
+      "product_id": "<must exist in candidates list>",
+      "title": "<existing name>",
+      "reason_1": "<reason>",
+      "reason_2": "<reason>",
+      "fit_tags": [],
+      "price": 0,
+      "confidence_0_1": 0.9
+    }
+  ],
   "chat_followup": "<friendly response acknowledge current info and asking for the next logical piece of data>",
   "message_script": "<only if recommendations are present>",
   "cautions": []
@@ -233,7 +253,11 @@ async function callLLM(
   intentString: string,
   candidatesJson: string,
   recipient: any | null,
-  chatHistory: { role: string; content: string }[] = []
+  chatHistory: { role: string; content: string }[] = [],
+  budget?: number,
+  recipientName?: string,
+  recipientRelationship?: string,
+  occasion?: string
 ): Promise<any> {
   const sensitivityLines: string[] = [];
   const preferenceSummary: string[] = [];
@@ -310,8 +334,11 @@ async function callLLM(
     `=== KNOWN RECIPIENT PROFILE ===`,
     preferenceSummary.length > 0 ? preferenceSummary.join('\n') : 'No existing profile data.',
     '',
-    `=== CURRENT BUYER CONTEXT ===`,
-    intentString,
+    `=== ADDITIONAL BUDGET/RECIPIENT CONTEXT ===`,
+    `Budget: $${budget ?? 'Not set'}`,
+    recipientName ? `Target Name: ${recipientName}` : '',
+    recipientRelationship ? `Relationship: ${recipientRelationship}` : '',
+    occasion ? `Occasion: ${occasion}` : '',
     '',
     sensitivityLines.length > 0
       ? `=== RECIPIENT SENSITIVITIES ===\n${sensitivityLines.join('\n')}\n`
@@ -319,7 +346,7 @@ async function callLLM(
     `=== CANDIDATE PRODUCTS (${candidateCount} items) ===`,
     candidatesJson,
     '',
-    `Task: You are a Discovery Wizard. Compare the KNOWN RECIPIENT PROFILE and BUYER CONTEXT against the MANDATORY CHECKLIST. If data is missing, prioritize asking exactly ONE friendly question and keep 'recommendations' EMPTY. Only if the profile is robust (demographics + interests + occasion) should you recommend 3-5 gifts.`
+    `Task: Provide 6-8 helpful recommendations based on the current profile and buyer context. If you need more info, ask a friendly question in 'clarifying_questions' while still showing the recommendations.`
   ]
     .filter(Boolean)
     .join('\n');
@@ -364,9 +391,18 @@ async function callLLM(
     throw new Error(`Failed to parse LLM JSON: ${raw.slice(0, 300)}`);
   }
 
+  const validCandidateIds = new Set(JSON.parse(candidatesJson).map((c: any) => String(c.id)));
+
   const recommendations = (Array.isArray(parsed.recommendations) ? parsed.recommendations : [])
-    .filter((r: any) => typeof r?.product_id === 'string')
-    .slice(0, 5)
+    .filter((r: any) => {
+      const id = String(r?.product_id ?? '');
+      if (!id || !validCandidateIds.has(id)) {
+        console.warn(`[ai-recommend] LLM suggested invalid/hallucinated product_id: ${id}`);
+        return false;
+      }
+      return true;
+    })
+    .slice(0, 8)
     .map((r: any) => ({
       product_id: String(r.product_id),
       title: String(r.title ?? ''),
@@ -544,10 +580,7 @@ Deno.serve(async (req: Request) => {
       if (rec.gift_dislikes?.length > 0) intentParts.push(`MUST AVOID (Dislikes): ${rec.gift_dislikes.join(', ')} [Weight: ${PREFERENCE_WEIGHTS.PREFERENCE_DEALBREAKERS}]`);
     }
 
-    if (chatHistory && chatHistory.length > 0) {
-      const historyText = chatHistory.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
-      intentParts.push(`Conversation History:\n${historyText}`);
-    }
+    // History is handled separately in the messages array
 
     if (feedbackHistory && feedbackHistory.length > 0) {
       const feedbackText = feedbackHistory.map(f => `${f.type === 'like' ? 'Liked' : 'Disliked'} product: ${f.productName}${f.reason ? ` (Reason: ${f.reason})` : ''}`).join('\n');
@@ -561,16 +594,36 @@ Deno.serve(async (req: Request) => {
 
     const intentString = intentParts.join('\n\n');
 
-    // ── Step 3: Embed intent + RAG retrieval ──────────────────────────────
+    // ── Step 3: Embed intent + RAG retrieval (Two-Phase) ──────────────────
     const embedding = await embedText(intentString);
-    const maxBudget = budget ?? 9999;
-    const candidates = await searchRAG({
+    const initialBudget = budget ?? 9999;
+    
+    // Phase 1: Search within budget
+    let candidates = await searchRAG({
       embedding,
-      maxPrice: maxBudget,
+      maxPrice: initialBudget,
       giftWrap: constraints?.gift_wrap_required ?? null,
       personalization: constraints?.personalization_required ?? null,
-      limit: 60,
+      limit: 40,
     });
+
+    // Phase 2: ALWAYS Peeking Broadly (Unlimited Price)
+    // We do a second search with NO price cap to find the best quality matches globally
+    const broadCandidates = await searchRAG({
+      embedding,
+      maxPrice: 99999, // Essentially unlimited
+      giftWrap: constraints?.gift_wrap_required ?? null,
+      personalization: constraints?.personalization_required ?? null,
+      limit: 15,
+    });
+
+    // Merge and label
+    const initialIds = new Set(candidates.map((c: any) => c.id));
+    const premiumAddition = broadCandidates
+      .filter((c: any) => !initialIds.has(c.id))
+      .map((c: any) => ({ ...c, is_over_budget: true }));
+    
+    candidates = [...candidates, ...premiumAddition];
 
     const dislikedIds = (feedbackHistory || [])
       .filter((f: any) => f.type === 'dislike')
@@ -578,19 +631,14 @@ Deno.serve(async (req: Request) => {
 
     const filteredCandidates = candidates.filter((c: any) => !dislikedIds.includes(c.id));
 
-    if (filteredCandidates.length === 0) {
-      return jsonResponse({
-        clarifying_questions: [],
-        recommendations: [],
-        message_script: '',
-        cautions: [],
-        candidates_evaluated: 0,
-      });
-    }
+    // Intelligence: We NO LONGER return an early "empty" response here.
+    // Instead, we let the LLM see whatever we found (even if empty) 
+    // and decide how to talk to the user about it.
+
 
     // ── Step 4: LLM reranker ──────────────────────────────────────────────
     const candidatesJson = serializeCandidates(filteredCandidates);
-    const output = await callLLM(intentString, candidatesJson, recipient, chatHistory || []);
+    const output = await callLLM(intentString, candidatesJson, recipient, chatHistory || [], budget, recipientName, recipientRelationship, occasion);
 
     // ── Step 4b: Enrich recommendations with images from candidates ───────
     if (output.recommendations) {

@@ -20,7 +20,7 @@ const CARD_GAP = 10;
 type Props = {
 	occasions: UpcomingOccasion[];
 	loading: boolean;
-	onPressOccasion: (recipientId: string) => void;
+	onPressOccasion: (recipientId: string, occasionId: string) => void;
 	onAddOccasion: () => void;
 };
 
@@ -148,7 +148,7 @@ export function OccasionList({ occasions, loading, onPressOccasion, onAddOccasio
 					return (
 						<Pressable
 							key={occ.id}
-							onPress={() => onPressOccasion(occ.recipientId)}
+							onPress={() => onPressOccasion(occ.recipientId, occ.id)}
 							style={({ pressed }) => [
 								styles.card,
 								pressed && styles.cardPressed,

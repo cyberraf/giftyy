@@ -91,6 +91,7 @@ function serializeCandidates(products: any[]): string {
       vibes: p.vibes,
       tags: p.tags,
       product_text: p.product_text,
+      is_over_budget: p.is_over_budget ?? false,
     }))
   );
 }
@@ -129,10 +130,20 @@ const SYSTEM_PROMPT = `1. PERSONALITY: You are Giftyy, a super cute, encouraging
 2. EXPERT MODE: You are assisting with a KNOWN RECIPIENT. 
    - DO NOT ask for basic demographics (Age, Gender, Relationship) if they are already in the profile.
    - FOCUS: Jump straight into the Occasion or specific interests.
-   - CONVERSATIONAL FLOW: If the user says something generic like "Sure" or "I'll tell you", acknowledge it warmly ("Wonderful! I'm all ears! ✨") and then ask for one specific detail (e.g. "What's their favorite hobby recently?") to keep the momentum.
-   - RECOMMENDATIONS: If the profile is robust (interests + occasion + demographics), prioritize recommending 6-8 matches.
+   - CONVERSATIONAL FLOW: Acknowledge user input warmly. Ask for one specific detail if truly needed, but prioritise showing products if the profile is starting to look good.
+   - RECOMMENDATIONS: You are ENCOURAGED to provide recommendations as soon as you have a few meaningful interests and the basics (demographics).
+   - QUANTITY: Recommend UP TO 6-8 gifts, but ONLY if they are truly excellent matches. If no excellent matches exist, provide fewer or even ZERO.
+   - STRICT GROUNDING: You MUST ONLY recommend products from the provided 'CANDIDATE PRODUCTS' list. 
+   - ABSOLUTELY FORBIDDEN: Do NOT invent, hallucinate, or create new products. Do NOT make up product IDs. If the 'CANDIDATE PRODUCTS' list is empty, return an empty 'recommendations' array.
 
-3. WEIGHTING SYSTEM (CRITICAL):
+3. PROACTIVE GUIDANCE & BUDGET FLEXIBILITY:
+   - You are a reasoning-first assistant. You will always receive a mix of "In-Budget" and "is_over_budget: true" products.
+   - If no good "In-Budget" matches exist, do NOT give up. Instead, use the over-budget items to explain what's available and guide the user.
+   - If you show over-budget items, explain it warmly: "I couldn't find exactly that under your $[budget], but I found these beautiful options that are a bit more premium. Shall we explore them?"
+   - Provide 3-5 "quick_replies" that suggest new specific budget limits (e.g. 'Try up to $200', 'Try up to $500') if you recommend items over budget.
+   - If the user says "increase the budget", they are officially giving you permission to promote the "is_over_budget" products.
+
+4. WEIGHTING SYSTEM (CRITICAL):
    - Positive Weights (100, 90, 80...): "Must Fit". HIGHEST priority.
    - Negative Weights (-100, -90...): "Must Avoid". ABSOLUTELY DO NOT suggest products that conflict with negative-weighted preferences.
 
@@ -156,8 +167,8 @@ const SYSTEM_PROMPT = `1. PERSONALITY: You are Giftyy, a super cute, encouraging
   "quick_replies": ["Short suggestion for user reply"],
   "recommendations": [
      {
-       "product_id": "<uuid>",
-       "title": "<name>",
+       "product_id": "<must exist in candidates list>",
+       "title": "<existing name>",
        "reason_1": "<cute fit reason>",
        "reason_2": "<another reason>",
        "fit_tags": ["<tag>"],
@@ -289,7 +300,24 @@ async function callLLM(
   
   try {
     const parsed = JSON.parse(raw);
-    return { ...parsed, candidates_evaluated: candidateCount };
+    const validCandidateIds = new Set(JSON.parse(candidatesJson).map((c: any) => String(c.id)));
+
+    const recommendations = (Array.isArray(parsed.recommendations) ? parsed.recommendations : [])
+      .filter((r: any) => {
+        const id = String(r?.product_id ?? '');
+        if (!id || !validCandidateIds.has(id)) {
+          console.warn(`[ai-recommend-tagged] LLM suggested invalid product_id: ${id}`);
+          return false;
+        }
+        return true;
+      })
+      .slice(0, 8);
+
+    return { 
+      ...parsed, 
+      recommendations,
+      candidates_evaluated: candidateCount 
+    };
   } catch (e) {
     console.error('[ai-recommend-tagged] LLM JSON failure:', raw);
     throw new Error(`Failed to parse AI response`);
@@ -356,13 +384,32 @@ Deno.serve(async (req) => {
     ];
 
     const embedding = await embedText(intentParts.join(' '));
-    const candidates = await searchRAG({
+    const initialBudget = budget ?? 9999;
+    
+    // Phase 1: Within budget
+    let candidates = await searchRAG({
       embedding,
-      maxPrice: budget ?? 9999,
+      maxPrice: initialBudget,
       giftWrap: constraints?.gift_wrap_required ?? null,
       personalization: constraints?.personalization_required ?? null,
-      limit: 40,
+      limit: 30,
     });
+
+    // Phase 2: ALWAYS Peeking Broadly
+    const broadSearch = await searchRAG({
+      embedding,
+      maxPrice: 99999,
+      giftWrap: constraints?.gift_wrap_required ?? null,
+      personalization: constraints?.personalization_required ?? null,
+      limit: 15,
+    });
+
+    const initialIds = new Set(candidates.map((c: any) => c.id));
+    const premiumAddition = broadSearch
+      .filter((c: any) => !initialIds.has(c.id))
+      .map((c: any) => ({ ...c, is_over_budget: true }));
+    
+    candidates = [...candidates, ...premiumAddition];
 
     const dislikedIds = (feedbackHistory || [])
       .filter((f: any) => f.type === 'dislike')
@@ -370,19 +417,12 @@ Deno.serve(async (req) => {
 
     const filteredCandidates = candidates.filter((c: any) => !dislikedIds.includes(c.id));
 
-    if (filteredCandidates.length === 0) {
-      return jsonResponse({
-        clarifying_questions: [],
-        recommendations: [],
-        chat_followup: "I'm so sorry, I couldn't find any gifts matching those specific criteria right now. Maybe we could try a different budget or category? ✨",
-        message_script: "",
-        cautions: [],
-        candidates_evaluated: 0
-      });
-    }
+    // NO early empty return. Let the LLM handle it.
+
 
     const candidatesJson = serializeCandidates(filteredCandidates);
     const output = await callLLM(intentParts.join('\n'), candidatesJson, recipient, chatHistory || []);
+
 
     if (feedbackHistory && feedbackHistory.length > 0) {
       const feedbackText = feedbackHistory.map(f => `${f.type === 'like' ? 'Liked' : 'Disliked'} product: ${f.productName}${f.reason ? ` (Reason: ${f.reason})` : ''}`).join('\n');

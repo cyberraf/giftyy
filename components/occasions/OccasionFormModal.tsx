@@ -10,7 +10,9 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
 	ActivityIndicator,
 	Alert,
+	KeyboardAvoidingView,
 	Modal,
+	Platform,
 	Pressable,
 	ScrollView,
 	StyleSheet,
@@ -296,7 +298,10 @@ export function OccasionFormModal({
 		<Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
 			<View style={styles.overlay}>
 				<Pressable style={styles.backdrop} onPress={saving ? undefined : onClose} />
-				<View style={styles.card}>
+				<KeyboardAvoidingView
+					style={styles.card}
+					behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+				>
 					<View style={styles.header}>
 						<View>
 							<Text style={styles.headerTitle}>{editingOccasionId ? 'Edit occasion' : 'Add occasion'}</Text>
@@ -430,7 +435,7 @@ export function OccasionFormModal({
 							</>
 						)}
 					</ScrollView>
-				</View>
+				</KeyboardAvoidingView>
 
 				<SelectSheet
 					visible={recipientPickerOpen}

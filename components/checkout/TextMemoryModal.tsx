@@ -8,7 +8,9 @@ import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import React, { useEffect, useState } from 'react';
 import {
 	Dimensions,
+	KeyboardAvoidingView,
 	Modal,
+	Platform,
 	Pressable,
 	StyleSheet,
 	Text,
@@ -133,14 +135,18 @@ export function TextMemoryModal({
 		>
 			<Pressable style={styles.overlay} onPress={onClose}>
 				<Animated.View style={[styles.backdrop, backdropStyle]} />
-				<Animated.View
-					style={[
-						styles.modal,
-						{ paddingTop: top + 20, paddingBottom: bottom + 20 },
-						modalStyle,
-					]}
-					onStartShouldSetResponder={() => true}
+				<KeyboardAvoidingView
+					style={{ flex: 1 }}
+					behavior={Platform.OS === 'ios' ? 'padding' : undefined}
 				>
+					<Animated.View
+						style={[
+							styles.modal,
+							{ paddingTop: top + 20, paddingBottom: bottom + 20 },
+							modalStyle,
+						]}
+						onStartShouldSetResponder={() => true}
+					>
 					{/* Sparkles decoration */}
 					<Animated.View style={[styles.sparkle, { top: 40, left: 40 }, sparkle1Style]}>
 						<IconSymbol name="sparkles" size={24} color={GIFTYY_THEME.colors.primary} />
@@ -197,7 +203,8 @@ export function TextMemoryModal({
 							</LinearGradient>
 						</AnimatedPressable>
 					)}
-				</Animated.View>
+					</Animated.View>
+				</KeyboardAvoidingView>
 			</Pressable>
 		</Modal>
 	);

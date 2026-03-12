@@ -23,8 +23,11 @@ import {
     ActivityIndicator,
     Image,
     Keyboard,
+    KeyboardAvoidingView,
     Modal,
+    Platform,
     Pressable,
+    RefreshControl,
     ScrollView,
     StyleSheet,
     Text,
@@ -76,6 +79,8 @@ type Props = {
     children?: React.ReactNode;
     style?: StyleProp<ViewStyle>;
     scrollToTop?: number;
+    refreshing?: boolean;
+    onRefresh?: () => void;
 };
 
 const AnimatedView = Animated.createAnimatedComponent(View);
@@ -90,7 +95,18 @@ const DEFAULT_SUGGESTIONS = [
 
 const BUDGET_PRESETS = [25, 50, 100, 250];
 
-export default function HomeAIInterface({ onSearch, recipients = [], occasions = [], products = [], initialPrompt = '', children, style, scrollToTop }: Props) {
+export default function HomeAIInterface({ 
+    onSearch, 
+    recipients = [], 
+    occasions = [], 
+    products = [], 
+    initialPrompt = '', 
+    children, 
+    style, 
+    scrollToTop,
+    refreshing = false,
+    onRefresh
+}: Props) {
     const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
     const { bottom, top } = useSafeAreaInsets();
     const router = useRouter();
@@ -826,6 +842,7 @@ export default function HomeAIInterface({ onSearch, recipients = [], occasions =
 
             console.log('[DEBUG] Extracting budget/occasion...');
             const reqBudget = extractBudget(searchText, budget);
+            setBudget(reqBudget);
             const reqOccasion = extractOccasion(textForOccasion);
             console.log('[DEBUG] Extracted:', { reqBudget, reqOccasion });
 
@@ -874,39 +891,49 @@ export default function HomeAIInterface({ onSearch, recipients = [], occasions =
             let responseText = '';
             let aiMsg: Message;
 
-            if (recommendationsData.clarifying_questions && recommendationsData.clarifying_questions.length > 0) {
-                // If there are questions, prioritize them
-                responseText = recommendationsData.clarifying_questions.join('\n\n');
-                aiMsg = {
-                    id: (Date.now() + 1).toString(),
-                    text: responseText,
-                    sender: 'ai',
-                    quickReplies: recommendationsData.quick_replies,
-                    followup: "Reply here and we'll keep looking!"
-                };
-            } else if (recommendationsData.recommendations && recommendationsData.recommendations.length > 0) {
+            const hasQuestions = recommendationsData.clarifying_questions && recommendationsData.clarifying_questions.length > 0;
+            const hasRecs = recommendationsData.recommendations && recommendationsData.recommendations.length > 0;
+
+            if (hasQuestions || hasRecs) {
                 const targetName = finalRecipientName ? ` for ${finalRecipientName}` : '';
-                responseText = `I've evaluated ${recommendationsData.candidates_evaluated} products and found these great matches${targetName}!`;
+                
+                let text = '';
+                if (hasRecs) {
+                    text = `I've evaluated ${recommendationsData.candidates_evaluated} products and found these great matches${targetName}! ✨`;
+                }
+
+                // If we also have questions, append them or prioritize them in the follow-up
+                let mainText = text;
+                let followup = recommendationsData.chat_followup || "What do you think of these options?";
+
+                if (hasQuestions) {
+                    const questionText = recommendationsData.clarifying_questions.join('\n\n');
+                    if (!mainText) {
+                        mainText = questionText;
+                        followup = "Reply here and we'll keep looking!";
+                    } else {
+                        // Append questions to main text if recommendations are also present
+                        mainText += `\n\n${questionText}`;
+                    }
+                }
+
                 aiMsg = {
                     id: (Date.now() + 2).toString(),
-                    text: responseText,
+                    text: mainText,
                     sender: 'ai',
-                    suggestions: recommendationsData.recommendations,
-                    followup: recommendationsData.chat_followup || "What do you think of these options?",
+                    suggestions: hasRecs ? recommendationsData.recommendations : undefined,
+                    followup,
                     message_script: recommendationsData.message_script,
                     quickReplies: recommendationsData.quick_replies
                 };
 
-                // Display cautions if any
                 if (recommendationsData.cautions && recommendationsData.cautions.length > 0) {
                     aiMsg.text += `\n\n⚠️ Caution: ${recommendationsData.cautions.join(' ')}`;
                 }
             } else {
-                const targetName = finalRecipientName ? ` for ${finalRecipientName}` : '';
-                responseText = `I couldn't find any perfect matches in our catalog${targetName} under $${reqBudget}. Please try adjusting the budget or constraints!`;
                 aiMsg = {
                     id: (Date.now() + 3).toString(),
-                    text: responseText,
+                    text: responseText || "I'm sorry, I'm having a little trouble finding perfect matches right now. Let's try refining the interests or budget! ✨",
                     sender: 'ai',
                     quickReplies: recommendationsData.quick_replies
                 };
@@ -999,417 +1026,434 @@ export default function HomeAIInterface({ onSearch, recipients = [], occasions =
 
     return (
         <View style={[styles.container, style]}>
-            <View style={[styles.contentContainer, { flex: 1 }]}>
-                {/* Header & Main Chat Area */}
-                <View style={{ flex: 1, backgroundColor: 'transparent' }}>
-                    <ScrollView
-                        ref={scrollRef}
-                        style={[styles.chatArea, { flex: 1 }]}
-                        contentContainerStyle={[
-                            styles.chatContent,
-                            { flexGrow: 1, justifyContent: messages.length > 1 ? 'flex-end' : 'flex-start' }
-                        ]}
-                        showsVerticalScrollIndicator={false}
-                        keyboardShouldPersistTaps="handled"
-                    >
-                        {/* Clear header when in chat mode; Dashboard children handle their own padding */}
-                        {messages.length > 1 && <View style={{ height: top + 60 }} />}
+            <KeyboardAvoidingView 
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+                style={{ flex: 1 }}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+            >
+                <View style={[styles.contentContainer, { flex: 1 }]}>
+                    {/* Header & Main Chat Area */}
+                    <View style={{ flex: 1, backgroundColor: 'transparent' }}>
+                        <ScrollView
+                            ref={scrollRef}
+                            style={[styles.chatArea, { flex: 1 }]}
+                            contentContainerStyle={[
+                                styles.chatContent,
+                                { flexGrow: 1, justifyContent: messages.length > 1 ? 'flex-end' : 'flex-start' }
+                            ]}
+                            showsVerticalScrollIndicator={false}
+                            keyboardShouldPersistTaps="handled"
+                            refreshControl={
+                                onRefresh ? (
+                                    <RefreshControl
+                                        refreshing={refreshing}
+                                        onRefresh={onRefresh}
+                                        tintColor={GIFTYY_THEME.colors.primary}
+                                        colors={[GIFTYY_THEME.colors.primary]}
+                                        progressViewOffset={top + 20}
+                                    />
+                                ) : undefined
+                            }
+                        >
+                            {/* Clear header when in chat mode; Dashboard children handle their own padding */}
+                            {messages.length > 1 && <View style={{ height: top + 60 }} />}
 
-                        {/* Safe area spacer for when children are hidden */}
-                        {/* messages.length > 1 && <View style={{ height: top + 10 }} /> */}
+                            {/* Safe area spacer for when children are hidden */}
+                            {/* messages.length > 1 && <View style={{ height: top + 10 }} /> */}
 
-                        {/* Inline Home Page Content rendered here! */}
-                        {messages.length <= 1 && (
-                            <View>
-                                {messages.map((msg, index) => {
-                                    // Simple greeting check: the very first AI message when starting a conversation
-                                    const isInitialGreeting = index === 0 &&
-                                        msg.sender === 'ai' &&
-                                        messages.length === 1;
+                            {/* Inline Home Page Content rendered here! */}
+                            {messages.length <= 1 && (
+                                <View>
+                                    {messages.map((msg, index) => {
+                                        // Simple greeting check: the very first AI message when starting a conversation
+                                        const isInitialGreeting = index === 0 &&
+                                            msg.sender === 'ai' &&
+                                            messages.length === 1;
 
-                                    if (isInitialGreeting) {
-                                        return (
-                                            <View key={msg.id} style={styles.initialGreetingContainer}>
-                                                <View style={styles.initialGreetingAvatarWrapper}>
+                                        if (isInitialGreeting) {
+                                            return (
+                                                <View key={msg.id} style={styles.initialGreetingContainer}>
+                                                    <View style={styles.initialGreetingAvatarWrapper}>
+                                                        <Image
+                                                            source={require('@/assets/images/giftyy.png')}
+                                                            style={styles.initialGreetingAvatar}
+                                                            resizeMode="cover"
+                                                        />
+                                                    </View>
+                                                    <Text
+                                                        style={styles.initialGreetingTitle}
+                                                        numberOfLines={1}
+                                                        adjustsFontSizeToFit
+                                                    >
+                                                        Hi <Text style={{ color: '#000' }}>{firstName}</Text>, I'm <Text style={{ color: GIFTYY_THEME.colors.orange, fontWeight: 'bold' }}>Giftyy</Text>!
+                                                    </Text>
+                                                    <Text style={styles.initialGreetingText}>
+                                                        {(() => {
+                                                            try {
+                                                                return renderFormattedText("Who are we celebrating today? Let's find some sparks of joy! ✨", false, GIFTYY_THEME.colors.gray500);
+                                                            } catch (err) {
+                                                                return msg.text;
+                                                            }
+                                                        })()}
+                                                    </Text>
+                                                </View>
+                                            );
+                                        }
+                                        return null;
+                                    })}
+                                    <View style={{ minHeight: SCREEN_HEIGHT * 0.4 }}>
+                                        {children}
+                                    </View>
+                                </View>
+                            )}
+
+                            {messages.length > 1 && messages.map((msg, index) => {
+
+                                return (
+                                    <View key={msg.id} style={[
+                                        styles.messageContainer,
+                                        msg.sender === 'user' ? styles.userMessageContainer : styles.aiMessageContainer
+                                    ]}>
+                                        <View style={styles.aiMessageRow}>
+                                            {msg.sender === 'ai' && (
+                                                <View style={styles.aiAvatarContainer}>
                                                     <Image
                                                         source={require('@/assets/images/giftyy.png')}
-                                                        style={styles.initialGreetingAvatar}
+                                                        style={styles.messageAvatar}
                                                         resizeMode="cover"
                                                     />
                                                 </View>
-                                                <Text
-                                                    style={styles.initialGreetingTitle}
-                                                    numberOfLines={1}
-                                                    adjustsFontSizeToFit
-                                                >
-                                                    Hi <Text style={{ color: '#000' }}>{firstName}</Text>, I'm <Text style={{ color: GIFTYY_THEME.colors.orange, fontWeight: 'bold' }}>Giftyy</Text>!
-                                                </Text>
-                                                <Text style={styles.initialGreetingText}>
-                                                    {(() => {
-                                                        try {
-                                                            return renderFormattedText("Who are we celebrating today? Let's find some sparks of joy! ✨", false, GIFTYY_THEME.colors.gray500);
-                                                        } catch (err) {
-                                                            return msg.text;
-                                                        }
-                                                    })()}
-                                                </Text>
+                                            )}
+                                            <View style={styles.bubbleWrapper}>
+                                                <View style={[
+                                                    styles.messageBubble,
+                                                    msg.sender === 'user' ? styles.userBubble : styles.aiBubble
+                                                ]}>
+                                                    <Text style={[
+                                                        styles.messageText,
+                                                        msg.sender === 'user' ? styles.userMessageText : styles.aiMessageText
+                                                    ]}>
+                                                        {(() => {
+                                                            try {
+                                                                const textColor = msg.sender === 'user' ? '#FFFFFF' : GIFTYY_THEME.colors.text;
+                                                                return renderFormattedText(msg.text, false, textColor);
+                                                            } catch (err) {
+                                                                console.error('[FloatingAIInput] error rendering text:', err);
+                                                                return msg.text;
+                                                            }
+                                                        })()}
+                                                    </Text>
+                                                </View>
                                             </View>
-                                        );
-                                    }
-                                    return null;
-                                })}
-                                <View style={{ minHeight: SCREEN_HEIGHT * 0.4 }}>
-                                    {children}
-                                </View>
-                            </View>
-                        )}
+                                        </View>
 
-                        {messages.length > 1 && messages.map((msg, index) => {
+                                        {msg.suggestions && msg.suggestions.length > 0 && (
+                                            <View style={styles.recommendationGroup}>
+                                                <View style={styles.recommendationHeader}>
+                                                    <IconSymbol name="sparkles" size={14} color={GIFTYY_THEME.colors.orange} />
+                                                    <Text style={styles.recommendationHeaderText}>Handpicked for you</Text>
+                                                </View>
 
-                            return (
-                                <View key={msg.id} style={[
-                                    styles.messageContainer,
-                                    msg.sender === 'user' ? styles.userMessageContainer : styles.aiMessageContainer
-                                ]}>
-                                    <View style={styles.aiMessageRow}>
-                                        {msg.sender === 'ai' && (
-                                            <View style={styles.aiAvatarContainer}>
-                                                <Image
-                                                    source={require('@/assets/images/giftyy.png')}
-                                                    style={styles.messageAvatar}
-                                                    resizeMode="cover"
-                                                />
+                                                <ScrollView
+                                                    horizontal
+                                                    showsHorizontalScrollIndicator={false}
+                                                    style={styles.recommendationCarousel}
+                                                    contentContainerStyle={styles.recommendationScrollContent}
+                                                    decelerationRate="fast"
+                                                    snapToInterval={SCREEN_WIDTH * 0.65 + 12}
+                                                    disableIntervalMomentum={true}
+                                                    nestedScrollEnabled={true}
+                                                >
+                                                    {msg.suggestions.map((s, idx) => {
+                                                        try {
+                                                            const product = products.find(p => p.id === s.product_id);
+                                                            return (
+                                                                <RecommendationCard
+                                                                    key={idx}
+                                                                    suggestion={s}
+                                                                    product={product}
+                                                                    onPress={handleSuggestionPress}
+                                                                    onFeedback={handleFeedback}
+                                                                />
+                                                            );
+                                                        } catch (err) {
+                                                            console.error(`[FloatingAIInput] error rendering RecommendationCard for msg ${msg.id}:`, err);
+                                                            return <Text key={idx} style={{ color: 'red' }}>Error rendering card</Text>;
+                                                        }
+                                                    })}
+                                                </ScrollView>
+
+                                                {msg.followup && (
+                                                    <View style={styles.followupContainer}>
+                                                        <View style={[styles.messageBubble, styles.aiBubble, styles.followupBubble]}>
+                                                            {msg.message_script && (
+                                                                <Text style={[styles.messageText, { fontSize: 13, fontWeight: '700', color: GIFTYY_THEME.colors.primary, marginBottom: 8 }]}>
+                                                                    💬 You can use this note!
+                                                                </Text>
+                                                            )}
+                                                            <Text style={[styles.messageText, styles.aiMessageText, { fontStyle: msg.message_script ? 'italic' : 'normal' }]}>
+                                                                {msg.message_script || msg.followup}
+                                                            </Text>
+                                                            {msg.message_script && msg.followup && (
+                                                                <>
+                                                                    <View style={{ height: 1, backgroundColor: GIFTYY_THEME.colors.gray50, marginVertical: 12 }} />
+                                                                    <Text style={[styles.messageText, styles.aiMessageText]}>
+                                                                        {msg.followup}
+                                                                    </Text>
+                                                                </>
+                                                            )}
+                                                        </View>
+                                                    </View>
+                                                )}
                                             </View>
                                         )}
+
+                                        {msg.actions && msg.actions.length > 0 && (
+                                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, marginLeft: 46 }}>
+                                                {msg.actions.map((action, idx) => (
+                                                    <Pressable
+                                                        key={idx}
+                                                        style={({ pressed }) => [
+                                                            styles.actionButton,
+                                                            styles.actionButtonOutline,
+                                                            pressed && styles.actionButtonPressed
+                                                        ]}
+                                                        onPress={() => {
+                                                            handleCollapse();
+                                                            router.push({
+                                                                pathname: action.route as any,
+                                                                params: action.params
+                                                            });
+                                                        }}
+                                                    >
+                                                        <Text style={styles.actionButtonText}>{action.label}</Text>
+                                                    </Pressable>
+                                                ))}
+                                            </View>
+                                        )}
+
+                                        {msg.quickReplies && msg.quickReplies.length > 0 && (!msg.suggestions || msg.suggestions.length === 0) && (
+                                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, marginLeft: 46 }}>
+                                                {msg.quickReplies.map((reply, idx) => (
+                                                    <Pressable
+                                                        key={idx}
+                                                        style={({ pressed }) => [
+                                                            styles.actionButton,
+                                                            styles.actionButtonOutline,
+                                                            pressed && styles.actionButtonPressed
+                                                        ]}
+                                                        onPress={() => {
+                                                            setText(reply);
+                                                            handleSubmit(reply);
+                                                        }}
+                                                    >
+                                                        <Text style={styles.actionButtonText}>{reply}</Text>
+                                                    </Pressable>
+                                                ))}
+                                            </View>
+                                        )}
+                                    </View>
+                                );
+                            })}
+
+                            {loading && (
+                                <View style={styles.aiMessageContainer}>
+                                    <View style={styles.aiMessageRow}>
+                                        <View style={styles.aiAvatarContainer}>
+                                            <Animated.Image
+                                                source={require('@/assets/images/giftyy.png')}
+                                                style={[styles.messageAvatar, animatedAvatarStyle]}
+                                                resizeMode="cover"
+                                            />
+                                        </View>
                                         <View style={styles.bubbleWrapper}>
-                                            <View style={[
-                                                styles.messageBubble,
-                                                msg.sender === 'user' ? styles.userBubble : styles.aiBubble
-                                            ]}>
-                                                <Text style={[
-                                                    styles.messageText,
-                                                    msg.sender === 'user' ? styles.userMessageText : styles.aiMessageText
-                                                ]}>
-                                                    {(() => {
-                                                        try {
-                                                            const textColor = msg.sender === 'user' ? '#FFFFFF' : GIFTYY_THEME.colors.text;
-                                                            return renderFormattedText(msg.text, false, textColor);
-                                                        } catch (err) {
-                                                            console.error('[FloatingAIInput] error rendering text:', err);
-                                                            return msg.text;
-                                                        }
-                                                    })()}
-                                                </Text>
+                                            <View style={[styles.messageBubble, styles.aiBubble, styles.loadingBubble]}>
+                                                <ThinkingDots />
                                             </View>
                                         </View>
                                     </View>
-
-                                    {msg.suggestions && msg.suggestions.length > 0 && (
-                                        <View style={styles.recommendationGroup}>
-                                            <View style={styles.recommendationHeader}>
-                                                <IconSymbol name="sparkles" size={14} color={GIFTYY_THEME.colors.orange} />
-                                                <Text style={styles.recommendationHeaderText}>Handpicked for you</Text>
-                                            </View>
-
-                                            <ScrollView
-                                                horizontal
-                                                showsHorizontalScrollIndicator={false}
-                                                style={styles.recommendationCarousel}
-                                                contentContainerStyle={styles.recommendationScrollContent}
-                                                decelerationRate="fast"
-                                                snapToInterval={SCREEN_WIDTH * 0.65 + 12}
-                                                disableIntervalMomentum={true}
-                                                nestedScrollEnabled={true}
-                                            >
-                                                {msg.suggestions.map((s, idx) => {
-                                                    try {
-                                                        const product = products.find(p => p.id === s.product_id);
-                                                        return (
-                                                            <RecommendationCard
-                                                                key={idx}
-                                                                suggestion={s}
-                                                                product={product}
-                                                                onPress={handleSuggestionPress}
-                                                                onFeedback={handleFeedback}
-                                                            />
-                                                        );
-                                                    } catch (err) {
-                                                        console.error(`[FloatingAIInput] error rendering RecommendationCard for msg ${msg.id}:`, err);
-                                                        return <Text key={idx} style={{ color: 'red' }}>Error rendering card</Text>;
-                                                    }
-                                                })}
-                                            </ScrollView>
-
-                                            {msg.followup && (
-                                                <View style={styles.followupContainer}>
-                                                    <View style={[styles.messageBubble, styles.aiBubble, styles.followupBubble]}>
-                                                        {msg.message_script && (
-                                                            <Text style={[styles.messageText, { fontSize: 13, fontWeight: '700', color: GIFTYY_THEME.colors.primary, marginBottom: 8 }]}>
-                                                                💬 You can use this note!
-                                                            </Text>
-                                                        )}
-                                                        <Text style={[styles.messageText, styles.aiMessageText, { fontStyle: msg.message_script ? 'italic' : 'normal' }]}>
-                                                            {msg.message_script || msg.followup}
-                                                        </Text>
-                                                        {msg.message_script && msg.followup && (
-                                                            <>
-                                                                <View style={{ height: 1, backgroundColor: GIFTYY_THEME.colors.gray50, marginVertical: 12 }} />
-                                                                <Text style={[styles.messageText, styles.aiMessageText]}>
-                                                                    {msg.followup}
-                                                                </Text>
-                                                            </>
-                                                        )}
-                                                    </View>
-                                                </View>
-                                            )}
-                                        </View>
-                                    )}
-
-                                    {msg.actions && msg.actions.length > 0 && (
-                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, marginLeft: 46 }}>
-                                            {msg.actions.map((action, idx) => (
-                                                <Pressable
-                                                    key={idx}
-                                                    style={({ pressed }) => [
-                                                        styles.actionButton,
-                                                        styles.actionButtonOutline,
-                                                        pressed && styles.actionButtonPressed
-                                                    ]}
-                                                    onPress={() => {
-                                                        handleCollapse();
-                                                        router.push({
-                                                            pathname: action.route as any,
-                                                            params: action.params
-                                                        });
-                                                    }}
-                                                >
-                                                    <Text style={styles.actionButtonText}>{action.label}</Text>
-                                                </Pressable>
-                                            ))}
-                                        </View>
-                                    )}
-
-                                    {msg.quickReplies && msg.quickReplies.length > 0 && (!msg.suggestions || msg.suggestions.length === 0) && (
-                                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, marginLeft: 46 }}>
-                                            {msg.quickReplies.map((reply, idx) => (
-                                                <Pressable
-                                                    key={idx}
-                                                    style={({ pressed }) => [
-                                                        styles.actionButton,
-                                                        styles.actionButtonOutline,
-                                                        pressed && styles.actionButtonPressed
-                                                    ]}
-                                                    onPress={() => {
-                                                        setText(reply);
-                                                        handleSubmit(reply);
-                                                    }}
-                                                >
-                                                    <Text style={styles.actionButtonText}>{reply}</Text>
-                                                </Pressable>
-                                            ))}
-                                        </View>
-                                    )}
                                 </View>
-                            );
-                        })}
-
-                        {loading && (
-                            <View style={styles.aiMessageContainer}>
-                                <View style={styles.aiMessageRow}>
-                                    <View style={styles.aiAvatarContainer}>
-                                        <Animated.Image
-                                            source={require('@/assets/images/giftyy.png')}
-                                            style={[styles.messageAvatar, animatedAvatarStyle]}
-                                            resizeMode="cover"
-                                        />
-                                    </View>
-                                    <View style={styles.bubbleWrapper}>
-                                        <View style={[styles.messageBubble, styles.aiBubble, styles.loadingBubble]}>
-                                            <ThinkingDots />
-                                        </View>
-                                    </View>
-                                </View>
-                            </View>
-                        )}
-                    </ScrollView>
-
-                    {/* Suggestions Carousel - Now inside the white container */}
-                    <AnimatedView style={[
-                        styles.suggestionsRow,
-                        suggestionsStyle,
-                        messages.length > 1 && { borderTopWidth: 0 }
-                    ]}>
-                        <ScrollView
-                            horizontal
-                            showsHorizontalScrollIndicator={false}
-                            contentContainerStyle={styles.suggestionsScroll}
-                            keyboardShouldPersistTaps="handled"
-                        >
-                            {dynamicSuggestions.map((s, i) => (
-                                <Pressable
-                                    key={i}
-                                    style={({ pressed }) => [
-                                        styles.suggestionChip,
-                                        pressed && styles.suggestionChipPressed
-                                    ]}
-                                    onPress={() => {
-                                        setText(s);
-                                        handleSubmit(s);
-                                    }}
-                                >
-                                    <Text style={styles.suggestionText}>{renderFormattedText(s)}</Text>
-                                </Pressable>
-                            ))}
+                            )}
                         </ScrollView>
-                    </AnimatedView>
-                </View>
 
-
-                {/* Plus Menu Overlay */}
-                {showMenu && (
-                    <Pressable
-                        style={StyleSheet.absoluteFillObject}
-                        onPress={handleToggleMenu}
-                    />
-                )}
-                {/* Navigation Menu (Plus Button) */}
-                {showMenu && (
-                    <View style={styles.actionMenu}>
-                        {(messages.length > 1 || isHistoryVisible) ? (
-                            <Pressable
-                                style={styles.actionMenuItem}
-                                onPress={() => {
-                                    handleToggleMenu();
-                                    startNewChat();
-                                }}
+                        {/* Suggestions Carousel - Now inside the white container */}
+                        <AnimatedView style={[
+                            styles.suggestionsRow,
+                            suggestionsStyle,
+                            messages.length > 1 && { borderTopWidth: 0 }
+                        ]}>
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                contentContainerStyle={styles.suggestionsScroll}
+                                keyboardShouldPersistTaps="handled"
                             >
-                                <IconSymbol name="house.fill" size={20} color={GIFTYY_THEME.colors.primary} />
-                                <Text style={styles.actionMenuText}>Home</Text>
-                            </Pressable>
-                        ) : (
-                            <Pressable
-                                style={styles.actionMenuItem}
-                                onPress={() => {
-                                    handleToggleMenu();
-                                    handleResumeLatestChat();
-                                }}
-                            >
-                                <IconSymbol name="message.fill" size={20} color={GIFTYY_THEME.colors.primary} />
-                                <Text style={styles.actionMenuText}>Chat</Text>
-                            </Pressable>
-                        )}
-                        <Pressable style={styles.actionMenuItem} onPress={() => {
-                            console.log('Navigating to Shop');
-                            handleNavPress('/(buyer)/(tabs)/shop');
-                        }}>
-                            <IconSymbol name="bag.fill" size={20} color={GIFTYY_THEME.colors.primary} />
-                            <Text style={styles.actionMenuText}>Shop</Text>
-                        </Pressable>
-                        <Pressable style={styles.actionMenuItem} onPress={() => {
-                            console.log('Navigating to Giftyy Circle');
-                            handleNavPress('/(buyer)/(tabs)/recipients');
-                        }}>
-                            <IconSymbol name="person.2.fill" size={20} color={GIFTYY_THEME.colors.primary} />
-                            <Text style={styles.actionMenuText}>Giftyy Circle</Text>
-                        </Pressable>
-                        <Pressable style={styles.actionMenuItem} onPress={() => {
-                            console.log('Navigating to Memories');
-                            handleNavPress('/(buyer)/(tabs)/memory');
-                        }}>
-                            <IconSymbol name="play.rectangle.on.rectangle.fill" size={20} color={GIFTYY_THEME.colors.primary} />
-                            <Text style={styles.actionMenuText}>Memories</Text>
-                        </Pressable>
-                    </View>
-                )}
-
-                {/* Floating History Icon (Only on Chat Screen) */}
-                {messages.length > 1 && !showMenu && (
-                    <Pressable
-                        style={[styles.floatingHistoryButton, { bottom: Math.max(bottom, 24) + 230 }]}
-                        onPress={handleHistoryPress}
-                    >
-                        <IconSymbol name="clock.fill" size={24} color="#FFFFFF" />
-                    </Pressable>
-                )}
-
-                <View style={[styles.inputWrapper, { paddingBottom: Math.max(bottom, 24) + 32 }]}>
-                    {/* Mentions Dropdown */}
-                    {showMentions && filteredRecipients.length > 0 && (
-                        <AnimatedView 
-                            entering={FadeInDown.duration(200)}
-                            exiting={FadeOutDown.duration(150)}
-                            style={styles.mentionDropdown}
-                        >
-                            <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-                                {filteredRecipients.map((r, idx) => (
+                                {dynamicSuggestions.map((s, i) => (
                                     <Pressable
-                                        key={r.id || idx}
-                                        onPress={() => handleMentionSelect(r)}
+                                        key={i}
                                         style={({ pressed }) => [
-                                            styles.mentionItem,
-                                            pressed && styles.mentionItemPressed,
-                                            idx < filteredRecipients.length - 1 && styles.mentionItemBorder
+                                            styles.suggestionChip,
+                                            pressed && styles.suggestionChipPressed
                                         ]}
+                                        onPress={() => {
+                                            setText(s);
+                                            handleSubmit(s);
+                                        }}
                                     >
-                                        <View style={styles.mentionAvatar}>
-                                            <Text style={styles.mentionAvatarText}>
-                                                {(r.firstName || r.first_name || 'U')[0].toUpperCase()}
-                                                {(r.lastName || r.last_name || '')[0]?.toUpperCase() || ''}
-                                            </Text>
-                                        </View>
-                                        <View style={{ flex: 1 }}>
-                                            <Text style={styles.mentionName}>{r.firstName || r.first_name} {r.lastName || r.last_name || ''}</Text>
-                                            {(r.relationship || r.sender_relationship) && (
-                                                <Text style={styles.mentionSubtext}>{r.relationship || r.sender_relationship}</Text>
-                                            )}
-                                        </View>
+                                        <Text style={styles.suggestionText}>{renderFormattedText(s)}</Text>
                                     </Pressable>
                                 ))}
                             </ScrollView>
                         </AnimatedView>
+                    </View>
+
+
+                    {/* Plus Menu Overlay */}
+                    {showMenu && (
+                        <Pressable
+                            style={StyleSheet.absoluteFillObject}
+                            onPress={handleToggleMenu}
+                        />
+                    )}
+                    {/* Navigation Menu (Plus Button) */}
+                    {showMenu && (
+                        <View style={styles.actionMenu}>
+                            {(messages.length > 1 || isHistoryVisible) ? (
+                                <Pressable
+                                    style={styles.actionMenuItem}
+                                    onPress={() => {
+                                        handleToggleMenu();
+                                        startNewChat();
+                                    }}
+                                >
+                                    <IconSymbol name="house.fill" size={20} color={GIFTYY_THEME.colors.primary} />
+                                    <Text style={styles.actionMenuText}>Home</Text>
+                                </Pressable>
+                            ) : (
+                                <Pressable
+                                    style={styles.actionMenuItem}
+                                    onPress={() => {
+                                        handleToggleMenu();
+                                        handleResumeLatestChat();
+                                    }}
+                                >
+                                    <IconSymbol name="message.fill" size={20} color={GIFTYY_THEME.colors.primary} />
+                                    <Text style={styles.actionMenuText}>Chat</Text>
+                                </Pressable>
+                            )}
+                            <Pressable style={styles.actionMenuItem} onPress={() => {
+                                console.log('Navigating to Shop');
+                                handleNavPress('/(buyer)/(tabs)/shop');
+                            }}>
+                                <IconSymbol name="bag.fill" size={20} color={GIFTYY_THEME.colors.primary} />
+                                <Text style={styles.actionMenuText}>Shop</Text>
+                            </Pressable>
+                            <Pressable style={styles.actionMenuItem} onPress={() => {
+                                console.log('Navigating to Giftyy Circle');
+                                handleNavPress('/(buyer)/(tabs)/recipients');
+                            }}>
+                                <IconSymbol name="person.2.fill" size={20} color={GIFTYY_THEME.colors.primary} />
+                                <Text style={styles.actionMenuText}>Giftyy Circle</Text>
+                            </Pressable>
+                            <Pressable style={styles.actionMenuItem} onPress={() => {
+                                console.log('Navigating to Memories');
+                                handleNavPress('/(buyer)/(tabs)/memory');
+                            }}>
+                                <IconSymbol name="play.rectangle.on.rectangle.fill" size={20} color={GIFTYY_THEME.colors.primary} />
+                                <Text style={styles.actionMenuText}>Memories</Text>
+                            </Pressable>
+                        </View>
                     )}
 
-                    <TourAnchor step="home_burger_menu">
-                        <Pressable style={styles.plusButton} onPress={handleToggleMenu}>
-                            <IconSymbol name={showMenu ? "xmark" : "line.3.horizontal"} size={20} color={GIFTYY_THEME.colors.gray600} />
+                    {/* Floating History Icon (Only on Chat Screen) */}
+                    {messages.length > 1 && !showMenu && (
+                        <Pressable
+                            style={[styles.floatingHistoryButton, { bottom: Math.max(bottom, 24) + 230 }]}
+                            onPress={handleHistoryPress}
+                        >
+                            <IconSymbol name="clock.fill" size={24} color="#FFFFFF" />
                         </Pressable>
-                    </TourAnchor>
-                    <TourAnchor step="home_ai_chat" style={styles.textInputContainer}>
-                        <TourAnchor step="home_tagging" style={StyleSheet.absoluteFillObject} />
-                        <TextInput
-                            ref={inputRef}
-                            style={[styles.input, { maxHeight: 100 }]}
-                            placeholder="Ask Giftyy (Use @ to tag)"
-                            placeholderTextColor="#94A3B8"
-                            value={text}
-                            onChangeText={handleTextChange}
-                            onSelectionChange={handleSelectionChange}
-                            onFocus={handleFocus}
-                            multiline
-                            onSubmitEditing={() => handleSubmit()}
-                            returnKeyType="send"
-                        />
-                    </TourAnchor>
-                    <Pressable
-                        onPress={() => handleSubmit()}
-                        disabled={!text.trim() || loading}
-                        style={({ pressed }) => [
-                            styles.sendButton,
-                            (!text.trim() || loading || pressed) && styles.sendButtonDisabled
-                        ]}
-                    >
-                        {loading ? (
-                            <ActivityIndicator size="small" color={GIFTYY_THEME.colors.primary} />
-                        ) : (
-                            <IconSymbol
-                                name="paperplane.fill"
-                                size={24}
-                                color={text.trim() ? GIFTYY_THEME.colors.orange : GIFTYY_THEME.colors.gray400}
-                            />
+                    )}
+
+                    <View style={[styles.inputWrapper, { paddingBottom: Math.max(bottom, 24) + 32 }]}>
+                        {/* Mentions Dropdown */}
+                        {showMentions && filteredRecipients.length > 0 && (
+                            <AnimatedView 
+                                entering={FadeInDown.duration(200)}
+                                exiting={FadeOutDown.duration(150)}
+                                style={styles.mentionDropdown}
+                            >
+                                <ScrollView keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                                    {filteredRecipients.map((r, idx) => (
+                                        <Pressable
+                                            key={r.id || idx}
+                                            onPress={() => handleMentionSelect(r)}
+                                            style={({ pressed }) => [
+                                                styles.mentionItem,
+                                                pressed && styles.mentionItemPressed,
+                                                idx < filteredRecipients.length - 1 && styles.mentionItemBorder
+                                            ]}
+                                        >
+                                            <View style={styles.mentionAvatar}>
+                                                <Text style={styles.mentionAvatarText}>
+                                                    {(r.firstName || r.first_name || 'U')[0].toUpperCase()}
+                                                    {(r.lastName || r.last_name || '')[0]?.toUpperCase() || ''}
+                                                </Text>
+                                            </View>
+                                            <View style={{ flex: 1 }}>
+                                                <Text style={styles.mentionName}>{r.firstName || r.first_name} {r.lastName || r.last_name || ''}</Text>
+                                                {(r.relationship || r.sender_relationship) && (
+                                                    <Text style={styles.mentionSubtext}>{r.relationship || r.sender_relationship}</Text>
+                                                )}
+                                            </View>
+                                        </Pressable>
+                                    ))}
+                                </ScrollView>
+                            </AnimatedView>
                         )}
-                    </Pressable>
+
+                        <TourAnchor step="home_burger_menu">
+                            <Pressable style={styles.plusButton} onPress={handleToggleMenu}>
+                                <IconSymbol name={showMenu ? "xmark" : "line.3.horizontal"} size={20} color={GIFTYY_THEME.colors.gray600} />
+                            </Pressable>
+                        </TourAnchor>
+                        <TourAnchor step="home_ai_chat" style={styles.textInputContainer}>
+                            <TourAnchor step="home_tagging" style={StyleSheet.absoluteFillObject} />
+                            <TextInput
+                                ref={inputRef}
+                                style={[styles.input, { maxHeight: 100 }]}
+                                placeholder="Ask Giftyy (Use @ to tag)"
+                                placeholderTextColor="#94A3B8"
+                                value={text}
+                                onChangeText={handleTextChange}
+                                onSelectionChange={handleSelectionChange}
+                                onFocus={handleFocus}
+                                multiline
+                                onSubmitEditing={() => handleSubmit()}
+                                returnKeyType="send"
+                            />
+                        </TourAnchor>
+                        <Pressable
+                            onPress={() => handleSubmit()}
+                            disabled={!text.trim() || loading}
+                            style={({ pressed }) => [
+                                styles.sendButton,
+                                (!text.trim() || loading || pressed) && styles.sendButtonDisabled
+                            ]}
+                        >
+                            {loading ? (
+                                <ActivityIndicator size="small" color={GIFTYY_THEME.colors.primary} />
+                            ) : (
+                                <IconSymbol
+                                    name="arrow.up"
+                                    size={22}
+                                    color="#FFFFFF"
+                                />
+                            )}
+                        </Pressable>
+                    </View>
                 </View>
-            </View>
+            </KeyboardAvoidingView>
 
             {/* History Modal Popup */}
             <Modal
@@ -1685,22 +1729,22 @@ const styles = StyleSheet.create({
         fontWeight: '500'
     },
     sendButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: 44,
+        height: 44,
+        borderRadius: 22,
         backgroundColor: GIFTYY_THEME.colors.primary,
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: 4,
-        ...GIFTYY_THEME.shadows.sm,
+        ...GIFTYY_THEME.shadows.md,
         shadowColor: GIFTYY_THEME.colors.primary,
-        shadowOpacity: 0.25,
+        shadowOpacity: 0.35,
     },
     sendButtonDisabled: {
-        backgroundColor: '#F8F9FA',
+        backgroundColor: '#E2E8F0',
         shadowOpacity: 0,
-        borderWidth: 1,
-        borderColor: '#F0F0F0',
+        elevation: 0,
+        borderWidth: 0,
     },
     actionMenu: {
         position: 'absolute',

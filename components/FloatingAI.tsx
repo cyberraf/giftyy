@@ -3,7 +3,7 @@ import { useAISection } from '@/contexts/AISectionContext';
 import * as FileSystem from 'expo-file-system/legacy';
 import { usePathname, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Image, Modal, PanResponder, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
+import { ActivityIndicator, Animated, Image, KeyboardAvoidingView, Modal, PanResponder, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function FloatingAI() {
@@ -151,7 +151,11 @@ export default function FloatingAI() {
       {/* Floating dialog with full AI card */}
       <Modal visible={promptOpen} transparent animationType="fade" onRequestClose={() => setPromptOpen(false)}>
         <Pressable style={styles.backdrop} onPress={() => setPromptOpen(false)} />
-        <View style={styles.dialog}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={StyleSheet.absoluteFill}
+        >
+          <View style={styles.dialog}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <Image source={require('@/assets/images/logo.png')} style={{ width: 24, height: 24, borderRadius: 6 }} resizeMode="contain" />
@@ -199,7 +203,8 @@ export default function FloatingAI() {
               </Pressable>
             ))}
           </ScrollView>
-        </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
