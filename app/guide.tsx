@@ -127,81 +127,81 @@ export default function GuideScreen() {
 	return (
 		<>
 			<Stack.Screen options={{ headerShown: false }} />
-		<View style={[styles.screen, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 18 }]}>
-			<View style={styles.topBar}>
-				<View style={{ width: 64 }} />
-				<Text style={styles.brand}>Giftyy</Text>
-				<Pressable onPress={() => void finish()} accessibilityRole="button" accessibilityLabel="Skip guide">
-					<Text style={styles.skip}>Skip</Text>
-				</Pressable>
-			</View>
+			<View style={[styles.screen, { paddingTop: insets.top + 8, paddingBottom: insets.bottom + 18 }]}>
+				<View style={styles.topBar}>
+					<View style={{ width: 64 }} />
+					<Text style={styles.brand}>Giftyy</Text>
+					<Pressable onPress={() => void finish()} accessibilityRole="button" accessibilityLabel="Skip guide">
+						<Text style={styles.skip}>Skip</Text>
+					</Pressable>
+				</View>
 
-			<FlatList
-				ref={listRef}
-				data={slides}
-				horizontal
-				pagingEnabled
-				showsHorizontalScrollIndicator={false}
-				keyExtractor={(s) => s.key}
-				onMomentumScrollEnd={(e) => {
-					const next = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-					setIndex(next);
-				}}
-				renderItem={({ item }) => (
-					<View style={[styles.slide, { width: SCREEN_WIDTH }]}>
-						<View style={styles.slideBody}>
-							<View style={styles.heroFrame}>
-								{item.image ? (
-									<Image source={item.image} style={styles.heroImage} resizeMode="contain" />
-								) : (
-									<View style={styles.iconFallback}>
-										<View style={styles.iconCircle}>
-											<IconSymbol name={item.icon} size={28} color="#ffffff" />
+				<FlatList
+					ref={listRef}
+					data={slides}
+					horizontal
+					pagingEnabled
+					showsHorizontalScrollIndicator={false}
+					keyExtractor={(s) => s.key}
+					onMomentumScrollEnd={(e) => {
+						const next = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+						setIndex(next);
+					}}
+					renderItem={({ item }) => (
+						<View style={[styles.slide, { width: SCREEN_WIDTH }]}>
+							<View style={styles.slideBody}>
+								<View style={styles.heroFrame}>
+									{item.image ? (
+										<Image source={item.image} style={styles.heroImage} resizeMode="contain" />
+									) : (
+										<View style={styles.iconFallback}>
+											<View style={styles.iconCircle}>
+												<IconSymbol name={item.icon} size={28} color="#ffffff" />
+											</View>
 										</View>
-									</View>
-								)}
-							</View>
+									)}
+								</View>
 
-							<View style={styles.textCard}>
-								<Text style={styles.title}>{item.title}</Text>
+								<View style={styles.textCard}>
+									<Text style={styles.title}>{item.title}</Text>
+								</View>
 							</View>
 						</View>
-					</View>
-				)}
-			/>
+					)}
+				/>
 
-			<View style={styles.dotsRow} accessibilityRole="tablist">
-				{slides.map((s, i) => (
-					<View
-						key={s.key}
-						accessibilityRole="tab"
-						accessibilityState={{ selected: i === index }}
-						style={[styles.dot, i === index ? styles.dotActive : styles.dotInactive]}
-					/>
-				))}
+				<View style={styles.dotsRow} accessibilityRole="tablist">
+					{slides.map((s, i) => (
+						<View
+							key={s.key}
+							accessibilityRole="tab"
+							accessibilityState={{ selected: i === index }}
+							style={[styles.dot, i === index ? styles.dotActive : styles.dotInactive]}
+						/>
+					))}
+				</View>
+
+				<View style={styles.actions}>
+					<Pressable
+						onPress={handleBack}
+						disabled={index === 0}
+						style={[styles.secondaryBtn, index === 0 && styles.btnDisabled]}
+						accessibilityRole="button"
+						accessibilityLabel="Back"
+					>
+						<Text style={[styles.secondaryText, index === 0 && styles.textDisabled]}>Back</Text>
+					</Pressable>
+
+					<Pressable
+						onPress={handleNext}
+						style={styles.primaryBtn}
+						accessibilityRole="button"
+						accessibilityLabel={index >= slides.length - 1 ? 'Get started' : 'Next'}
+					>
+						<Text style={styles.primaryText}>{index >= slides.length - 1 ? 'Get started' : 'Next'}</Text>
+					</Pressable>
+				</View>
 			</View>
-
-			<View style={styles.actions}>
-				<Pressable
-					onPress={handleBack}
-					disabled={index === 0}
-					style={[styles.secondaryBtn, index === 0 && styles.btnDisabled]}
-					accessibilityRole="button"
-					accessibilityLabel="Back"
-				>
-					<Text style={[styles.secondaryText, index === 0 && styles.textDisabled]}>Back</Text>
-				</Pressable>
-
-				<Pressable
-					onPress={handleNext}
-					style={styles.primaryBtn}
-					accessibilityRole="button"
-					accessibilityLabel={index >= slides.length - 1 ? 'Get started' : 'Next'}
-				>
-					<Text style={styles.primaryText}>{index >= slides.length - 1 ? 'Get started' : 'Next'}</Text>
-				</Pressable>
-			</View>
-		</View>
 		</>
 	);
 }

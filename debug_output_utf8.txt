@@ -1,0 +1,61 @@
+﻿[dotenv@17.3.1] injecting env (12) from .env.local -- tip: ≡ƒñû agentic secret storage: https://dotenvx.com/as2
+--- Comprehensive Occasion Debug ---
+Total Occasions: 6
+Total Connections: 1
+Total Recipient Profiles: 2
+
+--- Occasions Detail ---
+ID: 7fc9c0a5-076d-4b4b-8c92-b75c15bff2cd
+  Title: Valentine's Day
+  UserID (Owner): 652e1167-b838-4f60-96a6-1dc88c697007
+  RecipientProfileID: 3257c7d1-ea6e-40f7-a718-6238a6c6fc68
+  RecipientID (Legacy): null
+  Profile Match: YES
+  Connection Match: NO
+---
+ID: 4da9bcc9-8ba1-455d-83d8-83b64dcd89f6
+  Title: Christmas Day
+  UserID (Owner): 652e1167-b838-4f60-96a6-1dc88c697007
+  RecipientProfileID: 3257c7d1-ea6e-40f7-a718-6238a6c6fc68
+  RecipientID (Legacy): null
+  Profile Match: YES
+  Connection Match: NO
+---
+ID: b63335f1-d3ec-46f6-bef5-54343cc5a985
+  Title: Ramadan
+  UserID (Owner): 652e1167-b838-4f60-96a6-1dc88c697007
+  RecipientProfileID: 3257c7d1-ea6e-40f7-a718-6238a6c6fc68
+  RecipientID (Legacy): null
+  Profile Match: YES
+  Connection Match: NO
+---
+ID: ed506208-e526-4710-8fbe-0b1f722ab742
+  Title: Valentine's Day
+  UserID (Owner): 94006097-d311-4625-a606-fdbf9d0c4c78
+  RecipientProfileID: bce0370e-eff1-4182-b549-d9029515334d
+  RecipientID (Legacy): null
+  Profile Match: YES
+  Connection Match: NO
+---
+ID: 968a9511-9408-4f66-aa6d-6a904f706589
+  Title: Christmas Day
+  UserID (Owner): 94006097-d311-4625-a606-fdbf9d0c4c78
+  RecipientProfileID: bce0370e-eff1-4182-b549-d9029515334d
+  RecipientID (Legacy): null
+  Profile Match: YES
+  Connection Match: NO
+---
+ID: 1ed59ae2-e68a-4f93-aa8a-edb2604556b3
+  Title: Birthday
+  UserID (Owner): 94006097-d311-4625-a606-fdbf9d0c4c78
+  RecipientProfileID: bce0370e-eff1-4182-b549-d9029515334d
+  RecipientID (Legacy): null
+  Profile Match: YES
+  Connection Match: NO
+---
+
+--- Connections Detail ---
+ConnID: 955b15b7-fe13-4664-98b5-d514dc62b06c
+  SenderID: 94006097-d311-4625-a606-fdbf9d0c4c78
+  ProfileID: 3257c7d1-ea6e-40f7-a718-6238a6c6fc68
+---

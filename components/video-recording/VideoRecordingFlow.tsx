@@ -9,25 +9,26 @@
 
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
-import Constants, { ExecutionEnvironment } from 'expo-constants';
+import Constants from 'expo-constants';
 import React, { useMemo } from 'react';
 import { Linking, NativeModules, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { VideoRecordingFlowProps } from './VisionCameraRecordingFlow';
 
 function isVisionCameraAvailable(): boolean {
-  // 1. Check if we are in Expo Go (Store Client)
-  // In Expo Go, ExecutionEnvironment is 'store_client'
-  const isExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
-
-  // 2. Check for native module presence as a secondary validation
+  // Check for native module presence as the definitive validation
   const nm: any = NativeModules as any;
-  const hasNativeModule = !!(nm?.VisionCamera || nm?.VisionCameraModule || nm?.VisionCameraProxy || (global as any).VisionCameraProxy);
+  const hasNativeModule = !!(
+    nm?.CameraView ||
+    nm?.VisionCamera ||
+    nm?.VisionCameraModule ||
+    nm?.VisionCameraProxy ||
+    (global as any).VisionCameraProxy
+  );
 
   console.log('[VideoRecordingFlow] Environment:', Constants.executionEnvironment);
   console.log('[VideoRecordingFlow] Has Native Module:', hasNativeModule);
 
-  // If we're not in Expo Go, we're likely in a dev client or standalone build where native modules are supported.
-  return !isExpoGo;
+  return hasNativeModule;
 }
 
 export function VideoRecordingFlow(props: VideoRecordingFlowProps) {
@@ -75,9 +76,28 @@ export function VideoRecordingFlow(props: VideoRecordingFlowProps) {
     );
   }
 
-  // Use dynamic require to prevent top-level crash in Expo Go
-  const { VisionCameraRecordingFlow } = require('./VisionCameraRecordingFlow');
-  return <VisionCameraRecordingFlow {...props} />;
+  try {
+    // Use dynamic require to prevent top-level crash in Expo Go
+    const { VisionCameraRecordingFlow } = require('./VisionCameraRecordingFlow');
+    if (!VisionCameraRecordingFlow) throw new Error("Export is undefined");
+    return <VisionCameraRecordingFlow {...props} />;
+  } catch (error) {
+    console.warn('[VideoRecordingFlow] Failed to load VisionCamera recording flow:', error);
+    // If it fails to load dynamically (e.g., native module throws during init), fallback
+    return (
+      <View style={styles.fallbackContainer}>
+        <View style={styles.fallbackCard}>
+          <Text style={styles.fallbackTitle}>Camera Initialization Failed</Text>
+          <Text style={styles.fallbackText}>Please restart the app or rebuild your development client.</Text>
+          {props.onCancel && (
+            <Pressable onPress={props.onCancel} style={styles.fallbackSecondary}>
+              <Text style={styles.fallbackSecondaryText}>Cancel</Text>
+            </Pressable>
+          )}
+        </View>
+      </View>
+    );
+  }
 }
 
 const styles = StyleSheet.create({

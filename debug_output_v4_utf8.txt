@@ -1,0 +1,46 @@
+﻿[dotenv@17.3.1] injecting env (12) from .env.local -- tip: ΓÜÖ∩╕Å  specify custom .env file path with { path: '/custom/path/.env' }
+--- Comprehensive Occasion Debug v3 ---
+
+--- Occasions Detail ---
+Occasion: Valentine's Day
+  Date: 0004-02-14
+  Recurring: true
+  Pattern: holiday
+  For RP: 3257c7d1-ea6e-40f7-a718-6238a6c6fc68
+  Owner: Rafik (652e1167-b838-4f60-96a6-1dc88c697007)
+---
+Occasion: Christmas Day
+  Date: 0004-12-25
+  Recurring: true
+  Pattern: holiday
+  For RP: 3257c7d1-ea6e-40f7-a718-6238a6c6fc68
+  Owner: Rafik (652e1167-b838-4f60-96a6-1dc88c697007)
+---
+Occasion: Ramadan
+  Date: 2026-03-19
+  Recurring: false
+  Pattern: one_time
+  For RP: 3257c7d1-ea6e-40f7-a718-6238a6c6fc68
+  Owner: Rafik (652e1167-b838-4f60-96a6-1dc88c697007)
+---
+Occasion: Valentine's Day
+  Date: 0004-02-14
+  Recurring: true
+  Pattern: holiday
+  For RP: bce0370e-eff1-4182-b549-d9029515334d
+  Owner: Komou (94006097-d311-4625-a606-fdbf9d0c4c78)
+---
+Occasion: Christmas Day
+  Date: 0004-12-25
+  Recurring: true
+  Pattern: holiday
+  For RP: bce0370e-eff1-4182-b549-d9029515334d
+  Owner: Komou (94006097-d311-4625-a606-fdbf9d0c4c78)
+---
+Occasion: Birthday
+  Date: 2026-12-31
+  Recurring: true
+  Pattern: yearly
+  For RP: bce0370e-eff1-4182-b549-d9029515334d
+  Owner: Komou (94006097-d311-4625-a606-fdbf9d0c4c78)
+---

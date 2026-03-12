@@ -68,9 +68,9 @@ const initialPayment: Payment = { name: '', cardNumber: '', expiry: '', cvv: '' 
 
 export function CheckoutProvider({ children }: { children: React.ReactNode }) {
     const [recipient, setRecipient] = useState<Recipient>(initialRecipient);
-    const [cardPrice, setCardPrice] = useState<number>(0);
+    const [cardPrice, setCardPrice] = useState<number>(5.0);
     const [notifyRecipient, setNotifyRecipient] = useState<boolean>(true);
-    const [cardType, setCardType] = useState<CardType>('');
+    const [cardType, setCardType] = useState<CardType>('Giftyy Card');
     const [videoUri, setVideoUri] = useState<string | undefined>(undefined);
     const [videoTitle, setVideoTitle] = useState<string | undefined>(undefined);
     const [localVideoUri, setLocalVideoUri] = useState<string | undefined>(undefined);
@@ -98,9 +98,9 @@ export function CheckoutProvider({ children }: { children: React.ReactNode }) {
                     return;
                 }
 
-                if (data?.value) {
+                if (data?.value !== undefined && data?.value !== null) {
                     const price = parseFloat(data.value);
-                    if (!isNaN(price) && price > 0) {
+                    if (!isNaN(price) && price >= 0) {
                         setDefaultGiftyyCardPrice(price);
                     }
                 }
@@ -112,11 +112,19 @@ export function CheckoutProvider({ children }: { children: React.ReactNode }) {
         fetchGiftyyCardPrice();
     }, []); // Run once on mount
 
+    // Sync cardPrice when database default is fetched, if still using the default card
+    useEffect(() => {
+        if (cardType === 'Giftyy Card' || cardType === '') {
+            setCardPrice(defaultGiftyyCardPrice);
+            if (!cardType) setCardType('Giftyy Card');
+        }
+    }, [defaultGiftyyCardPrice]);
+
     const reset = () => {
         setRecipient(initialRecipient);
-        setCardPrice(0);
+        setCardPrice(5.0);
         setNotifyRecipient(true);
-        setCardType('');
+        setCardType('Giftyy Card');
         setVideoUri(undefined);
         setVideoTitle(undefined);
         setLocalVideoUri(undefined);

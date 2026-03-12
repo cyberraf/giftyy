@@ -1,8 +1,8 @@
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import { getSupabaseErrorMessage, isNetworkError } from '@/utils/supabase-errors';
 import { AuthError, Session, User } from '@supabase/supabase-js';
-import { router } from 'expo-router';
 import * as Linking from 'expo-linking';
+import { router } from 'expo-router';
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import { AppState } from 'react-native';
 
@@ -29,7 +29,8 @@ type AuthContextType = {
 	syncAuth: () => Promise<void>;
 	signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
 	signInWithGoogle: () => Promise<{ error: AuthError | null }>;
-	signUp: (email: string, password: string, firstName: string, lastName: string) => Promise<{ error: AuthError | null }>;
+	checkEmailExists: (email: string) => Promise<{ exists: boolean; error: AuthError | null }>;
+	signUp: (email: string, password: string, firstName: string, lastName: string, phone: string) => Promise<{ error: AuthError | null }>;
 	resetPasswordForEmail: (email: string) => Promise<{ error: AuthError | null }>;
 	resetPassword: (newPassword: string) => Promise<{ error: AuthError | null }>;
 	signOut: () => Promise<void>;
@@ -76,6 +77,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 	const fetchProfileForUser = useCallback(async (u: User) => {
 		try {
+			const { firstName, lastName } = extractNamesFromUser(u);
+			const phone = (u.user_metadata as any)?.phone ?? null;
+
 			// 1) Primary: profile id matches auth uid
 			const { data: byId, error: byIdError } = await supabase
 				.from('profiles')
@@ -84,12 +88,26 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				.maybeSingle();
 
 			if (byId) {
-				setProfile(byId as Profile);
+				const p = byId as Profile;
+				setProfile(p);
+
+				// If the profile is missing basic info but we have it in metadata, update it!
+				// This fixes users who signed up before triggers were robust or via certain OAuth paths.
+				const needsUpdate = (!p.first_name && firstName) || (!p.last_name && lastName) || (!p.phone && phone);
+				if (needsUpdate) {
+					const updates: any = {};
+					if (!p.first_name && firstName) updates.first_name = firstName;
+					if (!p.last_name && lastName) updates.last_name = lastName;
+					if (!p.phone && phone) updates.phone = phone;
+
+					await supabase.from('profiles').update(updates).eq('id', u.id);
+					// Refresh state with merged data
+					setProfile({ ...p, ...updates });
+				}
 				return;
 			}
 
 			// 2) Fallback: for some legacy datasets, profile row may be keyed differently.
-			// If the profiles table has an email column, try to locate by email.
 			const email = u.email?.trim().toLowerCase();
 			if (email) {
 				const { data: byEmail, error: byEmailError } = await supabase
@@ -101,36 +119,30 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				if (byEmail) {
 					setProfile(byEmail as Profile);
 					// Best-effort: ensure there's also a row keyed by auth uid (doesn't block UI).
-					const { firstName, lastName } = extractNamesFromUser(u);
-					supabase
-						.from('profiles')
-						.upsert(
-							{
-								id: u.id,
-								email,
-								first_name: firstName,
-								last_name: lastName,
-								role: (byEmail as any)?.role ?? 'buyer',
-							},
-							{ onConflict: 'id' }
-						)
-						.then(() => { })
-						.catch(() => { });
+					(async () => {
+						try {
+							await supabase
+								.from('profiles')
+								.upsert(
+									{
+										id: u.id,
+										email,
+										first_name: firstName,
+										last_name: lastName,
+										phone: phone,
+										role: (byEmail as any)?.role ?? 'buyer',
+									},
+									{ onConflict: 'id' }
+								);
+						} catch (e) {
+							// Silent fail for best-effort sync
+						}
+					})();
 					return;
-				}
-
-				// If email lookup errors (e.g. column doesn't exist), ignore and continue to create.
-				if (byEmailError) {
-					// Avoid noisy logs for missing column scenarios
-					const msg = String((byEmailError as any)?.message || '');
-					if (!msg.toLowerCase().includes('column') && !msg.toLowerCase().includes('does not exist')) {
-						console.warn('Error fetching profile by email:', byEmailError);
-					}
 				}
 			}
 
 			// 3) Create profile if missing
-			const { firstName, lastName } = extractNamesFromUser(u);
 			const { data: created, error: createError } = await supabase
 				.from('profiles')
 				.insert({
@@ -138,16 +150,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 					email: email ?? null,
 					first_name: firstName,
 					last_name: lastName,
+					phone: phone,
 					role: 'buyer',
 				})
 				.select()
 				.single();
 
 			if (createError) {
-				// If RLS blocks insert, surface the error for debugging.
 				console.error('Error creating profile:', createError);
-				// As a last resort, clear profile but keep session.
-				+				setProfile(null);
+				setProfile(null);
 				return;
 			}
 
@@ -182,6 +193,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			}
 
 			if (cancelled?.()) return;
+
 			setSession(nextSession);
 			setUser(nextSession?.user ?? null);
 			if (nextSession?.user) {
@@ -196,11 +208,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
 	const syncSessionFromSupabase = useCallback(
 		async (cancelled?: () => boolean) => {
+			if (__DEV__) console.log('[AuthContext] syncSessionFromSupabase starting...');
 			try {
+				if (__DEV__) console.log('[AuthContext] calling supabase.auth.getSession()...');
 				const {
 					data: { session: currentSession },
 					error,
 				} = await supabase.auth.getSession();
+				if (__DEV__) console.log('[AuthContext] getSession returned, session:', !!currentSession, 'error:', error?.message);
 
 				// Handle invalid refresh token errors (can happen after returning from OAuth or on stale tokens)
 				if (error) {
@@ -560,7 +575,40 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		}
 	}, [applySession]);
 
-	const signUp = useCallback(async (email: string, password: string, firstName: string, lastName: string) => {
+	const checkEmailExists = useCallback(async (email: string) => {
+		try {
+			const { data: exists, error } = await supabase.rpc('check_email_exists', {
+				email_to_check: email.trim().toLowerCase(),
+			});
+
+			if (error) {
+				console.error('Error checking email existence:', error);
+				return {
+					exists: false,
+					error: {
+						name: 'EmailCheckError',
+						message: error.message,
+						status: error.code ? parseInt(error.code) : 500,
+						code: error.code || '500',
+						__isAuthError: true
+					} as unknown as AuthError
+				};
+			}
+
+			return { exists: !!exists, error: null };
+		} catch (err: any) {
+			console.error('Unexpected error checking email:', err);
+			return {
+				exists: false,
+				error: {
+					name: 'EmailCheckError',
+					message: 'Could not verify email at this time.',
+				} as AuthError,
+			};
+		}
+	}, []);
+
+	const signUp = useCallback(async (email: string, password: string, firstName: string, lastName: string, phone: string) => {
 		try {
 			// Check if Supabase is properly configured
 			const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -584,6 +632,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 						data: {
 							first_name: firstName,
 							last_name: lastName,
+							phone: phone,
 						},
 					},
 				});
@@ -710,52 +759,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				};
 			}
 
-			// For React Native, try different redirect URL formats
-			// The Supabase URL should be the base URL (e.g., https://xxx.supabase.co)
-			let redirectUrl = 'giftyy://reset-password';
-
-			// Clean up the Supabase URL to get the base URL
-			let baseUrl = supabaseUrl;
-			if (baseUrl.includes('/rest/v1')) {
-				baseUrl = baseUrl.replace('/rest/v1', '');
-			}
-			// Remove trailing slash
-			baseUrl = baseUrl.replace(/\/$/, '');
-
-			// Try using the app scheme directly first (simplest approach)
-			// If this doesn't work, Supabase might need it whitelisted
-
-			// Log the request for debugging
-			console.log('=== Password Reset Request Debug ===');
-			console.log('Email:', email.trim());
-			console.log('Supabase URL:', supabaseUrl);
-			console.log('Supabase base URL:', baseUrl);
-			console.log('Redirect URL:', redirectUrl);
-			console.log('Supabase client configured:', !!supabase);
-
-			// Test Supabase connection first
-			try {
-				const { error: testError } = await supabase.auth.getSession();
-				if (testError && !testError.message.includes('session')) {
-					console.warn('Supabase connection test warning:', testError.message);
-				} else {
-					console.log('Supabase connection: OK');
-				}
-			} catch (testErr) {
-				console.error('Supabase connection test failed:', testErr);
-			}
+			// The web app has a dedicated route at /reset-password that handles
+			// parsing the recovery token from the URL hash and updating the password.
+			// This avoids deep linking issues where email clients strip custom protocols 
+			// like giftyy:// and instead land users on the root marketing page.
+			const redirectUrl = 'https://giftyy.store/reset-password';
 
 			let result;
 			try {
 				console.log('=== Password Reset Email Request ===');
 				console.log('Email:', email.trim());
 				console.log('Redirect URL being sent:', redirectUrl);
-				console.log('⚠️ IMPORTANT: Make sure "giftyy://reset-password" is in Supabase Redirect URLs');
-				console.log('⚠️ IMPORTANT: Update Site URL in Supabase to "giftyy://" (not localhost:3000)');
 
-				// Call resetPasswordForEmail with the custom redirect URL
-				// This ensures the email link uses the deep link scheme (giftyy://reset-password)
-				// instead of defaulting to localhost:3000
+				// Call resetPasswordForEmail with the custom webapp redirect URL
 				const options = {
 					redirectTo: redirectUrl,
 				};
@@ -770,8 +786,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				} else {
 					console.log('✅ Password reset email sent successfully');
 					console.log('📧 Check your email - the link should use:', redirectUrl);
-					console.log('📧 If the email shows redirect_to=giftyy:// instead, Supabase may be using Site URL');
-					console.log('📧 Our deep link handler will still work with giftyy://#access_token=...&type=recovery');
 				}
 			} catch (fetchError: any) {
 				// This catches network-level errors that occur before Supabase processes the request
@@ -953,12 +967,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			return { error: new Error('No user logged in') };
 		}
 
+		// 1. Update the public.profiles table
 		const { error } = await supabase
 			.from('profiles')
 			.update(updates)
 			.eq('id', user.id);
 
 		if (!error) {
+			// 2. Synchronize metadata back to auth.users
+			// This prevents the sync trigger from ever having stale data
+			// and provides a backup of the profile in the auth system.
+			await supabase.auth.updateUser({
+				data: updates
+			});
+
 			await fetchProfileForUser(user);
 		}
 
@@ -1052,6 +1074,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				syncAuth,
 				signIn,
 				signInWithGoogle,
+				checkEmailExists,
 				signUp,
 				resetPasswordForEmail,
 				resetPassword,

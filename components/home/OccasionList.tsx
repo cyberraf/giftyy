@@ -1,15 +1,21 @@
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { EmptyState } from '@/components/EmptyState';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import type { UpcomingOccasion } from '@/lib/hooks/useHome';
 import React from 'react';
 import {
 	ActivityIndicator,
+	Dimensions,
+	Image,
 	Pressable,
+	ScrollView,
 	StyleSheet,
 	Text,
-	View,
+	View
 } from 'react-native';
+
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const CARD_WIDTH = SCREEN_WIDTH * 0.4;
+const CARD_GAP = 10;
 
 type Props = {
 	occasions: UpcomingOccasion[];
@@ -18,28 +24,93 @@ type Props = {
 	onAddOccasion: () => void;
 };
 
-function formatDateLabel(dateIso: string): string {
-	const d = new Date(dateIso);
+export function formatDateLabel(dateIso: string): string {
+	const parts = dateIso.split('-');
+	let d: Date;
+
+	if (parts.length === 3) {
+		// YYYY-MM-DD string: parse explicitly as local midnight to avoid JS treating ISO as UTC
+		d = new Date(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10));
+	} else {
+		d = new Date(dateIso);
+	}
+
 	if (Number.isNaN(d.getTime())) return dateIso;
+
 	return d.toLocaleDateString(undefined, {
 		month: 'short',
 		day: 'numeric',
 	});
 }
 
-export function OccasionList({ occasions, loading, onPressOccasion, onAddOccasion }: Props) {
-	return (
-		<View style={styles.container}>
-			<View style={styles.headerRow}>
-				<Text style={styles.title}>Coming up</Text>
-			</View>
+export function formatTimeUntil(diff: number): string {
+	if (diff === 0) return 'Today! 🎉';
+	if (diff === 1) return 'Tomorrow';
+	if (diff < 0) return '';
 
-			{loading ? (
+	const months = Math.floor(diff / 30);
+	const remDays = diff % 30;
+	const weeks = Math.floor(remDays / 7);
+	const days = remDays % 7;
+
+	const durationParts = [];
+	if (months > 0) durationParts.push(`${months}mo`);
+	if (weeks > 0) durationParts.push(`${weeks}w`);
+	if (days > 0 && months === 0) durationParts.push(`${days}d`);
+
+	return durationParts.length > 0 ? `in ${durationParts.join(' ')}` : `in ${diff}d`;
+}
+
+const OCCASION_EMOJI: Record<string, string> = {
+	birthday: '🎂',
+	anniversary: '💍',
+	graduation: '🎓',
+	christmas: '🎄',
+	holiday: '🎁',
+	wedding: '💒',
+	valentine: '💝',
+	mother: '🌸',
+	father: '👔',
+	'new year': '🥂',
+	halloween: '🎃',
+	easter: '🐣',
+	hanukkah: '🕎',
+};
+
+function getOccasionEmoji(label: string): string {
+	const l = label.toLowerCase();
+	for (const [key, emoji] of Object.entries(OCCASION_EMOJI)) {
+		if (l.includes(key)) return emoji;
+	}
+	return '🗓️';
+}
+
+function getInitials(name: string): string {
+	const parts = name.trim().split(' ').filter(Boolean);
+	return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase() || '?';
+}
+
+function isUrgent(inDays: number) {
+	return inDays <= 7;
+}
+
+export function OccasionList({ occasions, loading, onPressOccasion, onAddOccasion }: Props) {
+	if (loading) {
+		return (
+			<View style={styles.container}>
+				<Text style={styles.title}>Coming up</Text>
 				<View style={styles.loadingRow}>
 					<ActivityIndicator size="small" color={GIFTYY_THEME.colors.primary} />
-					<Text style={styles.loadingText}>Loading occasions…</Text>
+					<Text style={styles.loadingText}>Loading…</Text>
 				</View>
-			) : occasions.length === 0 ? (
+			</View>
+		);
+	}
+
+	if (occasions.length === 0) {
+		return (
+			<View style={styles.container}>
+				<Text style={styles.title}>Coming up</Text>
 				<View style={styles.emptyWrapper}>
 					<EmptyState
 						title="No upcoming occasions yet"
@@ -47,61 +118,67 @@ export function OccasionList({ occasions, loading, onPressOccasion, onAddOccasio
 					/>
 					<Pressable
 						onPress={onAddOccasion}
-						style={({ pressed }) => [
-							styles.addOccasionButton,
-							pressed && styles.addOccasionButtonPressed,
-						]}
+						style={({ pressed }) => [styles.addOccasionButton, pressed && styles.addOccasionButtonPressed]}
 						accessibilityRole="button"
-						accessibilityLabel="Add an occasion"
 					>
 						<Text style={styles.addOccasionText}>Add an occasion</Text>
 					</Pressable>
 				</View>
-			) : (
-				<View style={styles.list}>
-					{occasions.map((occ) => (
+			</View>
+		);
+	}
+
+	return (
+		<View style={styles.container}>
+			<Text style={styles.title}>Coming up</Text>
+			<ScrollView
+				horizontal
+				nestedScrollEnabled
+				showsHorizontalScrollIndicator={false}
+				contentContainerStyle={styles.carousel}
+				decelerationRate="fast"
+				snapToInterval={CARD_WIDTH + CARD_GAP}
+				snapToAlignment="start"
+				style={styles.carouselScroll}
+			>
+				{occasions.map((occ) => {
+					const urgent = isUrgent(occ.inDays);
+					const emoji = getOccasionEmoji(occ.label);
+
+					return (
 						<Pressable
 							key={occ.id}
 							onPress={() => onPressOccasion(occ.recipientId)}
 							style={({ pressed }) => [
-								styles.row,
-								pressed && styles.rowPressed,
+								styles.card,
+								pressed && styles.cardPressed,
+								urgent && styles.cardUrgent,
 							]}
 							accessibilityRole="button"
-							accessibilityLabel={`Open ${occ.recipientName}'s occasion`}
+							accessibilityLabel={`${occ.recipientName}'s ${occ.label}`}
 						>
-							<View style={styles.rowLeft}>
-								<View style={styles.avatar}>
-									<Text style={styles.avatarText}>
-										{occ.recipientName.charAt(0).toUpperCase()}
-									</Text>
-								</View>
-								<View>
-									<Text style={styles.rowTitle}>{occ.recipientName}</Text>
-									<Text style={styles.rowSubtitle}>
-										{occ.label} • {formatDateLabel(occ.date)}
-									</Text>
-								</View>
+							<View style={[styles.avatarCircle, urgent && styles.avatarCircleUrgent]}>
+								{occ.avatarUrl ? (
+									<Image source={{ uri: occ.avatarUrl }} style={styles.avatarImg} />
+								) : (
+									<Text style={styles.avatarInitials}>{getInitials(occ.recipientName)}</Text>
+								)}
 							</View>
-
-							<View style={styles.rowRight}>
-								<View style={styles.badge}>
-									<Text style={styles.badgeText}>
-										{occ.inDays === 0
-											? 'Today'
-											: `in ${occ.inDays} day${occ.inDays === 1 ? '' : 's'}`}
-									</Text>
-								</View>
-								<IconSymbol
-									name="chevron.right"
-									size={16}
-									color={GIFTYY_THEME.colors.gray400}
-								/>
+							<Text style={styles.recipientName} numberOfLines={1}>{occ.recipientName}</Text>
+							<View style={styles.occasionRow}>
+								<Text style={styles.occasionEmoji}>{emoji}</Text>
+								<Text style={styles.occasionLabel} numberOfLines={1}>{occ.label}</Text>
+							</View>
+							<Text style={styles.dateText}>{formatDateLabel(occ.date)}</Text>
+							<View style={[styles.badge, urgent && styles.badgeUrgent]}>
+								<Text style={[styles.badgeText, urgent && styles.badgeTextUrgent]}>
+									{formatTimeUntil(occ.inDays)}
+								</Text>
 							</View>
 						</Pressable>
-					))}
-				</View>
-			)}
+					);
+				})}
+			</ScrollView>
 		</View>
 	);
 }
@@ -110,24 +187,19 @@ const styles = StyleSheet.create({
 	container: {
 		marginTop: GIFTYY_THEME.spacing.lg,
 	},
-	headerRow: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
-		marginBottom: GIFTYY_THEME.spacing.sm,
-	},
 	title: {
 		fontSize: GIFTYY_THEME.typography.sizes.lg,
 		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
 		color: GIFTYY_THEME.colors.gray900,
+		marginBottom: GIFTYY_THEME.spacing.sm,
 	},
 	loadingRow: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		paddingVertical: GIFTYY_THEME.spacing.sm,
+		gap: 8,
 	},
 	loadingText: {
-		marginLeft: GIFTYY_THEME.spacing.sm,
 		fontSize: GIFTYY_THEME.typography.sizes.sm,
 		color: GIFTYY_THEME.colors.gray500,
 	},
@@ -146,74 +218,104 @@ const styles = StyleSheet.create({
 		justifyContent: 'center',
 		backgroundColor: GIFTYY_THEME.colors.primary,
 	},
-	addOccasionButtonPressed: {
-		opacity: 0.9,
-	},
+	addOccasionButtonPressed: { opacity: 0.9 },
 	addOccasionText: {
 		color: GIFTYY_THEME.colors.white,
 		fontSize: GIFTYY_THEME.typography.sizes.sm,
 		fontWeight: GIFTYY_THEME.typography.weights.bold,
 	},
-	list: {
-		borderRadius: GIFTYY_THEME.radius.lg,
+	carousel: {
+		paddingRight: GIFTYY_THEME.spacing.lg,
+		gap: CARD_GAP,
+	},
+	carouselScroll: {
+		height: 165,
+	},
+	card: {
+		width: CARD_WIDTH,
+		backgroundColor: GIFTYY_THEME.colors.white,
+		borderRadius: 16,
+		paddingVertical: 12,
+		paddingHorizontal: 10,
+		alignItems: 'center',
 		borderWidth: 1,
 		borderColor: GIFTYY_THEME.colors.gray200,
-		overflow: 'hidden',
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 1 },
+		shadowOpacity: 0.05,
+		shadowRadius: 4,
+		elevation: 1,
 	},
-	row: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
-		paddingHorizontal: GIFTYY_THEME.spacing.lg,
-		paddingVertical: GIFTYY_THEME.spacing.md,
-		backgroundColor: GIFTYY_THEME.colors.white,
+	cardPressed: { opacity: 0.85, transform: [{ scale: 0.97 }] },
+	cardUrgent: {
+		borderColor: '#FED7AA',
+		backgroundColor: '#FFFBF7',
 	},
-	rowPressed: {
-		backgroundColor: GIFTYY_THEME.colors.gray50,
-	},
-	rowLeft: {
-		flexDirection: 'row',
-		alignItems: 'center',
-	},
-	avatar: {
+	avatarCircle: {
 		width: 40,
 		height: 40,
 		borderRadius: 20,
+		backgroundColor: GIFTYY_THEME.colors.cream,
 		alignItems: 'center',
 		justifyContent: 'center',
-		backgroundColor: GIFTYY_THEME.colors.cream,
-		marginRight: GIFTYY_THEME.spacing.sm,
+		overflow: 'hidden',
+		marginBottom: 6,
+		borderWidth: 2,
+		borderColor: GIFTYY_THEME.colors.gray100,
 	},
-	avatarText: {
-		fontSize: GIFTYY_THEME.typography.sizes.md,
-		fontWeight: GIFTYY_THEME.typography.weights.bold,
+	avatarCircleUrgent: {
+		borderColor: '#FF6B00',
+	},
+	avatarImg: {
+		width: 40,
+		height: 40,
+		borderRadius: 20,
+	},
+	avatarInitials: {
+		fontSize: 15,
+		fontWeight: '800',
 		color: GIFTYY_THEME.colors.primary,
 	},
-	rowTitle: {
-		fontSize: GIFTYY_THEME.typography.sizes.sm,
-		fontWeight: GIFTYY_THEME.typography.weights.bold,
+	recipientName: {
+		fontSize: 13,
+		fontWeight: '800',
 		color: GIFTYY_THEME.colors.gray900,
+		marginBottom: 4,
+		textAlign: 'center',
 	},
-	rowSubtitle: {
-		fontSize: GIFTYY_THEME.typography.sizes.xs,
-		color: GIFTYY_THEME.colors.gray500,
-		marginTop: 2,
-	},
-	rowRight: {
+	occasionRow: {
 		flexDirection: 'row',
 		alignItems: 'center',
+		gap: 4,
+		marginBottom: 3,
+	},
+	occasionEmoji: { fontSize: 13 },
+	occasionLabel: {
+		fontSize: 11,
+		fontWeight: '600',
+		color: GIFTYY_THEME.colors.gray600,
+		flexShrink: 1,
+	},
+	dateText: {
+		fontSize: 11,
+		color: GIFTYY_THEME.colors.gray400,
+		marginBottom: 8,
 	},
 	badge: {
-		paddingHorizontal: GIFTYY_THEME.spacing.sm,
+		paddingHorizontal: 8,
 		paddingVertical: 4,
 		borderRadius: GIFTYY_THEME.radius.full,
 		backgroundColor: GIFTYY_THEME.colors.gray100,
-		marginRight: GIFTYY_THEME.spacing.sm,
+	},
+	badgeUrgent: {
+		backgroundColor: '#FFF0E5',
 	},
 	badgeText: {
-		fontSize: GIFTYY_THEME.typography.sizes.xs,
-		fontWeight: GIFTYY_THEME.typography.weights.semibold,
-		color: GIFTYY_THEME.colors.gray700,
+		fontSize: 11,
+		fontWeight: '700',
+		color: GIFTYY_THEME.colors.gray600,
+	},
+	badgeTextUrgent: {
+		color: '#FF6B00',
 	},
 });
-

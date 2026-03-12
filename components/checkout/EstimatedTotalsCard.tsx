@@ -1,6 +1,6 @@
-import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
+import React from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 
 type ShippingBreakdown = {
 	total: number;
@@ -45,10 +45,12 @@ export function EstimatedTotalsCard({
 				<Text style={styles.summaryLabel}>Items subtotal</Text>
 				<Text style={styles.summaryValue}>{formatCurrency(itemsSubtotal)}</Text>
 			</View>
-			<View style={styles.summaryRowBetween}>
-				<Text style={styles.summaryLabel}>Card price</Text>
-				<Text style={styles.summaryValue}>{formatCurrency(cardAddOn)}</Text>
-			</View>
+			{cardAddOn > 0 && (
+				<View style={styles.summaryRowBetween}>
+					<Text style={styles.summaryLabel}>Card price</Text>
+					<Text style={styles.summaryValue}>{formatCurrency(cardAddOn)}</Text>
+				</View>
+			)}
 
 			<View style={{ marginTop: GIFTYY_THEME.spacing.sm, paddingTop: GIFTYY_THEME.spacing.sm, borderTopWidth: 1, borderTopColor: GIFTYY_THEME.colors.gray100 }}>
 				<View style={[styles.summaryRowBetween, { marginBottom: 6 }]}>

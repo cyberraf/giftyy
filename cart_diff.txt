@@ -1,0 +1,194 @@
+diff --git a/app/(buyer)/cart.tsx b/app/(buyer)/cart.tsx
+index 64295cc..d9471e4 100644
+--- a/app/(buyer)/cart.tsx
++++ b/app/(buyer)/cart.tsx
+@@ -57,7 +57,7 @@ export default function CartScreen() {
+ 
+ 	return (
+ 		<GestureHandlerRootView style={{ flex: 1 }}>
+-			<View style={[styles.container, { paddingTop: top + 8 }]}>
++			<View style={[styles.container, { paddingTop: top + 64 }]}>
+ 				<Header />
+ 
+ 				{items.length === 0 ? (
+@@ -292,7 +292,7 @@ function EmptyState({ onStart }: { onStart: () => void }) {
+ const styles = StyleSheet.create({
+ 	container: {
+ 		flex: 1,
+-		backgroundColor: '#fff',
++		backgroundColor: 'transparent',
+ 		paddingHorizontal: 16,
+ 	},
+ 	header: {
+diff --git a/app/(buyer)/checkout/confirmation.tsx b/app/(buyer)/checkout/confirmation.tsx
+index c866d2b..2cb17d4 100644
+--- a/app/(buyer)/checkout/confirmation.tsx
++++ b/app/(buyer)/checkout/confirmation.tsx
+@@ -1,15 +1,24 @@
+-import { MessageVideoViewer, type MemoryVideoItem } from '../(tabs)/memory';
+ import BrandButton from '@/components/BrandButton';
+ import StepBar from '@/components/StepBar';
++import { GIFTYY_THEME } from '@/constants/giftyy-theme';
+ import { useOrders } from '@/contexts/OrdersContext';
+-import { useVideoMessages } from '@/contexts/VideoMessagesContext';
+ import { useSharedMemories } from '@/contexts/SharedMemoriesContext';
++import { useVideoMessages } from '@/contexts/VideoMessagesContext';
+ import { useCheckout } from '@/lib/CheckoutContext';
+ import { LinearGradient } from 'expo-linear-gradient';
+ import { useLocalSearchParams, useRouter } from 'expo-router';
+-import { GIFTYY_THEME } from '@/constants/giftyy-theme';
+-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+-import { Animated, Pressable, ScrollView, StyleSheet, Text, View, RefreshControl } from 'react-native';
++import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
++import { Animated, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
++
++type MemoryVideoItem = {
++    id: string;
++    title: string;
++    duration: string;
++    date: string;
++    videoUrl: string;
++    direction: string;
++    orderId?: string;
++};
+ 
+ export default function ConfirmationScreen() {
+     const { recipient, cardType, videoUri, videoTitle, reset } = useCheckout();
+@@ -54,15 +63,15 @@ export default function ConfirmationScreen() {
+ 
+     // Get order from database if orderId is provided
+     const order = orderId ? getOrderById(orderId) : null;
+-    
+-    const fullName = order 
++
++    const fullName = order
+         ? `${order.recipient.firstName} ${order.recipient.lastName || ''}`.trim() || 'Your recipient'
+         : `${recipient.firstName} ${recipient.lastName}`.trim() || 'Your recipient';
+-    
++
+     const orderCode = order?.orderCode || useMemo(() => `GIF-${Date.now().toString(36).toUpperCase().slice(-6)}`, []);
+-    
++
+     // Find video message associated with this order
+-    const orderVideoMessage = order 
++    const orderVideoMessage = order
+         ? videoMessages.find((vm) => vm.orderId === order.id)
+         : videoMessages.find((vm) => vm.videoUrl === videoUri);
+ 
+@@ -70,11 +79,11 @@ export default function ConfirmationScreen() {
+     const videoItem: MemoryVideoItem | null = useMemo(() => {
+         const video = orderVideoMessage;
+         if (!video) return null;
+-        
+-        const duration = video.durationSeconds 
++
++        const duration = video.durationSeconds
+             ? `${Math.floor(video.durationSeconds / 60)}:${String(video.durationSeconds % 60).padStart(2, '0')}`
+             : '00:00';
+-        
++
+         return {
+             id: video.id,
+             title: video.title,
+@@ -85,26 +94,26 @@ export default function ConfirmationScreen() {
+             orderId: video.orderId, // Include orderId for QR code generation
+         };
+     }, [orderVideoMessage]);
+-    
++
+     const hasVideo = Boolean(orderVideoMessage);
+-    
++
+     // Get shared memory associated with this order
+     const orderSharedMemory = useMemo(() => {
+         if (!order?.sharedMemoryId) return null;
+         return sharedMemories.find((sm) => sm.id === order.sharedMemoryId);
+     }, [order, sharedMemories]);
+-    
++
+     // Convert shared memory to MemoryVideoItem format
+     const sharedMemoryItem: (MemoryVideoItem & { mediaType: 'video' | 'photo' }) | null = useMemo(() => {
+         if (!orderSharedMemory) return null;
+-        
++
+         const date = new Date(orderSharedMemory.createdAt);
+-        const formattedDate = date.toLocaleDateString('en-US', { 
+-            month: 'short', 
+-            day: 'numeric', 
+-            year: 'numeric' 
++        const formattedDate = date.toLocaleDateString('en-US', {
++            month: 'short',
++            day: 'numeric',
++            year: 'numeric'
+         });
+-        
++
+         return {
+             id: orderSharedMemory.id,
+             title: orderSharedMemory.title,
+@@ -115,9 +124,9 @@ export default function ConfirmationScreen() {
+             mediaType: orderSharedMemory.mediaType,
+         };
+     }, [orderSharedMemory]);
+-    
++
+     const hasSharedMemory = Boolean(orderSharedMemory);
+-    
++
+     const shippingAddress = useMemo(() => {
+         const rec = order?.recipient || recipient;
+         const line1 = rec.street || '???';
+@@ -126,7 +135,7 @@ export default function ConfirmationScreen() {
+         const countryZip = [rec.country, rec.zip].filter(Boolean).join(' ');
+         return `${line1}\n${line2}${cityState}\n${countryZip}`.trim();
+     }, [order, recipient]);
+-    
++
+     const orderStatus = order?.status || 'processing';
+     const statusDisplay = useMemo(() => {
+         switch (orderStatus) {
+@@ -158,7 +167,7 @@ export default function ConfirmationScreen() {
+     return (
+         <View style={{ flex: 1, backgroundColor: '#fff' }}>
+             <StepBar current={7} total={7} label="Confirmation" />
+-            <ScrollView 
++            <ScrollView
+                 contentContainerStyle={styles.content}
+                 refreshControl={
+                     <RefreshControl
+@@ -169,8 +178,8 @@ export default function ConfirmationScreen() {
+                     />
+                 }
+             >
+-                <LinearGradient colors={[ '#FDF6EC', '#FFFFFF' ]} style={styles.heroCard}>
+-                    <Animated.View style={[styles.badge, { opacity: fadeIn, transform: [{ scale: pop }] }]}> 
++                <LinearGradient colors={['#FDF6EC', '#FFFFFF']} style={styles.heroCard}>
++                    <Animated.View style={[styles.badge, { opacity: fadeIn, transform: [{ scale: pop }] }]}>
+                         <Text style={styles.badgeEmoji}>????</Text>
+                     </Animated.View>
+                     <Animated.Text style={[styles.title, { opacity: fadeIn, transform: [{ scale: pop }] }]}>Gift on its way!</Animated.Text>
+@@ -282,24 +291,6 @@ export default function ConfirmationScreen() {
+                 </View>
+ 
+             </ScrollView>
+-
+-            {videoItem && (
+-                <MessageVideoViewer
+-                    visible={videoVisible}
+-                    initialIndex={0}
+-                    data={[videoItem]}
+-                    onClose={() => setVideoVisible(false)}
+-                />
+-            )}
+-
+-            {sharedMemoryItem && (
+-                <MessageVideoViewer
+-                    visible={sharedMemoryVisible}
+-                    initialIndex={0}
+-                    data={[sharedMemoryItem]}
+-                    onClose={() => setSharedMemoryVisible(false)}
+-                />
+-            )}
+         </View>
+     );
+ }

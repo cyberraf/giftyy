@@ -1,17 +1,28 @@
-import { MessageVideoViewer, type MemoryVideoItem } from '../(tabs)/memory';
-import BrandButton from '@/components/BrandButton';
 import StepBar from '@/components/StepBar';
+import { IconSymbol } from '@/components/ui/icon-symbol';
+import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { useOrders } from '@/contexts/OrdersContext';
-import { useVideoMessages } from '@/contexts/VideoMessagesContext';
 import { useSharedMemories } from '@/contexts/SharedMemoriesContext';
+import { useVideoMessages } from '@/contexts/VideoMessagesContext';
 import { useCheckout } from '@/lib/CheckoutContext';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import { GIFTYY_THEME } from '@/constants/giftyy-theme';
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { Animated, Pressable, ScrollView, StyleSheet, Text, View, RefreshControl } from 'react-native';
+import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, BackHandler, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+type MemoryVideoItem = {
+    id: string;
+    title: string;
+    duration: string;
+    date: string;
+    videoUrl: string;
+    direction: string;
+    orderId?: string;
+};
 
 export default function ConfirmationScreen() {
+    const { bottom } = useSafeAreaInsets();
     const { recipient, cardType, videoUri, videoTitle, reset } = useCheckout();
     const router = useRouter();
     const { orderId } = useLocalSearchParams<{ orderId?: string }>();
@@ -52,17 +63,34 @@ export default function ConfirmationScreen() {
         }
     }, [orderId, refreshOrders]);
 
+    // Prevent back navigation - Intercept physical back button
+    useEffect(() => {
+        const backAction = () => {
+            // Instead of going back, we redirect to home or just do nothing
+            // Redirecting to home is cleaner as it resets the flow
+            handleGoHome();
+            return true; // Return true to indicate we handled the event
+        };
+
+        const backHandler = BackHandler.addEventListener(
+            'hardwareBackPress',
+            backAction
+        );
+
+        return () => backHandler.remove();
+    }, []);
+
     // Get order from database if orderId is provided
     const order = orderId ? getOrderById(orderId) : null;
-    
-    const fullName = order 
+
+    const fullName = order
         ? `${order.recipient.firstName} ${order.recipient.lastName || ''}`.trim() || 'Your recipient'
         : `${recipient.firstName} ${recipient.lastName}`.trim() || 'Your recipient';
-    
+
     const orderCode = order?.orderCode || useMemo(() => `GIF-${Date.now().toString(36).toUpperCase().slice(-6)}`, []);
-    
+
     // Find video message associated with this order
-    const orderVideoMessage = order 
+    const orderVideoMessage = order
         ? videoMessages.find((vm) => vm.orderId === order.id)
         : videoMessages.find((vm) => vm.videoUrl === videoUri);
 
@@ -70,11 +98,11 @@ export default function ConfirmationScreen() {
     const videoItem: MemoryVideoItem | null = useMemo(() => {
         const video = orderVideoMessage;
         if (!video) return null;
-        
-        const duration = video.durationSeconds 
+
+        const duration = video.durationSeconds
             ? `${Math.floor(video.durationSeconds / 60)}:${String(video.durationSeconds % 60).padStart(2, '0')}`
             : '00:00';
-        
+
         return {
             id: video.id,
             title: video.title,
@@ -85,26 +113,26 @@ export default function ConfirmationScreen() {
             orderId: video.orderId, // Include orderId for QR code generation
         };
     }, [orderVideoMessage]);
-    
+
     const hasVideo = Boolean(orderVideoMessage);
-    
+
     // Get shared memory associated with this order
     const orderSharedMemory = useMemo(() => {
         if (!order?.sharedMemoryId) return null;
         return sharedMemories.find((sm) => sm.id === order.sharedMemoryId);
     }, [order, sharedMemories]);
-    
+
     // Convert shared memory to MemoryVideoItem format
     const sharedMemoryItem: (MemoryVideoItem & { mediaType: 'video' | 'photo' }) | null = useMemo(() => {
         if (!orderSharedMemory) return null;
-        
+
         const date = new Date(orderSharedMemory.createdAt);
-        const formattedDate = date.toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: 'numeric', 
-            year: 'numeric' 
+        const formattedDate = date.toLocaleDateString('en-US', {
+            month: 'short',
+            day: 'numeric',
+            year: 'numeric'
         });
-        
+
         return {
             id: orderSharedMemory.id,
             title: orderSharedMemory.title,
@@ -115,18 +143,11 @@ export default function ConfirmationScreen() {
             mediaType: orderSharedMemory.mediaType,
         };
     }, [orderSharedMemory]);
-    
+
     const hasSharedMemory = Boolean(orderSharedMemory);
-    
-    const shippingAddress = useMemo(() => {
-        const rec = order?.recipient || recipient;
-        const line1 = rec.street || '—';
-        const line2 = rec.apartment ? `${rec.apartment}, ` : '';
-        const cityState = [rec.city, rec.state].filter(Boolean).join(', ');
-        const countryZip = [rec.country, rec.zip].filter(Boolean).join(' ');
-        return `${line1}\n${line2}${cityState}\n${countryZip}`.trim();
-    }, [order, recipient]);
-    
+
+
+
     const orderStatus = order?.status || 'processing';
     const statusDisplay = useMemo(() => {
         switch (orderStatus) {
@@ -157,8 +178,16 @@ export default function ConfirmationScreen() {
 
     return (
         <View style={{ flex: 1, backgroundColor: '#fff' }}>
+            <Stack.Screen
+                options={{
+                    headerShown: true,
+                    headerTitle: 'Order Confirmed',
+                    headerLeft: () => null,
+                    gestureEnabled: false,
+                }}
+            />
             <StepBar current={7} total={7} label="Confirmation" />
-            <ScrollView 
+            <ScrollView
                 contentContainerStyle={styles.content}
                 refreshControl={
                     <RefreshControl
@@ -169,24 +198,31 @@ export default function ConfirmationScreen() {
                     />
                 }
             >
-                <LinearGradient colors={[ '#FDF6EC', '#FFFFFF' ]} style={styles.heroCard}>
-                    <Animated.View style={[styles.badge, { opacity: fadeIn, transform: [{ scale: pop }] }]}> 
-                        <Text style={styles.badgeEmoji}>🎉</Text>
+                <LinearGradient colors={['#FFF7F3', '#FFFFFF']} style={styles.heroCard}>
+                    <Animated.View style={[styles.logoContainer, { opacity: fadeIn, transform: [{ scale: pop }] }]}>
+                        <Image
+                            source={require('@/assets/images/giftyy.png')}
+                            style={styles.logo}
+                            resizeMode="contain"
+                        />
                     </Animated.View>
                     <Animated.Text style={[styles.title, { opacity: fadeIn, transform: [{ scale: pop }] }]}>Gift on its way!</Animated.Text>
                     <Text style={styles.subtitle}>
-                        We’ve queued up the surprise for {fullName}. A confirmation email is flying to your inbox with tracking updates.
+                        We’ve queued up the surprise for <Text style={{ fontWeight: '800', color: '#111827' }}>{fullName}</Text>. A confirmation email is flying to your inbox with tracking updates.
                     </Text>
                 </LinearGradient>
 
                 <View style={styles.summaryCard}>
-                    <Text style={styles.summaryHeading}>Delivery details</Text>
-                    <SummaryRow label="Order" value={`#${orderCode}`} />
-                    <SummaryRow label="Recipient" value={fullName} />
-                    <SummaryRow label="Card style" value={order?.cardType || cardType || 'Premium'} />
-                    <SummaryRow label="Video message" value={hasVideo ? 'Attached successfully' : 'Not added'} valueStyle={{ color: hasVideo ? '#16a34a' : '#64748B' }} />
-                    <SummaryRow label="Shared memory" value={hasSharedMemory ? (orderSharedMemory?.mediaType === 'photo' ? 'Photo attached' : 'Video attached') : 'Not added'} valueStyle={{ color: hasSharedMemory ? '#16a34a' : '#64748B' }} />
-                    <SummaryRow label="Estimated arrival" value={order?.estimatedDeliveryDate ? new Date(order.estimatedDeliveryDate).toLocaleDateString() : '2 – 5 business days'} />
+                    <View style={styles.summaryHeader}>
+                        <IconSymbol name="list.bullet.clipboard" size={20} color={GIFTYY_THEME.colors.primary} />
+                        <Text style={styles.summaryHeading}>Delivery details</Text>
+                    </View>
+                    <SummaryRow label="Order" value={`#${orderCode}`} icon="number" />
+                    <SummaryRow label="Recipient" value={fullName} icon="person.fill" />
+                    <SummaryRow label="Card style" value={order?.cardType || cardType || 'Premium'} icon="greetingcard.fill" />
+                    <SummaryRow label="Video message" value={hasVideo ? 'Attached successfully' : 'Not added'} valueStyle={{ color: hasVideo ? '#16a34a' : '#64748B' }} icon="video.fill" />
+                    <SummaryRow label="Shared memory" value={hasSharedMemory ? (orderSharedMemory?.mediaType === 'photo' ? 'Photo attached' : 'Video attached') : 'Not added'} valueStyle={{ color: hasSharedMemory ? '#16a34a' : '#64748B' }} icon="photo.fill" />
+                    <SummaryRow label="Estimated arrival" value={order?.estimatedDeliveryDate ? new Date(order.estimatedDeliveryDate).toLocaleDateString() : '2 – 5 business days'} icon="shippingbox.fill" />
                 </View>
 
                 {hasVideo && (
@@ -205,17 +241,26 @@ export default function ConfirmationScreen() {
 
                 <View style={styles.orderDetailsCard}>
                     <Pressable style={styles.orderHeader} onPress={() => setShowOrderDetails((prev) => !prev)}>
-                        <Text style={styles.orderHeaderLabel}>View order details</Text>
-                        <Text style={styles.orderHeaderChevron}>{showOrderDetails ? '–' : '+'}</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                            <IconSymbol name="info.circle.fill" size={18} color={GIFTYY_THEME.colors.primary} />
+                            <Text style={styles.orderHeaderLabel}>View order details</Text>
+                        </View>
+                        <IconSymbol
+                            name={showOrderDetails ? "minus" : "plus"}
+                            size={16}
+                            color={GIFTYY_THEME.colors.primary}
+                        />
                     </Pressable>
                     {showOrderDetails && (
                         <View style={styles.orderBody}>
-                            <Text style={styles.orderBodyLabel}>Shipping address</Text>
-                            <Text style={styles.orderBodyValue}>{shippingAddress || 'Not provided'}</Text>
-                            <View style={styles.orderDivider} />
+
 
                             <Text style={styles.orderBodyLabel}>Status</Text>
-                            <Text style={styles.orderBodyValue}>{statusDisplay}</Text>
+                            <View style={styles.statusBadge}>
+                                <View style={[styles.statusDot, { backgroundColor: orderStatus === 'delivered' ? '#16a34a' : GIFTYY_THEME.colors.primary }]} />
+                                <Text style={styles.statusText}>{statusDisplay}</Text>
+                            </View>
+
                             {order?.trackingNumber && (
                                 <>
                                     <View style={styles.orderDivider} />
@@ -225,29 +270,30 @@ export default function ConfirmationScreen() {
                             )}
 
                             <View style={styles.orderDivider} />
-                            <Text style={styles.orderBodyLabel}>Order total</Text>
-                            <Text style={styles.orderBodyValue}>
-                                {order?.totalAmount !== undefined
-                                    ? `$${Number(order.totalAmount).toFixed(2)}`
-                                    : '—'}
-                            </Text>
+
+                            <View style={styles.rowBetween}>
+                                <Text style={styles.orderBodyLabel}>Order total</Text>
+                                <Text style={styles.orderBodyValue}>
+                                    {order?.totalAmount !== undefined
+                                        ? `$${Number(order.totalAmount).toFixed(2)}`
+                                        : '—'}
+                                </Text>
+                            </View>
 
                             {order?.shippingCost !== undefined && (
-                                <>
-                                    <View style={styles.orderDivider} />
-                                    <Text style={styles.orderBodyLabel}>Shipping</Text>
-                                    <Text style={styles.orderBodyValue}>
+                                <View style={[styles.rowBetween, { marginTop: 4 }]}>
+                                    <Text style={[styles.muted, { fontSize: 13 }]}>Shipping</Text>
+                                    <Text style={[styles.bold, { fontSize: 13 }]}>
                                         {Number(order.shippingCost) === 0 ? 'Free' : `$${Number(order.shippingCost).toFixed(2)}`}
                                     </Text>
-                                </>
+                                </View>
                             )}
 
                             {order?.taxAmount !== undefined && (
-                                <>
-                                    <View style={styles.orderDivider} />
-                                    <Text style={styles.orderBodyLabel}>Tax</Text>
-                                    <Text style={styles.orderBodyValue}>${Number(order.taxAmount).toFixed(2)}</Text>
-                                </>
+                                <View style={[styles.rowBetween, { marginTop: 4 }]}>
+                                    <Text style={[styles.muted, { fontSize: 13 }]}>Tax</Text>
+                                    <Text style={[styles.bold, { fontSize: 13 }]}>${Number(order.taxAmount).toFixed(2)}</Text>
+                                </View>
                             )}
 
                             {order?.items && order.items.length > 0 && (
@@ -272,7 +318,6 @@ export default function ConfirmationScreen() {
                 </View>
 
                 <View style={styles.actions}>
-                    <BrandButton title="Return to home" onPress={handleGoHome} />
                     <Pressable style={styles.secondaryButton} onPress={handleSendAnother}>
                         <Text style={styles.secondaryLabel}>Send another gift</Text>
                     </Pressable>
@@ -280,34 +325,31 @@ export default function ConfirmationScreen() {
                         <Text style={styles.ordersLabel}>View my orders</Text>
                     </Pressable>
                 </View>
-
+                <View style={{ height: bottom + 120 }} />
             </ScrollView>
 
-            {videoItem && (
-                <MessageVideoViewer
-                    visible={videoVisible}
-                    initialIndex={0}
-                    data={[videoItem]}
-                    onClose={() => setVideoVisible(false)}
-                />
-            )}
-
-            {sharedMemoryItem && (
-                <MessageVideoViewer
-                    visible={sharedMemoryVisible}
-                    initialIndex={0}
-                    data={[sharedMemoryItem]}
-                    onClose={() => setSharedMemoryVisible(false)}
-                />
-            )}
+            {/* Floating Bottom CTA */}
+            <View style={[styles.stickyBar, { bottom: bottom > 0 ? bottom + 8 : 24 }]}>
+                <Pressable
+                    style={{ width: '100%', backgroundColor: GIFTYY_THEME.colors.primary, paddingVertical: 14, borderRadius: 999, alignItems: 'center' }}
+                    onPress={handleGoHome}
+                >
+                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Return to home</Text>
+                </Pressable>
+            </View>
         </View>
     );
 }
 
-function SummaryRow({ label, value, valueStyle }: { label: string; value: string; valueStyle?: object }) {
+function SummaryRow({ label, value, valueStyle, icon }: { label: string; value: string; valueStyle?: object; icon: any }) {
     return (
         <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>{label}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <View style={styles.summaryIconContainer}>
+                    <IconSymbol name={icon} size={14} color="#6B7280" />
+                </View>
+                <Text style={styles.summaryLabel}>{label}</Text>
+            </View>
             <Text style={[styles.summaryValue, valueStyle]}>{value}</Text>
         </View>
     );
@@ -320,173 +362,244 @@ const styles = StyleSheet.create({
         gap: GIFTYY_THEME.spacing.xl,
     },
     heroCard: {
-        borderRadius: GIFTYY_THEME.radius['2xl'],
-        padding: GIFTYY_THEME.spacing.xl,
-        gap: GIFTYY_THEME.spacing.sm,
-        shadowColor: GIFTYY_THEME.colors.primaryLight,
-        shadowOpacity: 0.08,
-        shadowRadius: GIFTYY_THEME.spacing.xl,
-        elevation: 3,
+        borderRadius: 24,
+        padding: 24,
+        gap: 12,
+        shadowColor: GIFTYY_THEME.colors.primary,
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+        elevation: 4,
     },
-    badge: {
+    logoContainer: {
         width: 64,
         height: 64,
-        borderRadius: 32,
-        backgroundColor: 'rgba(255,255,255,0.72)',
+        borderRadius: 16,
+        backgroundColor: '#FFFFFF',
         alignItems: 'center',
         justifyContent: 'center',
         alignSelf: 'flex-start',
+        borderWidth: 1,
+        borderColor: '#FFE8DC',
+        shadowColor: '#000',
+        shadowOpacity: 0.05,
+        shadowRadius: 10,
+        shadowOffset: { width: 0, height: 4 },
     },
-    badgeEmoji: {
-        fontSize: GIFTYY_THEME.typography.sizes['3xl'],
+    logo: {
+        width: 40,
+        height: 40,
     },
     title: {
-        fontSize: GIFTYY_THEME.typography.sizes['3xl'],
-        fontWeight: GIFTYY_THEME.typography.weights.black,
-        color: GIFTYY_THEME.colors.gray900,
+        fontSize: 28,
+        fontWeight: '900',
+        color: '#111827',
+        marginTop: 8,
     },
     subtitle: {
-        color: GIFTYY_THEME.colors.gray600,
-        fontSize: GIFTYY_THEME.typography.sizes.base,
-        lineHeight: 22,
+        color: '#4B5563',
+        fontSize: 16,
+        lineHeight: 24,
     },
     summaryCard: {
-        backgroundColor: GIFTYY_THEME.colors.white,
-        borderRadius: GIFTYY_THEME.radius.xl,
-        padding: GIFTYY_THEME.spacing.lg,
-        gap: GIFTYY_THEME.spacing.md,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
+        padding: 20,
+        gap: 16,
         borderWidth: 1,
-        borderColor: GIFTYY_THEME.colors.gray200,
-        ...GIFTYY_THEME.shadows.sm,
+        borderColor: '#F3F4F6',
+        shadowColor: '#000',
+        shadowOpacity: 0.03,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+    },
+    summaryHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        marginBottom: 4,
     },
     summaryHeading: {
-        fontSize: GIFTYY_THEME.typography.sizes.md,
-        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
-        color: GIFTYY_THEME.colors.gray900,
+        fontSize: 15,
+        fontWeight: '900',
+        color: '#111827',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
     },
     summaryRow: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
     },
+    summaryIconContainer: {
+        width: 28,
+        height: 28,
+        borderRadius: 8,
+        backgroundColor: '#F9FAFB',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
     summaryLabel: {
-        color: GIFTYY_THEME.colors.gray600,
-        fontWeight: GIFTYY_THEME.typography.weights.semibold,
+        color: '#6B7280',
+        fontWeight: '600',
+        fontSize: 14,
     },
     summaryValue: {
-        color: GIFTYY_THEME.colors.gray900,
-        fontWeight: GIFTYY_THEME.typography.weights.bold,
+        color: '#111827',
+        fontWeight: '700',
+        fontSize: 14,
     },
     actions: {
-        gap: GIFTYY_THEME.spacing.md,
+        gap: 12,
     },
     secondaryButton: {
-        paddingVertical: GIFTYY_THEME.spacing.md,
-        borderRadius: GIFTYY_THEME.radius.full,
+        paddingVertical: 16,
+        borderRadius: 999,
         borderWidth: 1,
-        borderColor: '#CBD5F5', // Keep as is - brand-specific color
+        borderColor: '#FFE8DC',
         alignItems: 'center',
-        backgroundColor: GIFTYY_THEME.colors.white,
+        backgroundColor: '#FFF7F3',
     },
     secondaryLabel: {
-        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
-        color: '#1D4ED8', // Keep as is - brand-specific color
+        fontWeight: '800',
+        color: GIFTYY_THEME.colors.primary,
+        fontSize: 15,
     },
     ordersButton: {
-        paddingVertical: GIFTYY_THEME.spacing.md,
-        borderRadius: GIFTYY_THEME.radius.full,
-        borderWidth: 1,
-        borderColor: GIFTYY_THEME.colors.gray200,
+        paddingVertical: 16,
+        borderRadius: 999,
         alignItems: 'center',
-        backgroundColor: GIFTYY_THEME.colors.gray50,
+        backgroundColor: '#F9FAFB',
     },
     ordersLabel: {
-        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
-        color: GIFTYY_THEME.colors.gray900,
+        fontWeight: '800',
+        color: '#4B5563',
+        fontSize: 15,
     },
     tertiaryButton: {
-        paddingVertical: GIFTYY_THEME.spacing.md,
-        borderRadius: GIFTYY_THEME.radius.lg,
+        paddingVertical: 16,
+        borderRadius: 16,
         alignItems: 'center',
-        backgroundColor: '#E0F2FE', // Keep as is - specific accent color
+        backgroundColor: '#F3F4F6',
         borderWidth: 1,
-        borderColor: '#BAE6FD', // Keep as is - specific accent color
+        borderColor: '#E5E7EB',
     },
     tertiaryLabel: {
-        color: '#0369A1', // Keep as is - brand-specific color
-        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+        color: '#374151',
+        fontWeight: '800',
+        fontSize: 14,
     },
     orderDetailsCard: {
-        backgroundColor: GIFTYY_THEME.colors.white,
-        borderRadius: GIFTYY_THEME.radius.md,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 20,
         borderWidth: 1,
-        borderColor: GIFTYY_THEME.colors.gray200,
+        borderColor: '#F3F4F6',
         overflow: 'hidden',
     },
     orderHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: GIFTYY_THEME.spacing.md,
-        paddingVertical: GIFTYY_THEME.spacing.md,
+        paddingHorizontal: 20,
+        paddingVertical: 18,
     },
     orderHeaderLabel: {
-        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
-        color: GIFTYY_THEME.colors.gray900,
-    },
-    orderHeaderChevron: {
-        fontSize: GIFTYY_THEME.typography.sizes.xl,
-        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
-        color: GIFTYY_THEME.colors.info,
+        fontWeight: '800',
+        color: '#111827',
+        fontSize: 15,
     },
     orderBody: {
-        paddingHorizontal: GIFTYY_THEME.spacing.md,
-        paddingBottom: GIFTYY_THEME.spacing.md,
-        gap: GIFTYY_THEME.spacing.sm,
+        paddingHorizontal: 20,
+        paddingBottom: 20,
+        gap: 16,
+    },
+
+    statusBadge: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: '#F3F4F6',
+        paddingHorizontal: 12,
+        paddingVertical: 6,
+        borderRadius: 999,
+        alignSelf: 'flex-start',
+        gap: 8,
+    },
+    statusDot: {
+        width: 8,
+        height: 8,
+        borderRadius: 4,
+    },
+    statusText: {
+        fontSize: 13,
+        fontWeight: '700',
+        color: '#374151',
     },
     orderBodyLabel: {
-        fontWeight: GIFTYY_THEME.typography.weights.bold,
-        color: GIFTYY_THEME.colors.gray600,
+        fontWeight: '900',
+        color: '#9CA3AF',
         textTransform: 'uppercase',
-        fontSize: GIFTYY_THEME.typography.sizes.sm,
-        letterSpacing: 0.6,
+        fontSize: 11,
+        letterSpacing: 1,
     },
     orderBodyValue: {
-        color: GIFTYY_THEME.colors.gray900,
-        fontWeight: GIFTYY_THEME.typography.weights.semibold,
-        lineHeight: 20,
+        color: '#111827',
+        fontWeight: '800',
+        fontSize: 14,
     },
     orderItemRow: {
         flexDirection: 'row',
         alignItems: 'flex-start',
         justifyContent: 'space-between',
-        paddingVertical: 6,
+        paddingVertical: 4,
     },
     orderItemName: {
-        color: GIFTYY_THEME.colors.gray900,
-        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
-        fontSize: GIFTYY_THEME.typography.sizes.base,
-    },
-    orderItemVendor: {
-        color: GIFTYY_THEME.colors.gray500,
-        fontSize: GIFTYY_THEME.typography.sizes.sm,
-        marginTop: GIFTYY_THEME.spacing.xs / 2,
+        color: '#111827',
+        fontWeight: '700',
+        fontSize: 14,
     },
     orderItemQty: {
-        color: GIFTYY_THEME.colors.gray600,
-        fontSize: GIFTYY_THEME.typography.sizes.sm,
-        marginTop: GIFTYY_THEME.spacing.xs / 2,
+        color: '#6B7280',
+        fontSize: 12,
+        fontWeight: '600',
+        marginTop: 2,
     },
     orderItemPrice: {
-        color: GIFTYY_THEME.colors.gray900,
-        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
-        fontSize: GIFTYY_THEME.typography.sizes.base,
-        marginLeft: GIFTYY_THEME.spacing.sm,
+        color: '#111827',
+        fontWeight: '800',
+        fontSize: 14,
+        marginLeft: 12,
     },
     orderDivider: {
         height: 1,
-        backgroundColor: GIFTYY_THEME.colors.gray200,
-        marginVertical: 6,
+        backgroundColor: '#F3F4F6',
+    },
+    muted: {
+        color: '#6B7280',
+        fontWeight: '600',
+    },
+    bold: {
+        color: '#111827',
+        fontWeight: '800',
+    },
+    rowBetween: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    stickyBar: {
+        position: 'absolute',
+        left: 20,
+        right: 20,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 24,
+        paddingHorizontal: 16,
+        paddingVertical: 16,
+        shadowColor: '#000',
+        shadowOpacity: 0.1,
+        shadowRadius: 20,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 10,
+        borderWidth: 1,
+        borderColor: '#F3F4F6',
     },
 });
 

@@ -1,0 +1,50 @@
+[31mError: Cannot find module 'ajv/dist/compile/codegen'[39m
+[31mRequire stack:[39m
+[31m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\ajv-keywords\dist\definitions\typeof.js[39m
+[31m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\ajv-keywords\dist\keywords\typeof.js[39m
+[31m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\ajv-keywords\dist\keywords\index.js[39m
+[31m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\ajv-keywords\dist\index.js[39m
+[31m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\schema-utils\dist\validate.js[39m
+[31m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\schema-utils\dist\index.js[39m
+[31m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\expo-router\plugin\build\index.js[39m
+[31m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\expo-router\app.plugin.js[39m
+[31m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\@expo\config-plugins\build\utils\plugin-resolver.js[39m
+[31m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\@expo\config-plugins\build\plugins\withStaticPlugin.js[39m
+[31m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\@expo\config-plugins\build\plugins\withPlugins.js[39m
+[31m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\@expo\config-plugins\build\index.js[39m
+[31m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\@expo\cli\build\src\prebuild\clearNativeFolder.js[39m
+[31m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\@expo\cli\build\src\utils\scheme.js[39m
+[31m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\@expo\cli\build\src\start\resolveOptions.js[39m
+[31m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\@expo\cli\build\src\start\index.js[39m
+[31m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\@expo\cli\build\bin\cli[39m
+[31m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\expo\bin\cli[39m
+[90mError: Cannot find module 'ajv/dist/compile/codegen'[39m
+[90mRequire stack:[39m
+[90m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\ajv-keywords\dist\definitions\typeof.js[39m
+[90m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\ajv-keywords\dist\keywords\typeof.js[39m
+[90m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\ajv-keywords\dist\keywords\index.js[39m
+[90m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\ajv-keywords\dist\index.js[39m
+[90m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\schema-utils\dist\validate.js[39m
+[90m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\schema-utils\dist\index.js[39m
+[90m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\expo-router\plugin\build\index.js[39m
+[90m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\expo-router\app.plugin.js[39m
+[90m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\@expo\config-plugins\build\utils\plugin-resolver.js[39m
+[90m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\@expo\config-plugins\build\plugins\withStaticPlugin.js[39m
+[90m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\@expo\config-plugins\build\plugins\withPlugins.js[39m
+[90m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\@expo\config-plugins\build\index.js[39m
+[90m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\@expo\cli\build\src\prebuild\clearNativeFolder.js[39m
+[90m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\@expo\cli\build\src\utils\scheme.js[39m
+[90m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\@expo\cli\build\src\start\resolveOptions.js[39m
+[90m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\@expo\cli\build\src\start\index.js[39m
+[90m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\@expo\cli\build\bin\cli[39m
+[90m- C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\expo\bin\cli[39m
+[90m    at Module._resolveFilename (node:internal/modules/cjs/loader:1225:15)[39m
+[90m    at Module._load (node:internal/modules/cjs/loader:1051:27)[39m
+[90m    at Module.require (node:internal/modules/cjs/loader:1311:19)[39m
+[90m    at require (node:internal/modules/helpers:179:18)[39m
+[90m    at Object.<anonymous> (C:\Users\raf97\Downloads\GIFTYY\giftyy\node_modules\ajv-keywords\dist\definitions\typeof.js:3:19)[39m
+[90m    at Module._compile (node:internal/modules/cjs/loader:1469:14)[39m
+[90m    at Module._extensions..js (node:internal/modules/cjs/loader:1548:10)[39m
+[90m    at Module.load (node:internal/modules/cjs/loader:1288:32)[39m
+[90m    at Module._load (node:internal/modules/cjs/loader:1104:12)[39m
+[90m    at Module.require (node:internal/modules/cjs/loader:1311:19)[39m

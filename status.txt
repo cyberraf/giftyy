@@ -1,0 +1,185 @@
+On branch main
+Your branch is up to date with 'origin/main'.
+
+Changes to be committed:
+  (use "git restore --staged <file>..." to unstage)
+	modified:   app/(buyer)/notifications.tsx
+
+Changes not staged for commit:
+  (use "git add/rm <file>..." to update what will be committed)
+  (use "git restore <file>..." to discard changes in working directory)
+	modified:   app/(buyer)/(tabs)/_layout.tsx
+	modified:   app/(buyer)/(tabs)/index.tsx
+	modified:   app/(buyer)/(tabs)/memory.tsx
+	modified:   app/(buyer)/(tabs)/product/[id].tsx
+	modified:   app/(buyer)/(tabs)/profile.tsx
+	modified:   app/(buyer)/(tabs)/search.tsx
+	modified:   app/(buyer)/(tabs)/shop.tsx
+	modified:   app/(buyer)/_layout.tsx
+	modified:   app/(buyer)/cart.tsx
+	modified:   app/(buyer)/checkout/confirmation.tsx
+	modified:   app/(buyer)/notifications.tsx
+	modified:   app/(buyer)/order-tracker.tsx
+	modified:   app/(buyer)/orders/[id].tsx
+	deleted:    app/(buyer)/recipients.tsx
+	deleted:    app/(buyer)/settings.tsx
+	modified:   app/(buyer)/settings/profile.tsx
+	modified:   app/(buyer)/subscription.tsx
+	modified:   app/(buyer)/vendor/[id].tsx
+	deleted:    app/(buyer)/wishlist.tsx
+	modified:   app/_layout.tsx
+	modified:   app/guide.tsx
+	modified:   app/index.tsx
+	modified:   components/ui/icon-symbol.tsx
+	modified:   constants/giftyy-theme.ts
+	modified:   contexts/AuthContext.tsx
+	modified:   contexts/NotificationsContext.tsx
+	modified:   contexts/RecipientsContext.tsx
+	modified:   lib/hooks/useHome.ts
+	modified:   package-lock.json
+	modified:   package.json
+
+Untracked files:
+  (use "git add <file>..." to include in what will be committed)
+	.npmrc
+	app/(auth)/find-friends.tsx
+	app/(buyer)/(tabs)/recipients.tsx
+	app/(buyer)/occasions.tsx
+	app/(buyer)/orders/index.tsx
+	app/(buyer)/qoko-ai.tsx
+	app/(buyer)/recipient/
+	app/(buyer)/server-error.tsx
+	app/(buyer)/settings/index.tsx
+	app/(buyer)/wishlist/
+	app/gift/
+	app/invite/
+	app/modals/
+	assets/images/icons8-shopping-bag-24.png
+	assets/images/recipients-icon.png
+	assets/images/shop-custom.png
+	check-products.mjs
+	check_rls.js
+	components/GlobalHeader.tsx
+	components/errors/
+	components/forms/
+	components/gift/
+	components/home/HomeAIInterface.backup.tsx
+	components/home/HomeAIInterface.tsx
+	components/home/OnboardingSection.tsx
+	components/home/RecommendationCard.tsx
+	components/navigation/
+	components/occasions/
+	components/recipients/ConversationalFormSteps.tsx
+	components/recipients/ConversationalFormSteps2.tsx
+	components/recipients/ConversationalRecipientForm.tsx
+	components/recipients/FindFriendsModal.tsx
+	components/recipients/InvitationPrompt.tsx
+	components/recipients/RecipientPreferenceSections.tsx
+	components/recipients/RelationshipPickerModal.tsx
+	components/recipients/ShareInviteModal.tsx
+	components/recipients/index.ts
+	components/tour/
+	components/ui/DatePickerSheet.tsx
+	components/ui/GlassDialog.tsx
+	components/ui/WheelPicker.tsx
+	components/video-recording/ExpoCameraRecordingFlow.tsx
+	constants/countries.ts
+	constants/country-codes.ts
+	constants/location-options.ts
+	constants/preference-options.ts
+	constants/relationships.ts
+	constants/web-preference-options.ts
+	contexts/TourContext.tsx
+	db_check.txt
+	debug_avatars.js
+	debug_occasions_full.js
+	debug_output.txt
+	debug_output_utf8.txt
+	debug_output_v2.txt
+	debug_output_v3.txt
+	debug_output_v3_utf8.txt
+	debug_output_v4.txt
+	debug_output_v4_utf8.txt
+	doctor_output.txt
+	error.log
+	errors.txt
+	final_stack.txt
+	final_stack_v5.txt
+	fix_output.txt
+	full_stack.txt
+	full_stack_v2.txt
+	full_stack_v3.txt
+	full_stack_v4.txt
+	gradle_clean_output.txt
+	hooks/usePushNotifications.ts
+	hooks/useSettings.ts
+	inspect_db.js
+	lib/AlertManager.ts
+	lib/api/
+	lib/notifications.ts
+	lib/stripe-safe.tsx
+	lib/utils/
+	log.txt
+	memory_commits.txt
+	memory_diff.txt
+	memory_git_log.txt
+	memory_history.txt
+	memory_old.tsx
+	rag_output.txt
+	run_fix_occasions.js
+	run_migration.js
+	schema_dump.sql
+	services/
+	src/
+	stack.log
+	stacktrace.txt
+	status.txt
+	supabase-migrations-anonymous-recipient-access.sql
+	supabase-migrations-recipient-preferences.sql
+	supabase/.temp/
+	supabase/add_occasion_recurrence.sql
+	supabase/auto_claim_profiles.sql
+	supabase/automated_notifications.sql
+	supabase/config.toml
+	supabase/data_migration_recipients.sql
+	supabase/fix_gifting_profile_rls.sql
+	supabase/fix_notifications_schema.sql
+	supabase/fix_occasions_constraint.sql
+	supabase/fix_orphaned_occasions.sql
+	supabase/fix_recipient_persistence.sql
+	supabase/fix_recipient_preferences_rls.sql
+	supabase/fix_recipient_reactions_fk.sql
+	supabase/functions/ai-profile-recommend/
+	supabase/functions/ai-recommend/
+	supabase/functions/approve-connection/
+	supabase/functions/create-payment-intent/
+	supabase/functions/invite-recipient/
+	supabase/functions/notify-buyer-opened/
+	supabase/functions/notify-recipient/
+	supabase/functions/save-reaction/
+	supabase/functions/send-push-notification/
+	supabase/functions/send-sms/
+	supabase/functions/verify-profile-otp/
+	supabase/migrations/
+	supabase/push_tokens.sql
+	supabase/recipient_privacy_rls.sql
+	supabase/recipient_profiles_connections.sql
+	supabase/restrict_occasions_rls.sql
+	supabase/update_user_settings_frequencies.sql
+	supabase/user_settings.sql
+	supabase/verification_codes.sql
+	temp_error.txt
+	temp_out.txt
+	temp_tsx_out.txt
+	test-edge-function-simple.js
+	test-edge-function.js
+	test-resolution.ts
+	test_occasions.js
+	test_query.js
+	ts_errors.log
+	tsc_output.txt
+	tsc_output_2.txt
+	types/base-64.d.ts
+	types/recipient-preferences.ts
+	utils/natural-language-parser.ts
+

@@ -1,11 +1,10 @@
-import CustomTabBar from '@/components/CustomTabBar';
 import { Tabs } from 'expo-router';
 import React from 'react';
 
 export default function BuyerTabsLayout() {
 	return (
 		<Tabs
-			tabBar={(props) => <CustomTabBar {...props} />}
+			tabBar={() => null}
 			screenOptions={{
 				headerShown: false,
 			}}>
@@ -19,5 +18,3 @@ export default function BuyerTabsLayout() {
 		</Tabs>
 	);
 }
-
-

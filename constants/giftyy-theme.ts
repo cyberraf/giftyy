@@ -11,12 +11,14 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 export const GIFTYY_THEME = {
 	// Primary Brand Colors
 	colors: {
-		primary: '#2d3748', // Modern dark grey
-		primaryDark: '#1a202c', // Deeper grey for pressed states
-		primaryLight: '#4a5568', // Medium grey for hover/light accents
+		primary: '#f75507', // Giftyy brand orange
+		primaryDark: '#d94704', // Deeper orange for pressed states
+		primaryLight: '#ff7836', // Lighter orange for hover/light accents
 		accent: '#14b8a6', // Teal accent for CTAs and important actions
 		accentDark: '#0f766e', // Darker teal
 		accentLight: '#2dd4bf', // Lighter teal
+		orange: '#f75507', // Giftyy brand orange
+		orangeLight: '#ff6b1a', // Lighter orange for gradients
 		white: '#ffffff',
 		black: '#000000',
 

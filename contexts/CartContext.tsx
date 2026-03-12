@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useMemo, useState, useEffect, useCallback } from 'react';
-import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useAuth } from '@/contexts/AuthContext';
 import { logProductAnalyticsEvent } from '@/lib/product-analytics';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 
 export type CartItem = {
     id: string;
@@ -14,7 +15,7 @@ export type CartItem = {
     vendorId?: string; // Vendor who owns this product
 };
 
-const CART_STORAGE_KEY = '@giftyy:cart';
+const CART_STORAGE_KEY_BASE = '@giftyy:cart';
 
 type CartContextValue = {
     items: CartItem[];
@@ -29,14 +30,20 @@ type CartContextValue = {
 const CartContext = createContext<CartContextValue | undefined>(undefined);
 
 export function CartProvider({ children }: { children: React.ReactNode }) {
+    const { user } = useAuth();
     const [items, setItems] = useState<CartItem[]>([]);
     const [loading, setLoading] = useState(true);
 
-    // Load cart from AsyncStorage on mount
+    const userCartKey = useMemo(() =>
+        user ? `${CART_STORAGE_KEY_BASE}:${user.id}` : `${CART_STORAGE_KEY_BASE}:guest`,
+        [user]);
+
+    // Load cart whenever the storage key (user) changes
     useEffect(() => {
         const loadCart = async () => {
+            setLoading(true);
             try {
-                const stored = await AsyncStorage.getItem(CART_STORAGE_KEY);
+                const stored = await AsyncStorage.getItem(userCartKey);
                 if (stored) {
                     const parsed = JSON.parse(stored);
                     if (Array.isArray(parsed)) {
@@ -46,30 +53,35 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                             productId: it.productId || it.product_id || it.id,
                         }));
                         setItems(hydrated);
+                    } else {
+                        setItems([]);
                     }
+                } else {
+                    setItems([]);
                 }
             } catch (error) {
                 console.error('Error loading cart from storage:', error);
+                setItems([]);
             } finally {
                 setLoading(false);
             }
         };
         loadCart();
-    }, []);
+    }, [userCartKey]);
 
-    // Save cart to AsyncStorage whenever items change
+    // Save cart to AsyncStorage whenever items change (and we aren't loading)
     useEffect(() => {
         if (!loading) {
             const saveCart = async () => {
                 try {
-                    await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
+                    await AsyncStorage.setItem(userCartKey, JSON.stringify(items));
                 } catch (error) {
                     console.error('Error saving cart to storage:', error);
                 }
             };
             saveCart();
         }
-    }, [items, loading]);
+    }, [items, loading, userCartKey]);
 
     const addItem: CartContextValue['addItem'] = useCallback((newItem) => {
         setItems((prev) => {
@@ -102,11 +114,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const clear = useCallback(async () => {
         setItems([]);
         try {
-            await AsyncStorage.removeItem(CART_STORAGE_KEY);
+            await AsyncStorage.removeItem(userCartKey);
         } catch (error) {
             console.error('Error clearing cart from storage:', error);
         }
-    }, []);
+    }, [userCartKey]);
 
     const totalQuantity = useMemo(() => items.reduce((sum, it) => sum + it.quantity, 0), [items]);
 

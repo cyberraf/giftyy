@@ -33,7 +33,7 @@ import {
 	Text,
 	View,
 } from 'react-native';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -1038,34 +1038,8 @@ export default function ProductDetailsScreen() {
 					/>
 				}
 			>
-				{/* A - Product Media Carousel (Edge-to-edge, fully visible) */}
 				<View style={styles.carouselWrapper}>
 					<ProductMediaCarousel key={imageKey} images={imageUris} />
-					{/* Header Overlay */}
-					<Animated.View
-						entering={FadeInDown.duration(300)}
-						style={[styles.headerOverlay, { paddingTop: top + 6 }]}
-						pointerEvents="box-none"
-					>
-						<Pressable onPress={() => router.back()} style={styles.headerButton}>
-							<IconSymbol name="chevron.left" size={24} color={GIFTYY_THEME.colors.white} />
-						</Pressable>
-						<View style={styles.headerRight}>
-							<Pressable style={styles.headerButton} onPress={handleShare}>
-								<IconSymbol name="square.and.arrow.up" size={20} color={GIFTYY_THEME.colors.white} />
-							</Pressable>
-							<Pressable
-								style={[styles.headerButton, isInWishlist && styles.headerButtonActive]}
-								onPress={handleWishlistToggle}
-							>
-								<IconSymbol
-									name={isInWishlist ? 'heart.fill' : 'heart'}
-									size={20}
-									color={isInWishlist ? GIFTYY_THEME.colors.primary : GIFTYY_THEME.colors.white}
-								/>
-							</Pressable>
-						</View>
-					</Animated.View>
 				</View>
 
 				{/* B - Product Title & Price Block */}
@@ -1087,6 +1061,24 @@ export default function ProductDetailsScreen() {
 								<Text style={styles.discountText}>{discountPercentage}% OFF</Text>
 							</View>
 						)}
+					</View>
+					{/* Share & Wishlist Actions Row */}
+					<View style={styles.actionButtonsRow}>
+						<Pressable style={styles.actionBtn} onPress={handleShare}>
+							<IconSymbol name="square.and.arrow.up" size={18} color={GIFTYY_THEME.colors.gray600} />
+							<Text style={styles.actionBtnText}>Share</Text>
+						</Pressable>
+						<View style={styles.actionDivider} />
+						<Pressable style={[styles.actionBtn, isInWishlist && styles.actionBtnActive]} onPress={handleWishlistToggle}>
+							<IconSymbol
+								name={isInWishlist ? 'heart.fill' : 'heart'}
+								size={18}
+								color={isInWishlist ? GIFTYY_THEME.colors.primary : GIFTYY_THEME.colors.gray600}
+							/>
+							<Text style={[styles.actionBtnText, isInWishlist && styles.actionBtnTextActive]}>
+								{isInWishlist ? 'Wishlisted' : 'Wishlist'}
+							</Text>
+						</Pressable>
 					</View>
 					{stockStatus === 'low_stock' && (
 						<View style={styles.stockWarning}>
@@ -1190,13 +1182,13 @@ export default function ProductDetailsScreen() {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: GIFTYY_THEME.colors.white,
+		backgroundColor: 'transparent',
 	},
 	loadingContainer: {
 		flex: 1,
 		justifyContent: 'center',
 		alignItems: 'center',
-		backgroundColor: GIFTYY_THEME.colors.white,
+		backgroundColor: '#fff5f0',
 	},
 	loadingText: {
 		marginTop: 12,
@@ -1214,7 +1206,48 @@ const styles = StyleSheet.create({
 		marginTop: 16,
 		fontSize: GIFTYY_THEME.typography.sizes['2xl'],
 		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
-		color: GIFTYY_THEME.colors.gray900,
+		color: GIFTYY_THEME.colors.primary,
+	},
+	actionButtonsRow: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		marginTop: 16,
+	},
+	actionBtn: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'center',
+		backgroundColor: GIFTYY_THEME.colors.white,
+		paddingVertical: 10,
+		paddingHorizontal: 20,
+		borderRadius: 100,
+		borderWidth: 1,
+		borderColor: '#e5e7eb',
+		gap: 6,
+	},
+	actionBtnActive: {
+		borderColor: GIFTYY_THEME.colors.primary,
+		backgroundColor: GIFTYY_THEME.colors.cream,
+	},
+	actionBtnText: {
+		fontSize: GIFTYY_THEME.typography.sizes.sm,
+		fontWeight: GIFTYY_THEME.typography.weights.medium,
+		color: GIFTYY_THEME.colors.gray700,
+	},
+	actionBtnTextActive: {
+		color: GIFTYY_THEME.colors.primary,
+	},
+	actionDivider: {
+		width: 1,
+		height: 24,
+		backgroundColor: '#e5e7eb',
+		marginHorizontal: 12,
+	},
+	stockWarning: {
+		marginTop: 8,
+		color: GIFTYY_THEME.colors.gray500,
+		textAlign: 'center',
+		fontSize: GIFTYY_THEME.typography.sizes.base,
 	},
 	errorText: {
 		marginTop: 8,
@@ -1282,11 +1315,9 @@ const styles = StyleSheet.create({
 		marginBottom: GIFTYY_THEME.spacing.md,
 	},
 	productTitle: {
-		// fontSize is now set dynamically based on title length
 		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
 		color: GIFTYY_THEME.colors.gray900,
 		flex: 1,
-		// lineHeight will be calculated based on fontSize (1.3x font size for better readability)
 	},
 	discountBadge: {
 		backgroundColor: GIFTYY_THEME.colors.error,
@@ -1323,13 +1354,6 @@ const styles = StyleSheet.create({
 		color: GIFTYY_THEME.colors.gray600,
 		lineHeight: 22,
 		marginTop: GIFTYY_THEME.spacing.sm,
-	},
-	stockWarning: {
-		backgroundColor: GIFTYY_THEME.colors.warning + '20',
-		paddingVertical: 10,
-		paddingHorizontal: 12,
-		borderRadius: GIFTYY_THEME.radius.md,
-		marginTop: GIFTYY_THEME.spacing.md,
 	},
 	stockWarningText: {
 		color: GIFTYY_THEME.colors.warning,

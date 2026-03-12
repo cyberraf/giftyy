@@ -1,11 +1,20 @@
-import { MemoryVideoItem, MessageVideoViewer } from '../(tabs)/memory';
 import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
 import { useOrders } from '@/contexts/OrdersContext';
 import { useVideoMessages } from '@/contexts/VideoMessagesContext';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useMemo } from 'react';
+import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+
+type MemoryVideoItem = {
+  id: string;
+  title: string;
+  duration: string;
+  date: string;
+  videoUrl: string;
+  direction: string;
+  orderId?: string;
+};
 
 const palette = {
   background: '#fff',
@@ -21,25 +30,24 @@ export default function OrderDetailsScreen() {
   const router = useRouter();
   const { getOrderById, loading } = useOrders();
   const { videoMessages } = useVideoMessages();
-  const [viewerVisible, setViewerVisible] = useState(false);
   const { bottom, top } = useSafeAreaInsets();
 
   const order = id ? getOrderById(id) : null;
   const orderCode = order?.orderCode || (id ?? 'GIF-0000000').toUpperCase();
 
   // Find video message associated with this order
-  const orderVideoMessage = order 
+  const orderVideoMessage = order
     ? videoMessages.find((vm) => vm.orderId === order.id)
     : null;
 
   // Create MemoryVideoItem from order video
   const videoItem: MemoryVideoItem | null = useMemo(() => {
     if (!orderVideoMessage) return null;
-    
-    const duration = orderVideoMessage.durationSeconds 
+
+    const duration = orderVideoMessage.durationSeconds
       ? `${Math.floor(orderVideoMessage.durationSeconds / 60)}:${String(orderVideoMessage.durationSeconds % 60).padStart(2, '0')}`
       : '00:00';
-    
+
     return {
       id: orderVideoMessage.id,
       title: orderVideoMessage.title,
@@ -52,14 +60,10 @@ export default function OrderDetailsScreen() {
   }, [orderVideoMessage]);
 
   const handleOpenVideo = useCallback(() => {
-    if (videoItem) {
-      setViewerVisible(true);
+    if (videoItem?.videoUrl) {
+      Linking.openURL(videoItem.videoUrl).catch(() => { });
     }
   }, [videoItem]);
-
-  const handleCloseVideo = useCallback(() => {
-    setViewerVisible(false);
-  }, []);
 
   const getStatusDisplay = (status?: string) => {
     switch (status) {
@@ -119,23 +123,23 @@ export default function OrderDetailsScreen() {
     );
   }
 
-  const shippingAddress = useMemo(() => {
+  const shippingAddress = (() => {
     const rec = order.recipient;
     const line1 = rec.street || '—';
     const line2 = rec.apartment ? `${rec.apartment}, ` : '';
     const cityState = [rec.city, rec.state].filter(Boolean).join(', ');
     const countryZip = [rec.country, rec.zip].filter(Boolean).join(' ');
     return `${line1}\n${line2}${cityState}\n${countryZip}`.trim();
-  }, [order.recipient]);
+  })();
 
   const orderDate = new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  const deliveryInfo = order.deliveredAt 
+  const deliveryInfo = order.deliveredAt
     ? `Delivered ${new Date(order.deliveredAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
     : order.estimatedDeliveryDate
-    ? `Arriving ${new Date(order.estimatedDeliveryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
-    : order.status === 'out_for_delivery'
-    ? 'Arriving soon'
-    : 'Placed ' + orderDate;
+      ? `Arriving ${new Date(order.estimatedDeliveryDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
+      : order.status === 'out_for_delivery'
+        ? 'Arriving soon'
+        : 'Placed ' + orderDate;
 
   return (
     <View style={styles.screen}>
@@ -231,15 +235,6 @@ export default function OrderDetailsScreen() {
         )}
 
       </ScrollView>
-
-      {videoItem && (
-        <MessageVideoViewer
-          visible={viewerVisible}
-          initialIndex={0}
-          data={[videoItem]}
-          onClose={handleCloseVideo}
-        />
-      )}
     </View>
   );
 }

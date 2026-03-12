@@ -1,253 +1,203 @@
-import { GiftSuggestionRow } from '@/components/home/GiftSuggestionRow';
+import HomeAIInterface from '@/components/home/HomeAIInterface';
 import { OccasionList } from '@/components/home/OccasionList';
-import {
-	RecipientCarousel,
-	type RecipientCarouselItem,
-} from '@/components/home/RecipientCarousel';
-import { IconSymbol } from '@/components/ui/icon-symbol';
-import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
-import { GIFTYY_THEME } from '@/constants/giftyy-theme';
-import { useAlert } from '@/contexts/AlertContext';
+import { OnboardingSection, type OnboardingStep } from '@/components/home/OnboardingSection';
 import { useAuth } from '@/contexts/AuthContext';
-import { useRecipients } from '@/contexts/RecipientsContext';
-import { useNotifications } from '@/contexts/NotificationsContext';
+import { useBottomBarVisibility } from '@/contexts/BottomBarVisibility';
+import { useOrders } from '@/contexts/OrdersContext';
+import { useSharedMemories } from '@/contexts/SharedMemoriesContext';
+import { useVideoMessages } from '@/contexts/VideoMessagesContext';
 import { useHome } from '@/lib/hooks/useHome';
-import { useAppStore } from '@/lib/store/useAppStore';
-import { RecipientFormModal } from '@/components/recipients/RecipientFormModal';
+import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
-import {
-	ScrollView,
-	StyleSheet,
-	Text,
-	View,
-} from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { StyleSheet, View } from 'react-native';
 
 /**
- * Buyer Home: high-level funnel into
- * 1) Add/select recipient
- * 2) See upcoming occasions
- * 3) Preview suggested gifts
- * 4) Start AI chat
+ * Buyer Home: AI Chat Interface with Upcoming Celebrations & Onboarding
  */
 export default function BuyerHomeIndexScreen() {
-	const { top, bottom } = useSafeAreaInsets();
-	const router = useRouter();
-	const { alert } = useAlert();
-	const { profile } = useAuth();
-	const { recipientsLoading, refreshRecipients } = useRecipients();
-	const { unreadCount } = useNotifications();
 	const {
 		recipients,
-		recipientsLoading: homeRecipientsLoading,
-		activeRecipient,
-		activeRecipientNextOccasion,
 		upcomingOccasions,
-		suggestions,
-		suggestionsLoading,
+		recipientsLoading,
+		myPreferences,
+		myProfileOccasions,
 	} = useHome();
+	const homeOccasions = upcomingOccasions.slice(0, 6);
 
-	const { activeRecipientId, setActiveRecipient } = useAppStore();
-	const [addRecipientVisible, setAddRecipientVisible] = useState(false);
+	const router = useRouter();
+	const { setVisible } = useBottomBarVisibility();
+	const { profile, user } = useAuth();
+	const { orders } = useOrders();
+	const { videoMessages } = useVideoMessages();
+	const { sharedMemories } = useSharedMemories();
 
-	const loading = recipientsLoading || homeRecipientsLoading;
+	const [hasReactions, setHasReactions] = useState(false);
 
-	// Default the active recipient to the first one if none is selected yet
 	useEffect(() => {
-		if (!activeRecipientId && recipients.length > 0) {
-			setActiveRecipient(recipients[0].id);
-		}
-	}, [activeRecipientId, recipients, setActiveRecipient]);
+		async function checkReactions() {
+			if (!user) return;
+			const { count, error } = await supabase
+				.from('recipient_reactions')
+				.select('*', { count: 'exact', head: true })
+				.eq('recipient_user_id', user.id);
 
-	const recipientCarouselItems: RecipientCarouselItem[] = useMemo(
-		() =>
-			recipients.slice(0, 8).map((r) => ({
-				id: r.id,
-				displayName: r.firstName || 'Recipient',
-				relationship: r.relationship,
-				nextOccasionLabel: activeRecipientNextOccasion?.recipientId === r.id
-					? activeRecipientNextOccasion.label
-					: undefined,
-				nextOccasionDateDisplay: activeRecipientNextOccasion?.recipientId === r.id
-					? new Date(activeRecipientNextOccasion.date).toLocaleDateString(undefined, {
-						month: 'short',
-						day: 'numeric',
-					})
-					: undefined,
-				nextOccasionInDays: activeRecipientNextOccasion?.recipientId === r.id
-					? activeRecipientNextOccasion.inDays
-					: undefined,
-			})),
-		[recipients, activeRecipientNextOccasion],
+			if (!error && count !== null) {
+				setHasReactions(count > 0);
+			}
+		}
+		checkReactions();
+	}, [user]);
+
+	// Hide bottom tab bar on the Home screen — we use the burger menu instead
+	useEffect(() => {
+		setVisible(false);
+		return () => setVisible(true);
+	}, [setVisible]);
+
+	const handleSearch = (text: string) => {
+		console.log('Searching for:', text);
+	};
+
+	const handlePressOccasion = useCallback(
+		(recipientId: string) => {
+			router.push({
+				pathname: '/(buyer)/(tabs)/shop',
+				params: { recipient: recipientId },
+			});
+		},
+		[router],
 	);
 
-	const handleNavigateToContact = (recipientId: string) => {
-		// Today there is a single recipients screen; we pass the id as a param
-		// so it can optionally highlight that contact in the future.
-		router.push({
-			pathname: '/(buyer)/recipients',
-			params: { recipientId },
+	const handleAddOccasion = useCallback(() => {
+		router.push('/(buyer)/(tabs)/recipients');
+	}, [router]);
+
+	// --- Onboarding progress ---
+	// Check for actual recipients (excluding potential self-references if they exist in the list)
+	const hasRecipients = recipients.length > 0;
+
+	// Check for occasions specifically for others or meaningful profile occasions
+	const hasOccasions = (myProfileOccasions ?? []).length > 0;
+
+	// Robust preference check: Ensure at least some key fields are populated
+	const hasPreferences = useMemo(() => {
+		if (!myPreferences) return false;
+		// Check for at least one meaningful preference field
+		const keyFields = [
+			'age_range', 'lifestyle_type', 'gender_identity',
+			'fashion_style', 'interests', 'dietary_preferences'
+		];
+		return keyFields.some(field => {
+			const val = (myPreferences as any)[field];
+			if (Array.isArray(val)) return val.length > 0;
+			return val != null && val !== '';
 		});
-	};
+	}, [myPreferences]);
 
-	const handleStartOrOpenSession = (recipientId: string) => {
-		// TODO: When AI sessions are implemented, replace this with:
-		// - find/create ai_session for recipient (+ occasion)
-		// - router.push(`/sessions/${sessionId}`)
-		//
-		// For now we reuse the existing gift-finder flow so the UX works end‑to‑end.
-		router.push({
-			pathname: '/(buyer)/gift-finder',
-			params: { recipientId },
-		});
-	};
+	const onboardingSteps: OnboardingStep[] = useMemo(
+		() => {
+			const steps: OnboardingStep[] = [
+				{
+					id: 'add-name',
+					label: 'Add your name',
+					completed: !!(profile?.first_name),
+					onPress: () => router.push('/(buyer)/(tabs)/profile'),
+				},
+				{
+					id: 'add-phone',
+					label: 'Add phone number',
+					completed: !!(profile?.phone),
+					onPress: () => router.push('/(buyer)/(tabs)/profile'),
+				},
+				{
+					id: 'add-birthday',
+					label: 'Add your birthday',
+					completed: !!(profile?.date_of_birth),
+					onPress: () => router.push('/(buyer)/(tabs)/profile'),
+				},
+				{
+					id: 'add-recipient',
+					label: 'Add a recipient',
+					completed: hasRecipients,
+					onPress: () => router.push({ pathname: '/(buyer)/(tabs)/recipients', params: { tab: 'circle' } }),
+				},
+				{
+					id: 'set-occasion',
+					label: 'Set an occasion',
+					completed: hasOccasions,
+					onPress: () => router.push({ pathname: '/(buyer)/(tabs)/recipients', params: { tab: 'occasions' } }),
+				},
+				{
+					id: 'fill-preferences',
+					label: 'Fill your preferences',
+					completed: hasPreferences,
+					onPress: () => router.push({ pathname: '/(buyer)/(tabs)/recipients', params: { tab: 'preferences' } }),
+				},
+				{
+					id: 'first-order',
+					label: 'Place your first order',
+					completed: orders.length > 0,
+					onPress: () => router.push('/(buyer)/(tabs)/shop'),
+				},
+				{
+					id: 'first-video',
+					label: 'Record a video message',
+					completed: videoMessages.some(v => v.direction === 'sent'),
+					onPress: () => router.push({ pathname: '/(buyer)/(tabs)/memory', params: { tab: 'Messages' } }),
+				},
+				{
+					id: 'first-memory',
+					label: 'Upload a shared memory',
+					completed: sharedMemories.length > 0,
+					onPress: () => router.push({ pathname: '/(buyer)/(tabs)/memory', params: { tab: 'Shared memories' } }),
+				},
+				{
+					id: 'first-reaction',
+					label: 'Send your first reaction',
+					completed: hasReactions,
+					onPress: () => router.push({ pathname: '/(buyer)/(tabs)/memory', params: { tab: 'Reactions' } }),
+				},
+			];
 
-	const handleAskAIEntry = () => {
-		if (!activeRecipient) {
-			alert(
-				'Pick a recipient first',
-				'Choose who you are shopping for so Giftyy can personalize suggestions.',
-			);
-			router.push('/(buyer)/recipients');
-			return;
-		}
+			// Sort: incomplete steps first
+			return steps.sort((a, b) => (a.completed === b.completed ? 0 : a.completed ? 1 : -1));
+		},
+		[profile, hasRecipients, hasOccasions, hasPreferences, orders, videoMessages, sharedMemories, hasReactions, router],
+	);
 
-		handleStartOrOpenSession(activeRecipient.id);
-	};
+	const onboardingPercentage = useMemo(() => {
+		const done = onboardingSteps.filter((s) => s.completed).length;
+		return Math.round((done / onboardingSteps.length) * 100);
+	}, [onboardingSteps]);
 
-	const handlePressSuggestion = (suggestion: any) => {
-		if (!activeRecipient) {
-			handleAskAIEntry();
-			return;
-		}
-
-		// If a session id is present, we could route there in the future.
-		// For now, keep behavior consistent with the main AI entry.
-		handleStartOrOpenSession(activeRecipient.id);
-	};
-
-	const handleGetGiftIdeasForRecipient = (recipientId: string) => {
-		setActiveRecipient(recipientId);
-		handleStartOrOpenSession(recipientId);
-	};
-
-	const handleAddRecipient = () => {
-		// Open the lightweight add-recipient dialog used in checkout
-		setAddRecipientVisible(true);
-	};
-
-	const firstName = profile?.first_name || 'there';
-	const headerPaddingTop = top + 6;
-	const headerHeight = headerPaddingTop + 56; // header content height
+	const isOnboardingComplete = onboardingPercentage === 100;
 
 	return (
 		<View style={styles.container}>
-			{/* Pinned header */}
-			<View
-				style={[
-					styles.headerContainer,
-					{ paddingTop: headerPaddingTop },
-				]}
+			<HomeAIInterface
+				recipients={recipients}
+				occasions={homeOccasions}
+				onSearch={handleSearch}
 			>
-				<View style={styles.headerRow}>
-					<View>
-						<Text style={styles.headerGreeting}>Hi, {firstName}</Text>
-						<Text style={styles.headerSubtitle}>Plan gifts and remember every occasion.</Text>
-					</View>
-					<View style={styles.headerRight}>
-						<View style={{ position: 'relative' }}>
-							<Text
-								accessible
-								accessibilityRole="button"
-								accessibilityLabel="Open notifications"
-								onPress={() => router.push('/(buyer)/notifications')}
-							>
-								<IconSymbol name="bell" size={20} color={GIFTYY_THEME.colors.gray700} />
-							</Text>
-							{unreadCount > 0 && (
-								<View style={styles.notificationBadge}>
-									<Text style={styles.notificationBadgeText}>
-										{unreadCount > 9 ? '9+' : unreadCount}
-									</Text>
-								</View>
-							)}
-						</View>
-					</View>
-				</View>
-			</View>
-
-			<ScrollView
-				style={styles.scroll}
-				contentContainerStyle={[
-					styles.scrollContent,
-					{
-						paddingTop: headerHeight + GIFTYY_THEME.spacing.sm,
-						paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + GIFTYY_THEME.spacing.lg,
-					},
-				]}
-				showsVerticalScrollIndicator={false}
-			>
-				<RecipientCarousel
-					items={recipientCarouselItems}
-					activeRecipientId={activeRecipient?.id ?? null}
-					loading={loading}
-					onSelectRecipient={setActiveRecipient}
-					onGetGiftIdeas={handleGetGiftIdeasForRecipient}
-					onAddRecipient={handleAddRecipient}
-				/>
-
+				{/* Upcoming Celebrations */}
 				<OccasionList
-					occasions={upcomingOccasions}
-					loading={loading}
-					onPressOccasion={handleNavigateToContact}
-					onAddOccasion={handleAddRecipient}
+					occasions={homeOccasions}
+					loading={recipientsLoading}
+					onPressOccasion={handlePressOccasion}
+					onAddOccasion={handleAddOccasion}
 				/>
 
-				<GiftSuggestionRow
-					activeRecipientName={activeRecipient?.firstName}
-					hasActiveRecipient={!!activeRecipient}
-					suggestions={suggestions}
-					loading={suggestionsLoading}
-					onPressSuggestion={handlePressSuggestion}
-					onAskAI={handleAskAIEntry}
-				/>
-
-				{/* Bottom AI entry section */}
-				<View style={styles.aiEntryCard}>
-					<View style={styles.aiEntryHeader}>
-						<Text style={styles.aiEntryTitle}>Ask Giftyy AI</Text>
-						<Text style={styles.aiEntrySubtitle}>
-							Describe what you’re shopping for and we’ll do the rest.
-						</Text>
+				{/* Onboarding Steps (hide once fully complete) */}
+				{!isOnboardingComplete && (
+					<View style={styles.onboardingWrapper}>
+						<OnboardingSection
+							percentage={onboardingPercentage}
+							steps={onboardingSteps}
+						/>
 					</View>
-					<View style={styles.aiEntryInputRow}>
-						<View style={styles.aiEntryInputStub}>
-							<Text style={styles.aiEntryInputText}>
-								Describe what you’re shopping for…
-							</Text>
-						</View>
-						<View style={styles.aiEntryIconPill}>
-							<IconSymbol name="sparkles" size={18} color={GIFTYY_THEME.colors.white} />
-						</View>
-					</View>
-					<View style={styles.aiEntryHintRow}>
-						<Text style={styles.aiEntryHintText}>
-							Try: “Birthday gift for my sister who loves coffee, under $50”
-						</Text>
-					</View>
-					<View style={styles.aiEntryOverlayHitbox}>
-					</View>
-				</View>
-			</ScrollView>
-
-			<RecipientFormModal
-				visible={addRecipientVisible}
-				mode="add"
-				editingRecipient={null}
-				onClose={() => setAddRecipientVisible(false)}
-				onSaved={refreshRecipients}
-			/>
+				)}
+			</HomeAIInterface>
 		</View>
 	);
 }
@@ -255,124 +205,9 @@ export default function BuyerHomeIndexScreen() {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: GIFTYY_THEME.colors.backgroundSecondary,
+		backgroundColor: 'transparent',
 	},
-	scroll: {
-		flex: 1,
-	},
-	scrollContent: {
-		paddingHorizontal: GIFTYY_THEME.spacing.lg,
-	},
-	headerContainer: {
-		position: 'absolute',
-		top: 0,
-		left: 0,
-		right: 0,
-		zIndex: 20,
-		backgroundColor: GIFTYY_THEME.colors.white,
-		borderBottomWidth: 1,
-		borderBottomColor: GIFTYY_THEME.colors.gray200,
-		paddingHorizontal: GIFTYY_THEME.spacing.lg,
-		paddingBottom: GIFTYY_THEME.spacing.sm,
-		...GIFTYY_THEME.shadows.sm,
-	},
-	headerRow: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
-		marginBottom: GIFTYY_THEME.spacing.lg,
-	},
-	headerGreeting: {
-		fontSize: GIFTYY_THEME.typography.sizes.lg,
-		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
-		color: GIFTYY_THEME.colors.gray900,
-	},
-	headerSubtitle: {
-		marginTop: 2,
-		fontSize: GIFTYY_THEME.typography.sizes.xs,
-		color: GIFTYY_THEME.colors.gray600,
-	},
-	headerRight: {
-		flexDirection: 'row',
-		alignItems: 'center',
-	},
-	notificationBadge: {
-		position: 'absolute',
-		top: -4,
-		right: -4,
-		minWidth: 16,
-		height: 16,
-		borderRadius: 8,
-		backgroundColor: GIFTYY_THEME.colors.error,
-		alignItems: 'center',
-		justifyContent: 'center',
-		paddingHorizontal: 3,
-		borderWidth: 2,
-		borderColor: GIFTYY_THEME.colors.white,
-	},
-	notificationBadgeText: {
-		color: GIFTYY_THEME.colors.white,
-		fontSize: 9,
-		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
-	},
-	aiEntryCard: {
-		marginTop: GIFTYY_THEME.spacing['3xl'],
-		borderRadius: GIFTYY_THEME.radius.xl,
-		backgroundColor: GIFTYY_THEME.colors.white,
-		padding: GIFTYY_THEME.spacing.lg,
-		borderWidth: 1,
-		borderColor: GIFTYY_THEME.colors.gray200,
-		position: 'relative',
-	},
-	aiEntryHeader: {
-		marginBottom: GIFTYY_THEME.spacing.sm,
-	},
-	aiEntryTitle: {
-		fontSize: GIFTYY_THEME.typography.sizes.lg,
-		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
-		color: GIFTYY_THEME.colors.gray900,
-	},
-	aiEntrySubtitle: {
-		marginTop: 2,
-		fontSize: GIFTYY_THEME.typography.sizes.xs,
-		color: GIFTYY_THEME.colors.gray600,
-	},
-	aiEntryInputRow: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		marginTop: GIFTYY_THEME.spacing.md,
-	},
-	aiEntryInputStub: {
-		flex: 1,
-		height: 44,
-		borderRadius: GIFTYY_THEME.radius.full,
-		backgroundColor: GIFTYY_THEME.colors.gray100,
-		justifyContent: 'center',
-		paddingHorizontal: GIFTYY_THEME.spacing.md,
-	},
-	aiEntryInputText: {
-		fontSize: GIFTYY_THEME.typography.sizes.sm,
-		color: GIFTYY_THEME.colors.gray500,
-	},
-	aiEntryIconPill: {
-		marginLeft: GIFTYY_THEME.spacing.sm,
-		width: 44,
-		height: 44,
-		borderRadius: 22,
-		alignItems: 'center',
-		justifyContent: 'center',
-		backgroundColor: GIFTYY_THEME.colors.primary,
-	},
-	aiEntryHintRow: {
-		marginTop: GIFTYY_THEME.spacing.sm,
-	},
-	aiEntryHintText: {
-		fontSize: GIFTYY_THEME.typography.sizes.xs,
-		color: GIFTYY_THEME.colors.gray500,
-	},
-	aiEntryOverlayHitbox: {
-		// Full-card invisible hitbox for the AI entry
-		...StyleSheet.absoluteFillObject,
+	onboardingWrapper: {
+		marginTop: 16,
 	},
 });
-

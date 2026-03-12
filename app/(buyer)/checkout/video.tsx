@@ -1,8 +1,10 @@
 /**
  * Video Recording Screen for Checkout
  * Integrates the new VideoRecordingFlow component with checkout context
+ * VERIFICATION_ID: FIX_SYNTAX_ERROR_V1
  */
 
+import StepBar from '@/components/StepBar';
 import { VideoRecordingFlow } from '@/components/video-recording/VideoRecordingFlow';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { useBottomBarVisibility } from '@/contexts/BottomBarVisibility';
@@ -14,7 +16,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { InteractionManager, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
-import StepBar from '@/components/StepBar';
 
 const PRIMARY = GIFTYY_THEME.colors.primary;
 const DRAFT_VIDEO_TITLE_KEY = 'draft_video_title';
@@ -22,7 +23,7 @@ const DRAFT_VIDEO_TITLE_KEY = 'draft_video_title';
 export default function VideoScreen() {
 	useKeepAwake();
 	const router = useRouter();
-	const { setLocalVideoUri, setVideoDurationMs, setVideoTitle, localVideoUri, videoDurationMs, videoTitle } = useCheckout();
+	const { recipient, setLocalVideoUri, setVideoDurationMs, setVideoTitle, localVideoUri, videoDurationMs, videoTitle, setCardPrice, setCardType } = useCheckout();
 	const { setVisible } = useBottomBarVisibility();
 
 	const [recordedVideoUri, setRecordedVideoUri] = useState<string | null>(null);
@@ -63,7 +64,7 @@ export default function VideoScreen() {
 				}
 			}
 		};
-		
+
 		// Debounce saving to avoid too many writes
 		const timeoutId = setTimeout(saveTitle, 500);
 		return () => clearTimeout(timeoutId);
@@ -100,7 +101,7 @@ export default function VideoScreen() {
 	const handleVideoRecorded = useCallback(async (videoUri: string, durationMs: number) => {
 		setRecordedVideoUri(videoUri);
 		setRecordedDurationMs(durationMs);
-		
+
 		// Load saved title if it exists
 		try {
 			const savedTitle = await AsyncStorage.getItem(DRAFT_VIDEO_TITLE_KEY);
@@ -110,7 +111,7 @@ export default function VideoScreen() {
 		} catch (err) {
 			console.warn('Error loading saved title:', err);
 		}
-		
+
 		// Delay state changes to allow camera to properly stop and cleanup
 		// This prevents the Android crash from unmounting while camera is active
 		setTimeout(() => {
@@ -132,19 +133,19 @@ export default function VideoScreen() {
 			}
 
 			const trimmedTitle = localVideoTitle.trim();
-			
+
 			// Store local video file URI, duration, and title in checkout context
 			// Video will be uploaded after successful checkout
 			setLocalVideoUri(recordedVideoUri);
 			setVideoDurationMs(recordedDurationMs);
 			setVideoTitle(trimmedTitle);
-			
+
 			// Clear saved title after storing (don't await to avoid blocking)
 			AsyncStorage.removeItem(DRAFT_VIDEO_TITLE_KEY).catch(console.warn);
-			
+
 			// Close modal first
 			setShowTitleModal(false);
-			
+
 			// Navigate after a brief delay to ensure state updates and modal close complete
 			requestAnimationFrame(() => {
 				try {
@@ -162,12 +163,30 @@ export default function VideoScreen() {
 	}, [recordedVideoUri, recordedDurationMs, localVideoTitle, setLocalVideoUri, setVideoDurationMs, setVideoTitle, router]);
 
 
-        return (
+	// Handle skip - bypass optional steps and go to payment
+	const handleSkip = useCallback(() => {
+		// Clear any local state if skipping
+		setLocalVideoUri(undefined);
+		setVideoDurationMs(undefined);
+		setVideoTitle(undefined);
+		setCardPrice(0);
+		setCardType('');
+		AsyncStorage.removeItem(DRAFT_VIDEO_TITLE_KEY).catch(console.warn);
+
+		router.push('/(buyer)/checkout/payment');
+	}, [router, setLocalVideoUri, setVideoDurationMs, setVideoTitle, setCardPrice, setCardType]);
+
+	return (
 		<View style={styles.container} collapsable={false}>
-			<View style={styles.headerContainer} pointerEvents="box-none" collapsable={false}>
-				<StepBar current={4} total={7} label="Record a video message" />
-			</View>
+			<StepBar current={3} total={7} label="Video message" />
 			<View style={styles.videoFlowContainer} collapsable={false}>
+				<Pressable
+					onPress={handleSkip}
+					style={styles.skipButtonOverlay}
+					hitSlop={20}
+				>
+					<Text style={styles.skipButtonText}>Skip</Text>
+				</Pressable>
 				{isScreenFocused && (isMounted || recordedVideoUri || localVideoUri) ? (
 					<VideoRecordingFlow
 						key={flowKey}
@@ -185,6 +204,7 @@ export default function VideoScreen() {
 						}}
 						initialVideoUri={recordedVideoUri || localVideoUri || null}
 						initialDurationMs={recordedDurationMs || videoDurationMs || 0}
+						recipientName={recipient.firstName}
 					/>
 				) : null}
 			</View>
@@ -196,12 +216,11 @@ export default function VideoScreen() {
 				animationType="fade"
 				onRequestClose={() => setShowTitleModal(false)}
 			>
-				<Pressable 
+				<Pressable
 					style={styles.modalOverlay}
 					onPress={() => setShowTitleModal(false)}
-					activeOpacity={1}
 				>
-					<Pressable 
+					<Pressable
 						style={styles.modalContent}
 						onPress={(e) => e.stopPropagation()}
 					>
@@ -258,24 +277,18 @@ export default function VideoScreen() {
 					</Pressable>
 				</Pressable>
 			</Modal>
-                                    </View>
+		</View>
 	);
 }
 
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: '#000',
-	},
-	headerContainer: {
-		zIndex: 100,
-		elevation: 100,
-		position: 'relative',
-		backgroundColor: '#fff',
+		backgroundColor: '#0F1014',
 	},
 	videoFlowContainer: {
 		flex: 1,
-		backgroundColor: '#000',
+		backgroundColor: '#0F1014',
 	},
 	modalOverlay: {
 		flex: 1,
@@ -375,5 +388,22 @@ const styles = StyleSheet.create({
 		fontSize: 18,
 		fontWeight: '800',
 		letterSpacing: 0.5,
+	},
+	skipButtonOverlay: {
+		position: 'absolute',
+		top: 16,
+		right: 16,
+		zIndex: 100,
+		backgroundColor: 'rgba(255, 255, 255, 0.15)',
+		paddingHorizontal: 16,
+		paddingVertical: 8,
+		borderRadius: 20,
+		borderWidth: 1,
+		borderColor: 'rgba(255, 255, 255, 0.2)',
+	},
+	skipButtonText: {
+		color: '#fff',
+		fontWeight: '800',
+		fontSize: 14,
 	},
 });

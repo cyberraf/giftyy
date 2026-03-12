@@ -1,0 +1,5 @@
+1f46100 feat: update checkout, notifications, and media flows
+261ff5c feat: add onboarding guides and improve checkout flows
+1d968bc feat: Major platform update with marketplace, bundles, deals, search, and vendor features
+4cb29f0 adding new commit
+7464d5d Initial commit: Giftyy app with buyer features, AI gift finder, product variations, notifications, and profile management

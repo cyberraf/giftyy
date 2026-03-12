@@ -1,0 +1,250 @@
+﻿Starting project at C:\Users\raf97\Downloads\GIFTYY\giftyy
+env: load .env.local
+env: export EXPO_PUBLIC_SUPABASE_URL EXPO_PUBLIC_SUPABASE_ANON_KEY EXPO_PUBLIC_OPENAI_API_KEY EXPO_PUBLIC_OPENAI_MODEL OPENAI_API_KEY OPENAI_MODEL
+npx : Error: Cannot 
+find module 'ajv/dis
+t/compile/codegen'
+At line:1 char:1
++ npx expo start 
+--clear 2>&1 | 
+Out-File -FilePath 
+full_stack.txt 
+-Enco ...
++ ~~~~~~~~~~~~~~~~~~
+~~~~~~~~~
+    + CategoryInfo  
+            : NotS  
+  pecified: (Erro   
+ r: Cannot f...o    
+mpile/codegen':    
+String) [], Rem    
+oteException
+    + FullyQualifie 
+   dErrorId : Nati  
+  veCommandError
+ 
+Require stack:
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\ajv-ke
+ywords\dist\definiti
+ons\typeof.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\ajv-ke
+ywords\dist\keywords
+\typeof.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\ajv-ke
+ywords\dist\keywords
+\index.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\ajv-ke
+ywords\dist\index.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\schema
+-utils\dist\validate
+.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\schema
+-utils\dist\index.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\expo-r
+outer\plugin\build\i
+ndex.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\expo-r
+outer\app.plugin.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\@expo\
+config-plugins\build
+\utils\plugin-resolv
+er.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\@expo\
+config-plugins\build
+\plugins\withStaticP
+lugin.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\@expo\
+config-plugins\build
+\plugins\withPlugins
+.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\@expo\
+config-plugins\build
+\index.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\@expo\
+cli\build\src\prebui
+ld\clearNativeFolder
+.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\@expo\
+cli\build\src\utils\
+scheme.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\@expo\
+cli\build\src\start\
+resolveOptions.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\@expo\
+cli\build\src\start\
+index.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\@expo\
+cli\build\bin\cli
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\expo\b
+in\cli
+Error: Cannot find 
+module 'ajv/dist/com
+pile/codegen'
+Require stack:
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\ajv-ke
+ywords\dist\definiti
+ons\typeof.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\ajv-ke
+ywords\dist\keywords
+\typeof.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\ajv-ke
+ywords\dist\keywords
+\index.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\ajv-ke
+ywords\dist\index.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\schema
+-utils\dist\validate
+.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\schema
+-utils\dist\index.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\expo-r
+outer\plugin\build\i
+ndex.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\expo-r
+outer\app.plugin.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\@expo\
+config-plugins\build
+\utils\plugin-resolv
+er.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\@expo\
+config-plugins\build
+\plugins\withStaticP
+lugin.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\@expo\
+config-plugins\build
+\plugins\withPlugins
+.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\@expo\
+config-plugins\build
+\index.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\@expo\
+cli\build\src\prebui
+ld\clearNativeFolder
+.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\@expo\
+cli\build\src\utils\
+scheme.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\@expo\
+cli\build\src\start\
+resolveOptions.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\@expo\
+cli\build\src\start\
+index.js
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\@expo\
+cli\build\bin\cli
+- C:\Users\raf97\Dow
+nloads\GIFTYY\giftyy
+\node_modules\expo\b
+in\cli
+    at Module._resol
+veFilename (node:int
+ernal/modules/cjs/lo
+ader:1225:15)
+    at Module._load 
+(node:internal/modul
+es/cjs/loader:1051:2
+7)
+    at 
+Module.require (node
+:internal/modules/cj
+s/loader:1311:19)
+    at require (node
+:internal/modules/he
+lpers:179:18)
+    at 
+Object.<anonymous> (
+C:\Users\raf97\Downl
+oads\GIFTYY\giftyy\n
+ode_modules\ajv-keyw
+ords\dist\definition
+s\typeof.js:3:19)
+    at 
+Module._compile (nod
+e:internal/modules/c
+js/loader:1469:14)
+    at Module._exten
+sions..js (node:inte
+rnal/modules/cjs/loa
+der:1548:10)
+    at Module.load (
+node:internal/module
+s/cjs/loader:1288:32
+)
+    at Module._load 
+(node:internal/modul
+es/cjs/loader:1104:1
+2)
+    at 
+Module.require (node
+:internal/modules/cj
+s/loader:1311:19)

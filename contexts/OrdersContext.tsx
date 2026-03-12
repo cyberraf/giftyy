@@ -1,6 +1,6 @@
 import { type Recipient } from '@/lib/CheckoutContext';
-import { supabase } from '@/lib/supabase';
 import { logProductAnalyticsEvent } from '@/lib/product-analytics';
+import { supabase } from '@/lib/supabase';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useAuth } from './AuthContext';
 import { type CartItem } from './CartContext';
@@ -349,15 +349,16 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 				// Send email notification to recipient if requested
 				if (notifyRecipient && recipient.email) {
 					try {
-						console.log('[Order] Sending email notification to recipient:', recipient.email);
-
 						// Calculate estimated arrival (3-5 business days from now)
 						const estimatedDays = '3-5 business days';
+						console.log('[Order] Invoking notify-recipient for:', recipient.email, 'with code:', orderCode);
 
-						supabase.functions.invoke('notify-recipient-email', {
+						// Use unified notification function (Email + In-app + Push)
+						await supabase.functions.invoke('notify-recipient', {
 							body: {
 								recipientEmail: recipient.email,
-								recipientName: `${recipient.firstName} ${recipient.lastName || ''}`.trim() || 'there',
+								recipientFirstName: recipient.firstName,
+								recipientLastName: recipient.lastName || null,
 								orderCode,
 								street: recipient.street,
 								apartment: recipient.apartment || undefined,
@@ -366,10 +367,13 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 								zip: recipient.zip,
 								country: recipient.country || undefined,
 								estimatedArrival: estimatedDays,
+								sendEmail: true,
+								sendInApp: true,
+								sendPush: true
 							},
 						});
-					} catch (notifyError) {
-						console.error('[Order] Unexpected error sending email notification:', notifyError);
+					} catch (notifyError: any) {
+						console.error('[Order] Unexpected error sending recipient notification:', notifyError?.message || notifyError);
 					}
 				}
 
@@ -388,7 +392,7 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 						].filter(Boolean);
 						const formattedAddress = addressParts.join(', ');
 
-						supabase.functions.invoke('notify-buyer-email', {
+						await supabase.functions.invoke('notify-buyer-email', {
 							body: {
 								buyerEmail: user.email,
 								buyerName: user.user_metadata?.first_name || 'Valued Customer',

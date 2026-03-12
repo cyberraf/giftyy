@@ -1,15 +1,14 @@
 import StepBar from '@/components/StepBar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { BRAND_COLOR } from '@/constants/theme';
+import { useAlert } from '@/contexts/AlertContext';
 import { useCart } from '@/contexts/CartContext';
 import { useProducts } from '@/contexts/ProductsContext';
 import { useCheckout, type CardType } from '@/lib/CheckoutContext';
 import { calculateVendorShippingSync } from '@/lib/shipping-utils';
-import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, Animated, FlatList, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { Animated, FlatList, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type CardLabel = 'Giftyy Card';
@@ -28,6 +27,7 @@ type CardConfig = {
 export default function DesignScreen() {
     const router = useRouter();
     const { cardType, setCardType, recipient, setCardPrice, defaultGiftyyCardPrice } = useCheckout();
+    const { alert } = useAlert();
     const { items } = useCart();
     const { refreshProducts, refreshCollections } = useProducts();
     const [pressedCard, setPressedCard] = useState<CardLabel | null>(null);
@@ -193,7 +193,7 @@ export default function DesignScreen() {
 
     return (
         <View style={{ flex: 1, backgroundColor: 'white' }}>
-            <StepBar current={2} total={7} label="Choose a card style" />
+            <StepBar current={5} total={7} label="Choose a card style" />
             <ScrollView
                 style={{ flex: 1 }}
                 contentContainerStyle={{ flexGrow: 1 }}
@@ -308,28 +308,19 @@ export default function DesignScreen() {
                                                 },
                                             ]}
                                         >
-                                            {/* Card Header with Logo */}
                                             <View style={styles.cardHeader}>
                                                 <View style={styles.logoContainer}>
-                                                    <LinearGradient
-                                                        colors={['#f75507', '#ff8c42']}
-                                                        start={{ x: 0, y: 0 }}
-                                                        end={{ x: 1, y: 1 }}
-                                                        style={styles.logoOuter}
-                                                    >
-                                                        <View style={styles.logoBox}>
-                                                            <Image
-                                                                source={require('@/assets/images/logo.png')}
-                                                                style={styles.logoImg}
-                                                                resizeMode="contain"
-                                                            />
-                                                        </View>
-                                                    </LinearGradient>
+                                                    <View style={styles.logoOuter}>
+                                                        <Image
+                                                            source={require('@/assets/images/logo.png')}
+                                                            style={styles.logoImg}
+                                                            resizeMode="contain"
+                                                        />
+                                                    </View>
                                                     <Text style={styles.logoText}>Giftyy</Text>
                                                 </View>
                                             </View>
 
-                                            {/* Card Body with Giftyy Image */}
                                             <View style={styles.cardBody}>
                                                 <Image
                                                     source={require('@/assets/images/giftyy.png')}
@@ -396,27 +387,31 @@ export default function DesignScreen() {
                         return <Animated.View key={i} style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: '#f75507', opacity: dotOpacity, transform: [{ scale: dotScale }] }} />;
                     })}
                 </View>
-                <View style={{ paddingHorizontal: sidePadding, marginTop: 12, marginBottom: 14 + bottom + BOTTOM_BAR_TOTAL_SPACE, gap: 12 }}>
+                <View style={{ height: bottom + 120 }} />
+            </ScrollView>
+
+            <View style={[styles.stickyBar, { bottom: bottom > 0 ? bottom + 8 : 24 }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Pressable
+                        style={{ paddingVertical: 12, paddingRight: 16 }}
+                        onPress={() => router.back()}
+                    >
+                        <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 13 }}>Back</Text>
+                    </Pressable>
                     <Pressable
                         onPress={() => {
                             if (disabled) {
-                                Alert.alert('Choose a card', 'Please select a card style to continue');
+                                alert('Choose a card', 'Please select a card style to continue');
                                 return;
                             }
-                            router.push('/(buyer)/checkout/recipient');
+                            router.push('/(buyer)/checkout/payment');
                         }}
-                        style={[styles.ctaBtn, { opacity: disabled ? 0.6 : 1 }]}
+                        style={{ flex: 1, backgroundColor: BRAND_COLOR, paddingVertical: 14, borderRadius: 999, alignItems: 'center', opacity: disabled ? 0.6 : 1 }}
                     >
-                        <Text style={{ color: 'white', fontWeight: '800' }}>Proceed to Recipient Details</Text>
-                    </Pressable>
-                    <Pressable
-                        style={{ alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 20 }}
-                        onPress={() => router.back()}
-                    >
-                        <Text style={{ color: '#6b7280', fontWeight: '700', fontSize: 15 }}>Back to cart</Text>
+                        <Text style={{ color: 'white', fontWeight: '800', fontSize: 15 }}>Proceed</Text>
                     </Pressable>
                 </View>
-            </ScrollView>
+            </View>
 
             {/* Info Modal */}
             <Modal
@@ -489,13 +484,14 @@ export default function DesignScreen() {
 
 const styles = StyleSheet.create({
     cardOuter: {
-        borderWidth: 2,
+        borderWidth: 1,
+        borderColor: '#f1f5f9',
         borderRadius: 16,
-        padding: 14,
+        padding: 12,
         shadowColor: '#000',
-        shadowOpacity: 0.06,
-        shadowRadius: 16,
-        elevation: 6,
+        shadowOpacity: 0.04,
+        shadowRadius: 10,
+        elevation: 2,
     },
     cardContainer: {
         width: '100%',
@@ -534,51 +530,32 @@ const styles = StyleSheet.create({
         gap: 8,
     },
     logoOuter: {
-        width: 32,
-        height: 32,
-        borderRadius: 10,
-        borderWidth: 2,
-        borderColor: '#f75507',
-        padding: 2,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.1,
-        shadowRadius: 2,
-        elevation: 2,
-    },
-    logoBox: {
-        width: '100%',
-        height: '100%',
-        backgroundColor: 'white',
+        width: 28,
+        height: 28,
         borderRadius: 8,
+        backgroundColor: 'white',
         alignItems: 'center',
         justifyContent: 'center',
-        overflow: 'hidden',
+        padding: 4,
     },
     logoImg: {
         width: '100%',
         height: '100%',
     },
     logoText: {
-        fontSize: 18,
-        fontWeight: '600',
-        letterSpacing: -0.5,
+        fontSize: 16,
+        fontWeight: 'bold',
         color: 'white',
     },
     cardBody: {
         flex: 1,
         alignItems: 'center',
-        justifyContent: 'flex-start',
-        gap: 4,
-        paddingTop: 5,
+        justifyContent: 'center',
+        gap: 16,
     },
     giftyyImage: {
-        maxWidth: 160,
-        maxHeight: 100,
-        width: '100%',
-        height: 'auto',
-        aspectRatio: 1.6,
-        marginTop: -5,
+        width: 90,
+        height: 90,
     },
     cardFooter: {
         textAlign: 'center',
@@ -747,6 +724,20 @@ const styles = StyleSheet.create({
         fontSize: 13,
         fontWeight: '400',
         textDecorationLine: 'underline',
+    },
+    stickyBar: {
+        position: 'absolute',
+        left: 16,
+        right: 16,
+        backgroundColor: '#fff',
+        borderRadius: 24,
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        shadowColor: '#000',
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 10,
     },
 });
 

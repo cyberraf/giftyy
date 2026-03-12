@@ -4,45 +4,27 @@ import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
 import { useProducts } from '@/contexts/ProductsContext';
 import { supabase } from '@/lib/supabase';
+import { ResizeMode, Video } from 'expo-av';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Dimensions, FlatList, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { VideoView, useVideoPlayer } from 'expo-video';
 
 const { width, height } = Dimensions.get('window');
 
 // Video Thumbnail Component - Shows video preview in gallery
 function VideoThumbnail({ videoUrl }: { videoUrl: string }) {
-	const player = useVideoPlayer(videoUrl, (player) => {
-		player.loop = true;
-		player.muted = true;
-		try {
-			player.play();
-		} catch (error) {
-			// Ignore play errors
-		}
-	});
-
-	useEffect(() => {
-		return () => {
-			// Cleanup: try to pause, but don't throw if player is already released
-			try {
-				player.pause();
-			} catch (error) {
-				// Ignore cleanup errors - player may already be released
-			}
-		};
-	}, [player]);
-
 	return (
 		<View style={styles.videoThumbnailContainer}>
-			<VideoView
-				player={player}
+			<Video
+				source={{ uri: videoUrl }}
 				style={styles.videoThumbnail}
-				contentFit="cover"
-				nativeControls={false}
+				resizeMode={ResizeMode.COVER}
+				shouldPlay
+				isLooping
+				isMuted
+				useNativeControls={false}
 			/>
 		</View>
 	);
@@ -63,7 +45,7 @@ function MediaViewerModal({
 	const { top, bottom } = useSafeAreaInsets();
 	const flatListRef = React.useRef<FlatList>(null);
 	const [currentIndex, setCurrentIndex] = useState(initialIndex);
-	
+
 	// All hooks must be called before any conditional returns
 	const onViewableItemsChanged = React.useRef(({ viewableItems }: { viewableItems: any[] }) => {
 		if (viewableItems.length > 0) {
@@ -160,30 +142,6 @@ function MediaViewerModal({
 
 // Individual media item component for the gallery
 function MediaViewerItem({ media, width, height }: { media: VendorMedia; width: number; height: number }) {
-	const videoPlayer = useVideoPlayer(media.mediaType === 'video' ? media.mediaUrl : '', (player) => {
-		player.loop = false;
-		player.muted = false;
-	});
-
-	useEffect(() => {
-		if (media.mediaType === 'video') {
-			try {
-				videoPlayer.replace(media.mediaUrl);
-				videoPlayer.play();
-			} catch (error) {
-				console.warn('Error playing video:', error);
-			}
-		}
-
-		return () => {
-			try {
-				videoPlayer.pause();
-			} catch (error) {
-				// Ignore cleanup errors
-			}
-		};
-	}, [media.id, media.mediaUrl, media.mediaType]);
-
 	return (
 		<View style={[styles.mediaViewerItem, { width, height: height * 0.8 }]}>
 			{media.mediaType === 'image' ? (
@@ -193,12 +151,12 @@ function MediaViewerItem({ media, width, height }: { media: VendorMedia; width: 
 					resizeMode="contain"
 				/>
 			) : media.mediaType === 'video' ? (
-				<VideoView
-					player={videoPlayer}
+				<Video
+					source={{ uri: media.mediaUrl }}
 					style={styles.fullscreenVideo}
-					contentFit="contain"
-					nativeControls={true}
-					allowsFullscreen={true}
+					resizeMode={ResizeMode.CONTAIN}
+					useNativeControls={true}
+					shouldPlay
 				/>
 			) : (
 				<View style={styles.loadingContainer}>
@@ -232,7 +190,7 @@ export default function VendorProfileScreen() {
 	const vendorId = params.id;
 	const { top, bottom } = useSafeAreaInsets();
 	const { products, getProductById } = useProducts();
-	
+
 	const [vendor, setVendor] = useState<VendorProfile | null>(null);
 	const [vendorMedia, setVendorMedia] = useState<VendorMedia[]>([]);
 	const [loading, setLoading] = useState(true);
@@ -287,13 +245,13 @@ export default function VendorProfileScreen() {
 							// 3. Path without avatars: "{user_id}/filename.png"
 							// We need: "avatars/{user_id}/filename.png"
 							let path = profileImageUrl.trim();
-							
+
 							// Remove leading/trailing slashes
 							path = path.replace(/^\/+|\/+$/g, '');
-							
+
 							// Remove bucket name if present (shouldn't be in path)
 							path = path.replace(/^profile_images\//, '');
-							
+
 							// Check if path already has avatars prefix
 							if (path.startsWith('avatars/')) {
 								// Path is already in correct format: avatars/{user_id}/filename
@@ -302,18 +260,18 @@ export default function VendorProfileScreen() {
 								// Extract filename (last part after any slashes)
 								const pathParts = path.split('/');
 								const filename = pathParts[pathParts.length - 1];
-								
+
 								// Construct path as: avatars/{user_id}/filename
 								path = `avatars/${data.id}/${filename}`;
 							}
-							
+
 							// Get public URL from Supabase storage
 							// This will return: https://...supabase.co/storage/v1/object/public/profile_images/avatars/{user_id}/{filename}
 							const { data: urlData } = supabase.storage.from('profile_images').getPublicUrl(path);
 							profileImageUrl = urlData.publicUrl;
 						}
 					}
-					
+
 					setVendor({
 						id: data.id,
 						storeName: data.store_name || undefined,
@@ -420,7 +378,7 @@ export default function VendorProfileScreen() {
 				<View style={styles.headerBtn} />
 			</View>
 
-			<ScrollView 
+			<ScrollView
 				contentContainerStyle={[styles.scrollContent, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20 }]}
 				showsVerticalScrollIndicator={false}
 			>
@@ -429,17 +387,17 @@ export default function VendorProfileScreen() {
 					<View style={styles.vendorHeader}>
 						{vendor.profileImageUrl && !imageError ? (
 							<View style={styles.vendorImageContainer}>
-								<Image 
+								<Image
 									key={`vendor-profile-image-${vendor.profileImageUrl}`}
-									source={{ 
+									source={{
 										uri: vendor.profileImageUrl,
-									}} 
+									}}
 									style={styles.vendorImage}
 									resizeMode="cover"
 									onError={async (error) => {
 										// Silently handle vendor image errors - we'll try to find the correct file
 										// Only log if we can't find an alternative (quiet error handling)
-										
+
 										// Try alternative path if original fails
 										if (vendor?.profileImageUrl && !imageError && vendor?.id) {
 											const urlMatch = vendor.profileImageUrl.match(/\/storage\/v1\/object\/public\/profile_images\/(.+)$/);
@@ -447,7 +405,7 @@ export default function VendorProfileScreen() {
 												const storagePath = urlMatch[1];
 												let alternativePath = '';
 												let alternativeUrl = '';
-												
+
 												// Try both path formats:
 												// - If path has 'avatars/', try without it (old format: {user_id}/{fileName})
 												// - If path doesn't have 'avatars/', try with it (new format: avatars/{user_id}/{fileName})
@@ -472,7 +430,7 @@ export default function VendorProfileScreen() {
 													alternativeUrl = urlData.publicUrl;
 													// Silently try alternative path
 												}
-												
+
 												// If alternative path format didn't work, try to find the actual file in storage
 												// This handles cases where the database URL is stale/incorrect
 												try {
@@ -480,7 +438,7 @@ export default function VendorProfileScreen() {
 													const userFolder = storagePath.startsWith('avatars/')
 														? storagePath.replace(/^avatars\//, '').split('/')[0]
 														: storagePath.split('/')[0] || vendor.id;
-													
+
 													if (userFolder) {
 														// List files in the user's avatars folder to find the actual profile image
 														// Profile images are usually the most recent uploads in the folder
@@ -490,14 +448,14 @@ export default function VendorProfileScreen() {
 																limit: 10,
 																sortBy: { column: 'created_at', order: 'desc' }
 															});
-														
+
 														if (!listError && files && files.length > 0) {
 															// Use the most recent file (profile images are usually the latest uploads)
 															// Filter for image files only
-															const imageFiles = files.filter(file => 
+															const imageFiles = files.filter(file =>
 																file.name.match(/\.(jpg|jpeg|png|gif|webp|heic)$/i)
 															);
-															
+
 															if (imageFiles.length > 0) {
 																const actualFile = imageFiles[0];
 																const { data: urlData } = supabase.storage
@@ -514,12 +472,12 @@ export default function VendorProfileScreen() {
 																	limit: 10,
 																	sortBy: { column: 'created_at', order: 'desc' }
 																});
-															
+
 															if (oldFiles && oldFiles.length > 0) {
-																const imageFiles = oldFiles.filter(file => 
+																const imageFiles = oldFiles.filter(file =>
 																	file.name.match(/\.(jpg|jpeg|png|gif|webp|heic)$/i)
 																);
-																
+
 																if (imageFiles.length > 0) {
 																	const actualFile = imageFiles[0];
 																	const { data: urlData } = supabase.storage
@@ -536,7 +494,7 @@ export default function VendorProfileScreen() {
 												} catch (err) {
 													// Silently handle errors while finding file in storage
 												}
-												
+
 												// Only update if we have an alternative URL
 												if (alternativeUrl) {
 													// Update the vendor URL to try the alternative (with a slight delay to ensure state updates)
@@ -548,7 +506,7 @@ export default function VendorProfileScreen() {
 												}
 											}
 										}
-										
+
 										// If no alternative worked, show placeholder silently
 										// Don't log error - this is expected for vendors without profile images
 										setImageError(true);

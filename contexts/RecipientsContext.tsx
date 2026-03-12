@@ -1,117 +1,117 @@
 import { supabase } from '@/lib/supabase';
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { getNormalizedContacts, normalizeForMatching } from '@/lib/utils/contacts';
+import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from './AuthContext';
 
 export type Recipient = {
-    id: string;
+    id: string; // Connection ID
+    profileId?: string; // Global profile ID
     firstName: string;
     lastName?: string;
     relationship: string;
     email?: string;
     phone: string;
-    birthDate?: string; // ISO date string: YYYY-MM-DD
+    birthDate?: string;
     address: string;
     apartment?: string;
     city: string;
     state?: string;
     country: string;
     zip: string;
-    sports?: string;
-    hobbies?: string;
-    favoriteColors?: string;
-    favoriteArtists?: string;
-    stylePreferences?: string;
-    favoriteGenres?: string;
-    personalityLifestyle?: string;
-    giftTypePreference?: string;
-    dietaryPreferences?: string;
-    allergies?: string;
-    recentLifeEvents?: string;
-    ageRange?: string;
-    notes?: string;
+    status: 'pending' | 'approved' | 'rejected';
+    isOutgoing: boolean;
+    isClaimed: boolean;
+    displayName: string;
+    actualProfileId?: string;
+    avatarUrl?: string;
+    senderAvatarUrl?: string;
+    senderName?: string;
+};
+
+export type MatchedContact = {
+    id: string;
+    name: string;
+    phone?: string;
+    email?: string;
+    userId?: string;
+    avatarUrl?: string;
+    imageUri?: string;
+    isGiftyyUser: boolean;
+    connectionStatus?: 'pending' | 'approved' | 'rejected' | 'none';
+    connectionId?: string;
+    isIncomingInvitation?: boolean;
 };
 
 type RecipientsContextValue = {
     recipients: Recipient[];
     loading: boolean;
     setRecipients: (recipients: Recipient[]) => void;
-    addRecipient: (recipient: Omit<Recipient, 'id'>) => Promise<{ error: Error | null }>;
-    updateRecipient: (id: string, recipient: Partial<Recipient>) => Promise<{ error: Error | null }>;
+    addRecipient: (recipient: any) => Promise<{ error: Error | null }>;
+    updateRecipient: (id: string, updates: any) => Promise<{ error: Error | null }>;
     deleteRecipient: (id: string) => Promise<{ error: Error | null }>;
     refreshRecipients: () => Promise<void>;
+    approveConnection: (id: string, updates?: any) => Promise<{ error: Error | null }>;
+    rejectConnection: (id: string) => Promise<{ error: Error | null }>;
+    syncedContacts: MatchedContact[];
+    isSyncingContacts: boolean;
+    syncContacts: (force?: boolean) => Promise<void>;
 };
 
 const RecipientsContext = createContext<RecipientsContextValue | undefined>(undefined);
 
-// Helper function to convert database row (snake_case) to Recipient (camelCase)
-function dbRowToRecipient(row: any): Recipient {
-    return {
-        id: row.id,
-        firstName: row.first_name,
-        lastName: row.last_name || undefined,
-        relationship: row.relationship,
-        email: row.email || undefined,
-        phone: row.phone,
-        birthDate: row.birth_date || undefined,
-        address: row.address,
-        apartment: row.apartment || undefined,
-        city: row.city,
-        state: row.state || undefined,
-        country: row.country,
-        zip: row.zip,
-        sports: row.sports || undefined,
-        hobbies: row.hobbies || undefined,
-        favoriteColors: row.favorite_colors || undefined,
-        favoriteArtists: row.favorite_artists || undefined,
-        stylePreferences: row.style_preferences || undefined,
-        favoriteGenres: row.favorite_genres || undefined,
-        personalityLifestyle: row.personality_lifestyle || undefined,
-        giftTypePreference: row.gift_type_preference || undefined,
-        dietaryPreferences: row.dietary_preferences || undefined,
-        allergies: row.allergies || undefined,
-        recentLifeEvents: row.recent_life_events || undefined,
-        ageRange: row.age_range || undefined,
-        notes: row.notes || undefined,
-    };
-}
+// Helper to map DB connection + profile to Recipient
+function mapToRecipient(conn: any, currentUserId?: string): Recipient {
+    const profile = conn.recipient_profile || {};
+    const senderProfile = conn.sender_profile || {};
+    const isOutgoing = conn.sender_id === currentUserId;
 
-// Helper function to convert Recipient (camelCase) to database row (snake_case)
-function recipientToDbRow(recipient: Partial<Recipient>): any {
-    const row: any = {};
-    if (recipient.firstName !== undefined) row.first_name = recipient.firstName;
-    if (recipient.lastName !== undefined) row.last_name = recipient.lastName;
-    if (recipient.relationship !== undefined) row.relationship = recipient.relationship;
-    if (recipient.email !== undefined) row.email = recipient.email;
-    if (recipient.phone !== undefined) row.phone = recipient.phone;
-    if (recipient.birthDate !== undefined) row.birth_date = recipient.birthDate || null;
-    if (recipient.address !== undefined) row.address = recipient.address;
-    if (recipient.apartment !== undefined) row.apartment = recipient.apartment;
-    if (recipient.city !== undefined) row.city = recipient.city;
-    if (recipient.state !== undefined) row.state = recipient.state;
-    if (recipient.country !== undefined) row.country = recipient.country;
-    if (recipient.zip !== undefined) row.zip = recipient.zip;
-    if (recipient.sports !== undefined) row.sports = recipient.sports;
-    if (recipient.hobbies !== undefined) row.hobbies = recipient.hobbies;
-    if (recipient.favoriteColors !== undefined) row.favorite_colors = recipient.favoriteColors;
-    if (recipient.favoriteArtists !== undefined) row.favorite_artists = recipient.favoriteArtists;
-    if (recipient.stylePreferences !== undefined) row.style_preferences = recipient.stylePreferences;
-    if (recipient.favoriteGenres !== undefined) row.favorite_genres = recipient.favoriteGenres;
-    if (recipient.personalityLifestyle !== undefined) row.personality_lifestyle = recipient.personalityLifestyle;
-    if (recipient.giftTypePreference !== undefined) row.gift_type_preference = recipient.giftTypePreference;
-    if (recipient.dietaryPreferences !== undefined) row.dietary_preferences = recipient.dietaryPreferences;
-    if (recipient.allergies !== undefined) row.allergies = recipient.allergies;
-    if (recipient.recentLifeEvents !== undefined) row.recent_life_events = recipient.recentLifeEvents;
-    if (recipient.ageRange !== undefined) row.age_range = recipient.ageRange;
-    if (recipient.notes !== undefined) row.notes = recipient.notes;
-    return row;
+    // Logic for display name:
+    // If I am the sender, I want to see the name I gave the receiver (receiver_nickname)
+    // If I am the receiver, I want to see the name the sender gave themselves (sender_nickname) OR their profile name
+    const senderFullName = senderProfile.first_name || senderProfile.last_name
+        ? `${senderProfile.first_name || ''} ${senderProfile.last_name || ''}`.trim()
+        : senderProfile.full_name;
+
+    const displayName = isOutgoing
+        ? (conn.receiver_nickname || profile.full_name || 'Recipient')
+        : (conn.sender_nickname || senderFullName || 'Sender');
+
+    const senderRpId = senderProfile.recipient_profiles?.[0]?.id;
+
+    return {
+        id: conn.id,
+        profileId: isOutgoing ? conn.recipient_profile_id : conn.sender_id,
+        actualProfileId: isOutgoing ? conn.recipient_profile_id : senderRpId,
+        firstName: displayName.split(' ')[0] || 'Recipient',
+        lastName: displayName.split(' ').slice(1).join(' ') || '',
+        relationship: isOutgoing ? conn.sender_relationship : conn.receiver_relationship || 'Friend',
+        email: isOutgoing ? (profile.email || '') : (senderProfile.email || ''),
+        phone: isOutgoing ? (profile.phone || '') : (senderProfile.phone || ''),
+        birthDate: profile.birth_date || '',
+        address: isOutgoing ? (profile.address || '') : (senderProfile.recipient_profiles?.[0]?.address || ''),
+        apartment: isOutgoing ? (profile.apartment || '') : (senderProfile.recipient_profiles?.[0]?.apartment || ''),
+        city: isOutgoing ? (profile.city || '') : (senderProfile.recipient_profiles?.[0]?.city || ''),
+        state: isOutgoing ? (profile.state || '') : (senderProfile.recipient_profiles?.[0]?.state || ''),
+        country: isOutgoing ? (profile.country || '') : (senderProfile.recipient_profiles?.[0]?.country || ''),
+        zip: isOutgoing ? (profile.zip || '') : (senderProfile.recipient_profiles?.[0]?.zip || ''),
+        status: conn.status as any,
+        isOutgoing,
+        isClaimed: profile.is_claimed || false,
+        displayName,
+        avatarUrl: profile?.profiles?.profile_image_url || profile.avatar_url,
+        senderAvatarUrl: senderProfile?.profile_image_url,
+        senderName: conn.sender_nickname || senderFullName,
+    };
 }
 
 export function RecipientsProvider({ children }: { children: React.ReactNode }) {
     const [recipients, setRecipients] = useState<Recipient[]>([]);
     const [loading, setLoading] = useState(true);
+    const [syncedContacts, setSyncedContacts] = useState<MatchedContact[]>([]);
+    const [isSyncingContacts, setIsSyncingContacts] = useState(false);
+    const syncingRef = useRef(false);
     const { user } = useAuth();
 
-    // Fetch recipients from Supabase
     const refreshRecipients = useCallback(async () => {
         if (!user) {
             setRecipients([]);
@@ -121,135 +121,332 @@ export function RecipientsProvider({ children }: { children: React.ReactNode }) 
 
         try {
             setLoading(true);
-            const { data, error } = await supabase
-                .from('recipients')
-                .select('*')
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false });
 
-            if (error) {
-                console.error('Error fetching recipients:', error);
-                return;
+            // 1. Get current user's recipient profile ID to fetch incoming connections
+            const { data: myRp } = await supabase
+                .from('recipient_profiles')
+                .select('id')
+                .eq('user_id', user.id)
+                .maybeSingle();
+
+            const myRpId = myRp?.id;
+
+            // 2. Fetch connections where user is sender OR recipient (via profile)
+            let query = supabase
+                .from('connections')
+                .select(`
+                    *,
+                    recipient_profile:recipient_profile_id (
+                        *,
+                        profiles:user_id ( profile_image_url )
+                    ),
+                    sender_profile:profiles!sender_id (
+                        first_name,
+                        last_name,
+                        profile_image_url,
+                        email,
+                        phone,
+                        recipient_profiles!user_id ( 
+                            id,
+                            address,
+                            city,
+                            state,
+                            country,
+                            zip,
+                            apartment
+                        )
+                    )
+                `);
+
+            if (myRpId) {
+                query = query.or(`sender_id.eq.${user.id},recipient_profile_id.eq.${myRpId}`);
+            } else {
+                query = query.eq('sender_id', user.id);
             }
 
-            const fetchedRecipients = (data || []).map(dbRowToRecipient);
-            setRecipients(fetchedRecipients);
+            const { data, error } = await query.order('created_at', { ascending: false });
+
+            if (error) throw error;
+
+            const mapped = (data || []).map(conn => mapToRecipient(conn, user.id));
+            setRecipients(mapped);
         } catch (err) {
-            console.error('Unexpected error fetching recipients:', err);
+            console.error('Error fetching connections:', err);
         } finally {
             setLoading(false);
         }
     }, [user]);
 
-    // Fetch recipients when user changes
     useEffect(() => {
         refreshRecipients();
     }, [refreshRecipients]);
 
-    const addRecipient = useCallback(async (recipient: Omit<Recipient, 'id'>): Promise<{ error: Error | null }> => {
-        if (!user) {
-            return { error: new Error('User not authenticated') };
-        }
+    // Keep synced contacts updated with current connection statuses
+    useEffect(() => {
+        setSyncedContacts(prev => {
+            let hasChanges = false;
+            const updated = prev.map(c => {
+                if (!c.userId) return c;
+                const recipient = recipients.find(r => r.profileId === c.userId);
+                if (recipient) {
+                    const status = recipient.status;
+                    const isIncoming = !recipient.isOutgoing && recipient.status === 'pending';
+                    if (c.connectionStatus !== status || c.isIncomingInvitation !== isIncoming) {
+                        hasChanges = true;
+                        return {
+                            ...c,
+                            connectionStatus: status,
+                            connectionId: recipient.id,
+                            isIncomingInvitation: isIncoming,
+                        };
+                    }
+                }
+                return c;
+            });
+            return hasChanges ? updated : prev;
+        });
+    }, [recipients]);
+
+    const addRecipient = useCallback(async (details: any) => {
+        if (!user) return { error: new Error('Not authenticated') };
 
         try {
-            const dbRow = recipientToDbRow(recipient);
-            dbRow.user_id = user.id;
+            console.log('[RecipientsContext] Calling invite-recipient edge function for:', details.fullName || details.phone);
 
-            const { data, error } = await supabase
-                .from('recipients')
-                .insert(dbRow)
-                .select()
-                .single();
+            const { data, error: functionError } = await supabase.functions.invoke('invite-recipient', {
+                body: {
+                    action: 'invite',
+                    senderId: user.id,
+                    fullName: details.fullName,
+                    phone: details.phone,
+                    email: details.email,
+                    relationship: details.relationship,
+                    nickname: details.nickname,
+                    profileId: details.profileId,
+                }
+            });
 
-            if (error) {
-                console.error('Error adding recipient:', error);
-                return { error: new Error(error.message) };
+            if (functionError) {
+                console.error('[RecipientsContext] Edge function error:', functionError);
+                throw functionError;
             }
 
-            // Refresh the list
+            if (data?.success === false) {
+                throw new Error(data.error || 'Failed to add recipient');
+            }
+
             await refreshRecipients();
             return { error: null };
         } catch (err: any) {
-            console.error('Unexpected error adding recipient:', err);
-            return { error: err instanceof Error ? err : new Error(String(err)) };
+            console.error('[RecipientsContext] Error adding recipient:', err);
+            return { error: err };
         }
     }, [user, refreshRecipients]);
 
-    const updateRecipient = useCallback(async (id: string, updates: Partial<Recipient>): Promise<{ error: Error | null }> => {
-        if (!user) {
-            return { error: new Error('User not authenticated') };
-        }
-
+    const updateRecipient = useCallback(async (id: string, updates: any) => {
         try {
-            const dbRow = recipientToDbRow(updates);
-
-            const { error } = await supabase
-                .from('recipients')
-                .update(dbRow)
-                .eq('id', id)
-                .eq('user_id', user.id); // Ensure user owns this recipient
-
-            if (error) {
-                console.error('Error updating recipient:', error);
-                return { error: new Error(error.message) };
-            }
-
-            // Refresh the list
+            const { error } = await supabase.from('connections').update(updates).eq('id', id);
+            if (error) throw error;
             await refreshRecipients();
             return { error: null };
         } catch (err: any) {
-            console.error('Unexpected error updating recipient:', err);
-            return { error: err instanceof Error ? err : new Error(String(err)) };
+            return { error: err };
         }
-    }, [user, refreshRecipients]);
+    }, [refreshRecipients]);
 
-    const deleteRecipient = useCallback(async (id: string): Promise<{ error: Error | null }> => {
-        if (!user) {
-            return { error: new Error('User not authenticated') };
-        }
-
+    const deleteRecipient = useCallback(async (id: string) => {
         try {
-            const { error } = await supabase
-                .from('recipients')
-                .delete()
-                .eq('id', id)
-                .eq('user_id', user.id); // Ensure user owns this recipient
-
-            if (error) {
-                console.error('Error deleting recipient:', error);
-                return { error: new Error(error.message) };
-            }
-
-            // Refresh the list
+            const { error } = await supabase.from('connections').delete().eq('id', id);
+            if (error) throw error;
             await refreshRecipients();
             return { error: null };
         } catch (err: any) {
-            console.error('Unexpected error deleting recipient:', err);
-            return { error: err instanceof Error ? err : new Error(String(err)) };
+            return { error: err };
+        }
+    }, [refreshRecipients]);
+
+    const approveConnection = useCallback(async (id: string, updates?: any) => {
+        if (!user) return { error: new Error('Not authenticated') };
+
+        try {
+            console.log('[RecipientsContext] Calling invite-recipient edge function to accept:', id);
+
+            const { data, error: functionError } = await supabase.functions.invoke('invite-recipient', {
+                body: {
+                    action: 'accept',
+                    senderId: user.id, // Current user is the acceptor
+                    connectionId: id,
+                    relationship: updates?.relationship,
+                    nickname: updates?.nickname
+                }
+            });
+
+            if (functionError) throw functionError;
+            if (data?.success === false) throw new Error(data.error || 'Failed to approve connection');
+
+            // Optionally update local state immediately or just refresh
+            await refreshRecipients();
+            return { error: null };
+        } catch (err: any) {
+            console.error('[RecipientsContext] Error approving connection:', err);
+            return { error: err };
         }
     }, [user, refreshRecipients]);
 
-    const value = useMemo(
-        () => ({
-            recipients,
-            loading,
-            setRecipients,
-            addRecipient,
-            updateRecipient,
-            deleteRecipient,
-            refreshRecipients,
-        }),
-        [recipients, loading, addRecipient, updateRecipient, deleteRecipient, refreshRecipients]
-    );
+    const rejectConnection = useCallback(async (id: string) => {
+        try {
+            const { error } = await supabase.from('connections').update({ status: 'rejected' }).eq('id', id);
+            if (error) throw error;
+            await refreshRecipients();
+            return { error: null };
+        } catch (err: any) {
+            return { error: err };
+        }
+    }, [refreshRecipients]);
+
+    // ── Contact Sync ──────────────────────────────────────────────────────
+    const syncContacts = useCallback(async (force?: boolean) => {
+        if (!user) return;
+        if (syncingRef.current && !force) return;
+
+        syncingRef.current = true;
+        setIsSyncingContacts(true);
+        try {
+            // 1. Fetch device contacts
+            const deviceContacts = await getNormalizedContacts();
+
+            if (deviceContacts.length === 0) {
+                setSyncedContacts([]);
+                return;
+            }
+
+            // 2. Collect all phone numbers for matching
+            const phoneNumbers = deviceContacts
+                .map(c => c.phone)
+                .filter(Boolean) as string[];
+
+            // Normalize for matching
+            const normalizedPhones = phoneNumbers.map(p => normalizeForMatching(p));
+
+            // 3. Match against recipient_profiles table by phone/email
+            const { data: matchedProfiles, error: matchErr } = await supabase
+                .from('recipient_profiles')
+                .select('id, full_name, phone, email, avatar_url, user_id, is_claimed');
+
+            if (matchErr) {
+                console.error('[syncContacts] Error matching profiles:', matchErr);
+                // Fall through and show device contacts without matching
+            }
+
+            // 4. Fetch existing connections for this user
+            const { data: existingConnections } = await supabase
+                .from('connections')
+                .select('id, sender_id, recipient_profile_id, status')
+                .or(`sender_id.eq.${user.id}`);
+
+            // Build lookup maps — match by both phone AND email
+            const profilesByPhone = new Map<string, any>();
+            const profilesByEmail = new Map<string, any>();
+            (matchedProfiles || []).forEach(p => {
+                if (p.phone) {
+                    // Store both the raw normalized and also try different variations
+                    const normalized = normalizeForMatching(p.phone);
+                    profilesByPhone.set(normalized, p);
+                    // Also store last 10 digits for more lenient matching
+                    if (normalized.length >= 10) {
+                        profilesByPhone.set(normalized.slice(-10), p);
+                    }
+                }
+                if (p.email) {
+                    profilesByEmail.set(p.email.toLowerCase().trim(), p);
+                }
+            });
+
+            const connectionsByProfileId = new Map<string, any>();
+            (existingConnections || []).forEach(c => {
+                if (c.recipient_profile_id) {
+                    connectionsByProfileId.set(c.recipient_profile_id, c);
+                }
+            });
+
+            // 5. Build matched contacts list
+            const matched: MatchedContact[] = deviceContacts.map(contact => {
+                const normalizedPhone = contact.phone ? normalizeForMatching(contact.phone) : '';
+                // Try full number match first, then last-10-digits match
+                let profile = normalizedPhone ? profilesByPhone.get(normalizedPhone) : null;
+                if (!profile && normalizedPhone.length >= 10) {
+                    profile = profilesByPhone.get(normalizedPhone.slice(-10));
+                }
+                // Also try email matching
+                if (!profile && contact.emails) {
+                    for (const email of contact.emails) {
+                        if (email) {
+                            profile = profilesByEmail.get(email.toLowerCase().trim());
+                            if (profile) break;
+                        }
+                    }
+                }
+
+                // Prevent self-matching
+                if (profile && profile.user_id === user.id) {
+                    profile = null;
+                }
+
+                const connection = profile ? connectionsByProfileId.get(profile.id) : null;
+
+                return {
+                    id: contact.id,
+                    name: contact.name,
+                    phone: contact.phone,
+                    email: contact.emails?.[0],
+                    imageUri: contact.imageUri,
+                    isGiftyyUser: !!profile,
+                    userId: profile?.id,
+                    avatarUrl: profile?.avatar_url,
+                    connectionStatus: connection?.status || 'none',
+                    connectionId: connection?.id,
+                    isIncomingInvitation: connection?.sender_id !== user.id && connection?.status === 'pending',
+                };
+            });
+
+            // Sort: Giftyy users first, then alphabetically
+            matched.sort((a, b) => {
+                if (a.isGiftyyUser && !b.isGiftyyUser) return -1;
+                if (!a.isGiftyyUser && b.isGiftyyUser) return 1;
+                return a.name.localeCompare(b.name);
+            });
+
+            setSyncedContacts(matched);
+        } catch (err: any) {
+            console.error('[syncContacts] Error:', err);
+            throw err;
+        } finally {
+            syncingRef.current = false;
+            setIsSyncingContacts(false);
+        }
+    }, [user]);
+
+    const value = useMemo(() => ({
+        recipients,
+        loading,
+        setRecipients,
+        addRecipient,
+        updateRecipient,
+        deleteRecipient,
+        refreshRecipients,
+        approveConnection,
+        rejectConnection,
+        syncedContacts,
+        isSyncingContacts,
+        syncContacts,
+    }), [recipients, loading, addRecipient, updateRecipient, deleteRecipient, refreshRecipients, approveConnection, rejectConnection, syncedContacts, isSyncingContacts, syncContacts]);
 
     return <RecipientsContext.Provider value={value}>{children}</RecipientsContext.Provider>;
 }
 
 export function useRecipients() {
     const ctx = useContext(RecipientsContext);
-    if (!ctx) {
-        throw new Error('useRecipients must be used within RecipientsProvider');
-    }
+    if (!ctx) throw new Error('useRecipients must be used within RecipientsProvider');
     return ctx;
 }
 

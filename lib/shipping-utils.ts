@@ -15,7 +15,7 @@ export async function calculateVendorShipping(
 
 	// Group items by vendorId
 	const itemsByVendor = new Map<string, CartItem[]>();
-	
+
 	items.forEach(item => {
 		const vendorId = item.vendorId || 'default';
 		if (!itemsByVendor.has(vendorId)) {
@@ -50,7 +50,7 @@ export async function calculateVendorShipping(
 					const vendorId = vendor.id;
 					const subtotal = vendorSubtotals.get(vendorId) || 0;
 					const threshold = vendor.free_shipping_threshold || freeShippingThreshold;
-					
+
 					// Check if vendor offers free shipping for this order
 					if (subtotal >= threshold) {
 						vendorShippingMap.set(vendorId, 0);
@@ -67,7 +67,7 @@ export async function calculateVendorShipping(
 
 	// Calculate total shipping
 	let totalShipping = 0;
-	
+
 	itemsByVendor.forEach((vendorItems, vendorId) => {
 		if (vendorId === 'default') {
 			// For items without vendor, use default shipping logic
@@ -96,7 +96,7 @@ export function calculateVendorShippingSync(
 
 	// Group items by vendorId
 	const itemsByVendor = new Map<string, CartItem[]>();
-	
+
 	items.forEach(item => {
 		const vendorId = item.vendorId || 'default';
 		if (!itemsByVendor.has(vendorId)) {
@@ -107,19 +107,54 @@ export function calculateVendorShippingSync(
 
 	// Calculate subtotal per vendor and apply default shipping logic
 	let totalShipping = 0;
-	
+
 	itemsByVendor.forEach((vendorItems, vendorId) => {
 		const subtotal = vendorItems.reduce((sum, item) => {
 			const price = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
 			return sum + price * item.quantity;
 		}, 0);
-		
+
 		// Apply default shipping logic per vendor
 		// Each vendor gets their own shipping cost if subtotal < threshold
 		totalShipping += subtotal >= freeShippingThreshold ? 0 : defaultShippingCost;
 	});
 
 	return totalShipping;
+}
+
+const US_STATE_MAP: Record<string, string> = {
+	'AL': 'Alabama', 'AK': 'Alaska', 'AZ': 'Arizona', 'AR': 'Arkansas', 'CA': 'California',
+	'CO': 'Colorado', 'CT': 'Connecticut', 'DE': 'Delaware', 'DC': 'District of Columbia',
+	'FL': 'Florida', 'GA': 'Georgia', 'HI': 'Hawaii', 'ID': 'Idaho', 'IL': 'Illinois',
+	'IN': 'Indiana', 'IA': 'Iowa', 'KS': 'Kansas', 'KY': 'Kentucky', 'LA': 'Louisiana',
+	'ME': 'Maine', 'MD': 'Maryland', 'MA': 'Massachusetts', 'MI': 'Michigan', 'MN': 'Minnesota',
+	'MS': 'Mississippi', 'MO': 'Missouri', 'MT': 'Montana', 'NE': 'Nebraska', 'NV': 'Nevada',
+	'NH': 'New Hampshire', 'NJ': 'New Jersey', 'NM': 'New Mexico', 'NY': 'New York',
+	'NC': 'North Carolina', 'ND': 'North Dakota', 'OH': 'Ohio', 'OK': 'Oklahoma', 'OR': 'Oregon',
+	'PA': 'Pennsylvania', 'RI': 'Rhode Island', 'SC': 'South Carolina', 'SD': 'South Dakota',
+	'TN': 'Tennessee', 'TX': 'Texas', 'UT': 'Utah', 'VT': 'Vermont', 'VA': 'Virginia',
+	'WA': 'Washington', 'WV': 'West Virginia', 'WI': 'Wisconsin', 'WY': 'Wyoming'
+};
+
+const COUNTRY_MAP: Record<string, string> = {
+	'US': 'United States',
+	'USA': 'United States',
+	'UNITED STATES OF AMERICA': 'United States'
+};
+
+function normalizeState(state: string): string {
+	if (!state) return '';
+	const s = state.trim().toUpperCase();
+	if (US_STATE_MAP[s]) return US_STATE_MAP[s];
+	const fullName = Object.values(US_STATE_MAP).find(name => name.toUpperCase() === s);
+	return fullName || state.trim();
+}
+
+function normalizeCountry(country: string): string {
+	if (!country) return 'United States';
+	const c = country.trim().toUpperCase();
+	if (COUNTRY_MAP[c]) return COUNTRY_MAP[c];
+	return country.trim();
 }
 
 /**
@@ -133,10 +168,27 @@ export async function calculateVendorShippingByZone(
 	recipientCountry: string = 'United States',
 	defaultShippingCost: number = 4.99,
 	freeShippingThreshold: number = 50
-): Promise<{ total: number; breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number }> }> {
+): Promise<{
+	total: number;
+	hasShippingError: boolean;
+	breakdown: Array<{
+		vendorId: string;
+		vendorName: string;
+		subtotal: number;
+		shipping: number;
+		itemCount: number;
+		doesNotShip?: boolean;
+	}>
+}> {
 	if (items.length === 0) {
-		return { total: 0, breakdown: [] };
+		return { total: 0, hasShippingError: false, breakdown: [] };
 	}
+
+	// Normalize location
+	const normalizedCountry = normalizeCountry(recipientCountry);
+	const normalizedState = normalizeState(recipientState);
+
+	console.log(`[Shipping] Calculating for ${normalizedState}, ${normalizedCountry} (Original: ${recipientState}, ${recipientCountry})`);
 
 	// Group items by vendor
 	const itemsByVendor = new Map<string, CartItem[]>();
@@ -159,8 +211,16 @@ export async function calculateVendorShippingByZone(
 	});
 
 	const vendorIds = Array.from(itemsByVendor.keys()).filter(id => id !== 'default');
-	const breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number }> = [];
+	const breakdown: Array<{
+		vendorId: string;
+		vendorName: string;
+		subtotal: number;
+		shipping: number;
+		itemCount: number;
+		doesNotShip?: boolean;
+	}> = [];
 	let totalShipping = 0;
+	let hasShippingError = false;
 
 	// Fetch vendor names
 	const vendorNamesMap = new Map<string, string>();
@@ -170,7 +230,7 @@ export async function calculateVendorShippingByZone(
 				.from('profiles')
 				.select('id, store_name')
 				.in('id', vendorIds);
-			
+
 			vendorData?.forEach((vendor: any) => {
 				if (vendor.id) {
 					vendorNamesMap.set(vendor.id, vendor.store_name?.trim() || `Vendor ${vendor.id.slice(0, 8)}`);
@@ -186,6 +246,7 @@ export async function calculateVendorShippingByZone(
 		const subtotal = vendorSubtotals.get(vendorId) || 0;
 		const itemCount = vendorItems.reduce((sum, item) => sum + item.quantity, 0);
 		let shipping = defaultShippingCost;
+		let doesNotShip = false;
 
 		if (vendorId === 'default') {
 			// Default vendor logic - only use default for items without a vendor
@@ -196,33 +257,13 @@ export async function calculateVendorShippingByZone(
 				// First, find zones that match the recipient's location
 				// Table structure: id, vendor_id, name, countries (text[]), is_rest_of_world (bool)
 				console.log(`[Shipping] Querying zones for vendor_id: ${vendorId} (type: ${typeof vendorId})`);
-				
+
 				const { data: zones, error: zonesError } = await supabase
 					.from('vendor_shipping_zones')
-					.select('id, vendor_id, name, countries, is_rest_of_world')
+					.select('id, vendor_id, name, countries, is_rest_of_world, us_states')
 					.eq('vendor_id', vendorId);
 
 				console.log(`[Shipping] Zones query result for vendor ${vendorId}:`, zones, 'Error:', zonesError);
-				
-				// Check for RLS/permission errors
-				if (zonesError) {
-					console.error(`[Shipping] Error querying zones:`, zonesError);
-					if (zonesError.code === '42501' || zonesError.message?.includes('permission') || zonesError.message?.includes('policy')) {
-						console.warn(`[Shipping] RLS policy may be blocking access to vendor_shipping_zones table`);
-					}
-				}
-				
-				// If no zones found, try querying all zones to debug
-				if ((!zones || zones.length === 0) && !zonesError) {
-					const { data: allZones, error: allZonesError } = await supabase
-						.from('vendor_shipping_zones')
-						.select('id, vendor_id, name, countries, is_rest_of_world')
-						.limit(10);
-					console.log(`[Shipping] Sample of all zones (first 10):`, allZones, 'Error:', allZonesError);
-					if (allZonesError) {
-						console.error(`[Shipping] Error querying all zones:`, allZonesError);
-					}
-				}
 
 				if (!zonesError && zones && zones.length > 0) {
 					let matchedZone: any = null;
@@ -231,7 +272,7 @@ export async function calculateVendorShippingByZone(
 					for (const zone of zones) {
 						const countries = zone.countries || [];
 						const isRestOfWorld = zone.is_rest_of_world === true;
-						
+
 						// Ensure countries is an array
 						const countriesArray = Array.isArray(countries) ? countries : [];
 
@@ -241,9 +282,9 @@ export async function calculateVendorShippingByZone(
 							const otherZonesHaveCountry = zones.some((z: any) => {
 								if (z.id === zone.id) return false; // Skip current zone
 								const zCountries = Array.isArray(z.countries) ? z.countries : [];
-								return zCountries.includes(recipientCountry);
+								return zCountries.includes(normalizedCountry);
 							});
-							
+
 							if (!otherZonesHaveCountry) {
 								matchedZone = zone;
 								console.log(`[Shipping] Matched rest-of-world zone:`, zone);
@@ -251,23 +292,25 @@ export async function calculateVendorShippingByZone(
 							}
 						} else {
 							// Regular zone: check if recipient country is in the countries array
-							if (countriesArray.length === 0 || countriesArray.includes(recipientCountry)) {
+							if (countriesArray.length === 0 || countriesArray.includes(normalizedCountry)) {
+								// Extra Check for US States Restriction
+								if (normalizedCountry === 'United States' && Array.isArray(zone.us_states) && zone.us_states.length > 0) {
+									if (!zone.us_states.includes(normalizedState)) {
+										console.log(`[Shipping] Zone ${zone.id} includes US, but excludes state: ${normalizedState}. Skipping.`);
+										continue; // Not a match, try next zone
+									}
+								}
+
 								matchedZone = zone;
-								console.log(`[Shipping] Matched zone by country:`, zone, `for country: ${recipientCountry}`);
+								console.log(`[Shipping] Matched zone by country:`, zone, `for country: ${normalizedCountry}`);
 								break;
 							}
 						}
 					}
 
-					// If no specific zone matches, use the first zone as fallback
-					if (!matchedZone && zones.length > 0) {
-						matchedZone = zones[0];
-						console.log(`[Shipping] No zone matched, using first zone as fallback:`, matchedZone);
-					}
-
 					if (matchedZone) {
 						console.log(`[Shipping] Found matched zone for vendor ${vendorId}:`, matchedZone.id);
-						
+
 						// Get all shipping rates for this zone
 						const { data: rates, error: ratesError } = await supabase
 							.from('vendor_shipping_rates')
@@ -276,14 +319,6 @@ export async function calculateVendorShippingByZone(
 							.order('price', { ascending: true });
 
 						console.log(`[Shipping] Rates for zone ${matchedZone.id}:`, rates, 'Error:', ratesError);
-						
-						// Check for RLS/permission errors
-						if (ratesError) {
-							console.error(`[Shipping] Error querying rates:`, ratesError);
-							if (ratesError.code === '42501' || ratesError.message?.includes('permission') || ratesError.message?.includes('policy')) {
-								console.warn(`[Shipping] RLS policy may be blocking access to vendor_shipping_rates table`);
-							}
-						}
 
 						if (!ratesError && rates && rates.length > 0) {
 							// Find the matching rate based on conditions
@@ -293,11 +328,11 @@ export async function calculateVendorShippingByZone(
 							const sortedRates = [...rates].sort((a, b) => {
 								const aHasConditions = a.conditions && (a.conditions.order_price_min !== undefined || a.conditions.order_price_max !== undefined);
 								const bHasConditions = b.conditions && (b.conditions.order_price_min !== undefined || b.conditions.order_price_max !== undefined);
-								
+
 								// Rates without conditions come first
 								if (!aHasConditions && bHasConditions) return -1;
 								if (aHasConditions && !bHasConditions) return 1;
-								
+
 								// Otherwise sort by price
 								const aPrice = parseFloat(String(a.price)) || 0;
 								const bPrice = parseFloat(String(b.price)) || 0;
@@ -309,15 +344,12 @@ export async function calculateVendorShippingByZone(
 								const orderPriceMin = conditions.order_price_min;
 								const orderPriceMax = conditions.order_price_max;
 
-								console.log(`[Shipping] Checking rate ${rate.id}: price=${rate.price}, is_free=${rate.is_free}, conditions=`, conditions, `subtotal=${subtotal}`);
-
 								// If no conditions specified, this is a default rate that matches everything
-								const hasNoConditions = (orderPriceMin === undefined || orderPriceMin === null) && 
-														(orderPriceMax === undefined || orderPriceMax === null);
+								const hasNoConditions = (orderPriceMin === undefined || orderPriceMin === null) &&
+									(orderPriceMax === undefined || orderPriceMax === null);
 
 								if (hasNoConditions) {
 									matchedRate = rate;
-									console.log(`[Shipping] Matched default rate (no conditions):`, matchedRate);
 									break;
 								}
 
@@ -327,75 +359,56 @@ export async function calculateVendorShippingByZone(
 
 								if (matchesMin && matchesMax) {
 									matchedRate = rate;
-									console.log(`[Shipping] Matched rate with conditions:`, matchedRate);
 									break; // Use the first matching rate
 								}
 							}
 
-							// If no rate matches conditions, use the first rate as fallback
-							if (!matchedRate && sortedRates.length > 0) {
-								matchedRate = sortedRates[0];
-								console.log(`[Shipping] No condition match, using first rate as fallback:`, matchedRate);
-							}
-
 							if (matchedRate) {
-								// If is_free is true, shipping is free
 								if (matchedRate.is_free === true) {
 									shipping = 0;
-									console.log(`[Shipping] Rate is free, setting shipping to 0`);
 								} else {
-									// Use the price from the rate - handle both string and number types
 									let ratePrice = 0;
 									if (typeof matchedRate.price === 'number') {
 										ratePrice = matchedRate.price;
 									} else if (typeof matchedRate.price === 'string') {
 										ratePrice = parseFloat(matchedRate.price) || 0;
 									}
-									
-									// Always use the rate price if it's valid, never fall back to default
-									if (ratePrice > 0) {
-										shipping = ratePrice;
-										console.log(`[Shipping] Using rate price: ${ratePrice} (from ${typeof matchedRate.price}), final shipping: ${shipping}`);
-									} else {
-										// If price is 0 or invalid, log warning but still use 0 (not default)
-										console.warn(`[Shipping] Rate price is invalid (${matchedRate.price}), using 0 instead of default`);
-										shipping = 0;
-									}
+									shipping = ratePrice;
 								}
 							} else {
-								// No rates found - this shouldn't happen if zones are configured correctly
-								// Log error but don't use default - use 0 to indicate missing configuration
-								console.error(`[Shipping] No matched rate found for zone ${matchedZone.id}. This indicates missing shipping rate configuration.`);
+								// No rates configured for matched zone
+								console.warn(`[Shipping] No rates configured for zone ${matchedZone.id} for vendor ${vendorId}`);
 								shipping = 0;
 							}
 						} else {
-							// No rates configured for this zone - log error
-							console.error(`[Shipping] No rates found for zone ${matchedZone.id}. This indicates missing shipping rate configuration. Error:`, ratesError);
+							// No rates configured for matched zone
+							console.warn(`[Shipping] No rates found for zone ${matchedZone.id} for vendor ${vendorId}`);
 							shipping = 0;
 						}
 					} else {
-						// No matching zone found - this means vendor hasn't configured shipping for this location
-						// Log warning but don't use default - use 0 to indicate missing configuration
-						console.warn(`[Shipping] No matching zone found for vendor ${vendorId}, location: ${recipientState}, ${recipientCountry}. Vendor needs to configure shipping zones.`);
+						// No matching zone found - Vendor does not ship here!
+						// GiftyyNotify.toast(`This vendor does not ship to ${normalizedState}, ${normalizedCountry}`, 'error');
 						shipping = 0;
+						doesNotShip = true;
+						hasShippingError = true;
 					}
 				} else {
-					// No zones configured for this vendor - this means vendor hasn't set up shipping
-					// Log warning but don't use default - use 0 to indicate missing configuration
-					console.warn(`[Shipping] No zones found for vendor ${vendorId}. Vendor needs to configure shipping zones. Error:`, zonesError);
+					// No zones found for this vendor at all - Vendor does not ship anywhere yet!
+					// GiftyyNotify.toast(`This vendor does not ship to ${normalizedCountry}`, 'error');
 					shipping = 0;
+					doesNotShip = true;
+					hasShippingError = true;
 				}
 			} catch (err) {
-				console.warn(`[Shipping] Error calculating shipping for vendor ${vendorId}:`, err);
-				// Fallback to default logic
+				console.error(`[Shipping] Inner Error for vendor ${vendorId}:`, err);
 				shipping = subtotal >= freeShippingThreshold ? 0 : defaultShippingCost;
 			}
 		}
 
 		totalShipping += shipping;
 
-		const vendorName = vendorId === 'default' 
-			? 'Giftyy Store' 
+		const vendorName = vendorId === 'default'
+			? 'Giftyy Store'
 			: vendorNamesMap.get(vendorId) || `Vendor ${vendorId.slice(0, 8)}`;
 
 		breakdown.push({
@@ -404,9 +417,10 @@ export async function calculateVendorShippingByZone(
 			subtotal,
 			shipping,
 			itemCount,
+			doesNotShip
 		});
 	}
 
-	return { total: totalShipping, breakdown };
+	return { total: totalShipping, hasShippingError, breakdown };
 }
 

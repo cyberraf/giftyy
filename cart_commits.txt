@@ -1,0 +1,8 @@
+1d3033d Merge branch 'main' of https://github.com/cyberraf/giftyy
+9e36350 Redesign app: dark grey theme, thin borders, and UI improvements
+e1d7c22 New app version
+1f46100 feat: update checkout, notifications, and media flows
+261ff5c feat: add onboarding guides and improve checkout flows
+1d968bc feat: Major platform update with marketplace, bundles, deals, search, and vendor features
+4cb29f0 adding new commit
+7464d5d Initial commit: Giftyy app with buyer features, AI gift finder, product variations, notifications, and profile management

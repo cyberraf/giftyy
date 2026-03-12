@@ -1,17 +1,20 @@
+import { useAlert } from '@/contexts/AlertContext';
 import { useAuth } from '@/contexts/AuthContext';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
-import { Redirect, useRouter, useSegments } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import React, { useEffect } from 'react';
-import { ActivityIndicator, Alert, InteractionManager, Text, View } from 'react-native';
+import { ActivityIndicator, InteractionManager, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const HAS_SEEN_GUIDE_KEY = 'giftyy_has_seen_guide_v1';
 
 export default function Index() {
 	const { user, loading, syncAuth } = useAuth();
 	const router = useRouter();
-	const segments = useSegments();
+	const { top } = useSafeAreaInsets();
+	const { alert } = useAlert();
 	const [isHandlingDeepLink, setIsHandlingDeepLink] = React.useState(false);
 	const [hasCheckedInitialUrl, setHasCheckedInitialUrl] = React.useState(false);
 	const [hasSeenGuide, setHasSeenGuide] = React.useState<boolean | null>(null);
@@ -20,12 +23,15 @@ export default function Index() {
 	// Load onboarding/guide completion flag
 	useEffect(() => {
 		let cancelled = false;
+		if (__DEV__) console.log('[Index] Loading hasSeenGuide from AsyncStorage...');
 		(async () => {
 			try {
 				const v = await AsyncStorage.getItem(HAS_SEEN_GUIDE_KEY);
 				if (cancelled) return;
+				if (__DEV__) console.log('[Index] hasSeenGuide loaded:', v);
 				setHasSeenGuide(v === '1');
-			} catch {
+			} catch (e) {
+				if (__DEV__) console.error('[Index] Error loading hasSeenGuide:', e);
 				// If storage fails, do not block users.
 				if (cancelled) return;
 				setHasSeenGuide(true);
@@ -53,7 +59,7 @@ export default function Index() {
 		if (__DEV__) {
 			console.log('🔵 useEffect for deep links initialized');
 		}
-		
+
 		// Handle deep links for password reset and OAuth callbacks
 		const handleDeepLink = async (url: string) => {
 			// If the app was opened via deep link, do not interrupt with onboarding.
@@ -69,7 +75,7 @@ export default function Index() {
 				console.log('Has ?:', url.includes('?'));
 			}
 			setIsHandlingDeepLink(true);
-			
+
 			const parsed = Linking.parse(url);
 			if (__DEV__) {
 				console.log('🔵 Parsed path:', parsed.path || '(empty)');
@@ -78,7 +84,7 @@ export default function Index() {
 				console.log('🔵 Parsed queryParams keys:', Object.keys(parsed.queryParams || {}));
 				console.log('🔵 Parsed queryParams:', JSON.stringify(parsed.queryParams, null, 2));
 			}
-			
+
 			// Supabase OAuth URLs can have tokens in queryParams (?) or hash fragments (#)
 			// We need to manually parse hash fragments if present
 			let accessToken: string | undefined;
@@ -86,7 +92,7 @@ export default function Index() {
 			let code: string | undefined;
 			let type: string | undefined;
 			let state: string | undefined;
-			
+
 			// Check if URL has hash fragment (common for OAuth)
 			const hashIndex = url.indexOf('#');
 			if (hashIndex !== -1) {
@@ -95,7 +101,7 @@ export default function Index() {
 					console.log('🔴 Hash fragment found, length:', hashPart.length);
 					console.log('🔴 Hash fragment preview (first 200 chars):', hashPart.substring(0, 200));
 				}
-				
+
 				// Parse hash fragment as query string
 				try {
 					const hashParams = new URLSearchParams(hashPart);
@@ -104,7 +110,7 @@ export default function Index() {
 					code = hashParams.get('code') || undefined;
 					type = hashParams.get('type') || undefined;
 					state = hashParams.get('state') || undefined;
-					
+
 					if (__DEV__) {
 						console.log('🔴 Tokens from hash:', {
 							hasAccessToken: !!accessToken,
@@ -121,7 +127,7 @@ export default function Index() {
 					}
 				}
 			}
-			
+
 			// Fallback to query params if hash parsing didn't work
 			if (!accessToken && parsed.queryParams) {
 				if (__DEV__) {
@@ -132,7 +138,7 @@ export default function Index() {
 				code = parsed.queryParams?.code as string;
 				type = parsed.queryParams?.type as string;
 				state = parsed.queryParams?.state as string;
-				
+
 				if (__DEV__) {
 					console.log('🔴 Tokens from query params:', {
 						hasAccessToken: !!accessToken,
@@ -142,7 +148,7 @@ export default function Index() {
 					});
 				}
 			}
-			
+
 			if (__DEV__) {
 				console.log('🔴 Final extracted tokens:', {
 					hasAccessToken: !!accessToken,
@@ -152,7 +158,7 @@ export default function Index() {
 					state: state ? 'Present' : 'Missing',
 				});
 			}
-			
+
 			// Check if this is a password reset link
 			// Password reset links can have:
 			// - path === 'reset-password'
@@ -162,14 +168,14 @@ export default function Index() {
 			// - URL contains "recovery" anywhere (fallback check)
 			const urlLower = url.toLowerCase();
 			const hasRecoveryInUrl = urlLower.includes('recovery') || urlLower.includes('reset');
-			const isPasswordReset = 
-				parsed.path === 'reset-password' || 
+			const isPasswordReset =
+				parsed.path === 'reset-password' ||
 				type === 'recovery' ||
 				(accessToken && type === 'recovery') ||
 				(accessToken && parsed.queryParams?.type === 'recovery') ||
 				(accessToken && !parsed.path && type === 'recovery') || // Handle empty path with type=recovery
 				(accessToken && hasRecoveryInUrl && !code); // Fallback: if URL has "recovery" and access token but no OAuth code
-			
+
 			if (isPasswordReset) {
 				if (__DEV__) {
 					console.log('🔵 ========================================');
@@ -181,7 +187,7 @@ export default function Index() {
 					console.log('🔵 Access token length:', accessToken?.length || 0);
 					console.log('🔵 Has refresh token:', !!refreshToken);
 				}
-				
+
 				if (accessToken) {
 					try {
 						if (__DEV__) {
@@ -198,7 +204,7 @@ export default function Index() {
 								console.log('✅ Password reset session established');
 								console.log('✅ Session user ID:', data.session.user.id);
 							}
-							
+
 							// Verify the session was actually saved
 							const { data: verifyData, error: verifyError } = await supabase.auth.getSession();
 							if (verifyError || !verifyData?.session) {
@@ -211,10 +217,10 @@ export default function Index() {
 									console.log('✅ Session verified and saved');
 								}
 							}
-							
+
 							// Wait a moment for auth state to update in AuthContext
 							await new Promise(resolve => setTimeout(resolve, 1000));
-							
+
 							// Navigate to reset password screen with URL as param so it can also process it
 							if (__DEV__) {
 								console.log('🔵 Navigating to reset password page...');
@@ -244,12 +250,12 @@ export default function Index() {
 					setIsHandlingDeepLink(false);
 				}
 			}
-			
+
 			// Check if this is an OAuth callback (Google sign-in)
 			// OAuth callbacks can come from giftyy:// or giftyy://auth/callback
 			// They typically have access_token and refresh_token in the URL
 			const isOAuthCallback = parsed.path === 'auth/callback' || parsed.path === '' || accessToken || code;
-			
+
 			// If it's an OAuth callback with path 'auth/callback', handle it directly here
 			// This ensures we have access to the full URL with all parameters
 			if (parsed.path === 'auth/callback') {
@@ -264,7 +270,7 @@ export default function Index() {
 					console.log('🔴 Access token from query:', !!parsed.queryParams?.access_token);
 					console.log('🔴 Code from query:', !!code);
 				}
-				
+
 				// Handle OAuth callback directly here
 				if (accessToken && refreshToken) {
 					if (__DEV__) {
@@ -282,7 +288,7 @@ export default function Index() {
 								console.log('User ID:', data.session.user.id);
 								console.log('Email:', data.session.user.email);
 							}
-							
+
 							// Verify session was saved
 							const { data: verifySession } = await supabase.auth.getSession();
 							if (verifySession?.session) {
@@ -364,13 +370,13 @@ export default function Index() {
 					return;
 				}
 			}
-			
+
 			if (isOAuthCallback && (accessToken || code)) {
 				try {
 					if (__DEV__) {
 						console.log('Handling OAuth callback...');
 					}
-					
+
 					if (accessToken && refreshToken) {
 						// Direct token exchange (most common for OAuth)
 						if (__DEV__) {
@@ -387,7 +393,7 @@ export default function Index() {
 								console.log('User ID:', data.session.user.id);
 								console.log('Email:', data.session.user.email);
 							}
-							
+
 							// Verify the session was actually saved
 							const { data: verifySession, error: verifyError } = await supabase.auth.getSession();
 							if (verifyError || !verifySession?.session) {
@@ -399,7 +405,7 @@ export default function Index() {
 									console.log('✅ Session verified and saved');
 								}
 							}
-							
+
 							// Ensure AuthContext picks up the session
 							await syncAuth();
 							// Wait for interactions and state to propagate, then navigate
@@ -464,7 +470,7 @@ export default function Index() {
 		if (__DEV__) {
 			console.log('🔵 Checking for initial URL...');
 		}
-		
+
 		// Use a timeout to ensure we always set hasCheckedInitialUrl
 		const urlCheckTimeout = setTimeout(() => {
 			if (!hasCheckedInitialUrl) {
@@ -493,15 +499,12 @@ export default function Index() {
 						console.log('🔴 Full URL string:', JSON.stringify(url));
 						console.log('🔴 URL length:', url.length);
 					}
-					
-					// Show alert in dev mode to verify URL is received
+
+					// Log in dev mode to verify URL is received
 					if (__DEV__) {
-						// Use setTimeout to avoid blocking
-						setTimeout(() => {
-							Alert.alert('Deep Link Received', `URL: ${url.substring(0, 100)}...`);
-						}, 100);
+						console.log('Deep Link Received', `URL: ${url.substring(0, 100)}...`);
 					}
-					
+
 					// Only handle if it's not the Expo dev client URL
 					if (url && !url.includes('expo-development-client')) {
 						setBypassGuide(true);
@@ -549,7 +552,7 @@ export default function Index() {
 			if (__DEV__) {
 				console.log('🔴 Full event object:', JSON.stringify(event, null, 2));
 			}
-			
+
 			// Only handle if it's not the Expo dev client URL
 			if (event.url && !event.url.includes('expo-development-client')) {
 				setBypassGuide(true);
@@ -568,13 +571,13 @@ export default function Index() {
 		return () => {
 			subscription.remove();
 		};
-	}, [router, hasCheckedInitialUrl]);
+	}, [router]); // eslint-disable-line react-hooks/exhaustive-deps
 
 	// Show loading while checking initial URL or handling deep link
 	if (loading || isHandlingDeepLink || !hasCheckedInitialUrl || hasSeenGuide === null) {
 		if (__DEV__) {
-		console.log('🔵 Showing loading screen - loading:', loading, 'isHandlingDeepLink:', isHandlingDeepLink, 'hasCheckedInitialUrl:', hasCheckedInitialUrl);
-	}
+			console.log('🔵 Showing loading screen - loading:', loading, 'isHandlingDeepLink:', isHandlingDeepLink, 'hasCheckedInitialUrl:', hasCheckedInitialUrl);
+		}
 		return (
 			<View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'white' }}>
 				<ActivityIndicator size="large" color="#f75507" />

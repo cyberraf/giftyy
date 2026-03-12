@@ -20,6 +20,7 @@ import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 // Components
+import { formatTimeUntil } from '@/components/home/OccasionList';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 // Contexts & Utils
@@ -240,7 +241,7 @@ export default function HomeScreen() {
                                 <Text style={styles.statLabel}>Upcoming {upcomingBirthdays.length === 1 ? 'Birthday' : 'Birthdays'}</Text>
                                 {upcomingBirthdays[0] && (
                                     <Text style={styles.statSubtext}>
-                                        {upcomingBirthdays[0].firstName} in {upcomingBirthdays[0].daysUntil} {upcomingBirthdays[0].daysUntil === 1 ? 'day' : 'days'}
+                                        {upcomingBirthdays[0].firstName} {formatTimeUntil(upcomingBirthdays[0].daysUntil)}
                                     </Text>
                                 )}
                             </Pressable>

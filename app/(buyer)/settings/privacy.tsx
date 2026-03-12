@@ -1,10 +1,11 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, Linking, Alert } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
-import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
+import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
+import { useAlert } from '@/contexts/AlertContext';
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const palette = {
     background: '#fff',
@@ -22,10 +23,11 @@ const palette = {
 export default function PrivacyScreen() {
     const { top, bottom } = useSafeAreaInsets();
     const router = useRouter();
+    const { alert } = useAlert();
 
     const handleOpenLink = (url: string) => {
         Linking.openURL(url).catch(() => {
-            Alert.alert('Error', 'Could not open link');
+            alert('Error', 'Could not open link');
         });
     };
 
@@ -94,19 +96,19 @@ export default function PrivacyScreen() {
                         <View style={styles.dataActions}>
                             <Pressable
                                 style={styles.dataActionButton}
-                                onPress={() => Alert.alert('Coming soon', 'Export data feature coming soon')}
+                                onPress={() => alert('Coming soon', 'Export data feature coming soon')}
                             >
                                 <IconSymbol name="square.and.arrow.up.fill" size={20} color={BRAND_COLOR} />
                                 <Text style={styles.dataActionText}>Export data</Text>
                             </Pressable>
                             <Pressable
                                 style={[styles.dataActionButton, styles.deleteDataButton]}
-                                onPress={() => Alert.alert(
+                                onPress={() => alert(
                                     'Delete data',
                                     'Are you sure you want to delete all your data? This action cannot be undone.',
                                     [
                                         { text: 'Cancel', style: 'cancel' },
-                                        { text: 'Delete', style: 'destructive', onPress: () => Alert.alert('Coming soon', 'Delete data feature coming soon') },
+                                        { text: 'Delete', style: 'destructive', onPress: () => alert('Coming soon', 'Delete data feature coming soon') },
                                     ]
                                 )}
                             >

@@ -1,10 +1,11 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
 import CustomAlert from '@/components/CustomAlert';
+import { setAlertHandler } from '@/lib/AlertManager';
+import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 
 type AlertButton = {
 	text: string;
 	onPress?: () => void;
-	style?: 'default' | 'cancel' | 'destructive';
+	style?: 'default' | 'cancel' | 'destructive' | 'primary';
 };
 
 type AlertState = {
@@ -40,6 +41,10 @@ export function AlertProvider({ children }: { children: React.ReactNode }) {
 	const handleDismiss = useCallback(() => {
 		setAlertState((prev) => ({ ...prev, visible: false }));
 	}, []);
+
+	useEffect(() => {
+		setAlertHandler(showAlert);
+	}, [showAlert]);
 
 	return (
 		<AlertContext.Provider value={{ alert: showAlert }}>

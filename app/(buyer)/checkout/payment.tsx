@@ -1,21 +1,25 @@
-import BrandButton from '@/components/BrandButton';
 import StepBar from '@/components/StepBar';
 import { EstimatedTotalsCard } from '@/components/checkout/EstimatedTotalsCard';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
+import { useAlert } from '@/contexts/AlertContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { useCart } from '@/contexts/CartContext';
 import { useOrders } from '@/contexts/OrdersContext';
 import { useProducts } from '@/contexts/ProductsContext';
-import { supabase } from '@/lib/supabase';
 import { useVideoMessages } from '@/contexts/VideoMessagesContext';
 import { useCheckout } from '@/lib/CheckoutContext';
-import { calculateVendorShippingSync, calculateVendorShippingByZone } from '@/lib/shipping-utils';
+import { calculateVendorShippingByZone } from '@/lib/shipping-utils';
+import { SafeCardField, useSafeStripe } from '@/lib/stripe-safe';
+import { supabase } from '@/lib/supabase';
 import * as FileSystem from 'expo-file-system/legacy';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useState, useEffect } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function PaymentScreen() {
     const router = useRouter();
+    const { bottom } = useSafeAreaInsets();
     const { items, clear: clearCart } = useCart();
     const { payment, setPayment, cardType, cardPrice, recipient, notifyRecipient, localVideoUri, videoTitle, videoDurationMs, setVideoUri, sharedMemoryId, reset: resetCheckout } = useCheckout();
     const { createOrder, refreshOrders } = useOrders();
@@ -23,10 +27,11 @@ export default function PaymentScreen() {
     const { refreshProducts, refreshCollections } = useProducts();
     const [vendorNames, setVendorNames] = useState<Map<string, string>>(new Map());
 
-    const [name, setName] = useState(payment.name);
-    const [cardNumber, setCardNumber] = useState(payment.cardNumber);
-    const [expiry, setExpiry] = useState(payment.expiry);
-    const [cvv, setCvv] = useState(payment.cvv);
+    const [name, setName] = useState(payment.name || '');
+    const [cardDetails, setCardDetails] = useState<any>(null);
+    const { user } = useAuth();
+    const { alert } = useAlert();
+    const { confirmPayment } = useSafeStripe();
     const [loading, setLoading] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
     const [shippingBreakdown, setShippingBreakdown] = useState<{ total: number; breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number }> }>({ total: 0, breakdown: [] });
@@ -51,8 +56,9 @@ export default function PaymentScreen() {
 
             // Seed with names available on cart items
             items.forEach(item => {
+                const anyItem = item as any;
                 if (item.vendorId) {
-                    const existingName = item.vendorName || item.storeName;
+                    const existingName = anyItem.vendorName || anyItem.storeName;
                     if (existingName) {
                         names.set(item.vendorId, existingName);
                     }
@@ -117,12 +123,12 @@ export default function PaymentScreen() {
         const calculateShipping = async () => {
             const stateCode = recipient?.state;
             const country = recipient?.country || 'United States';
-            
+
             if (!stateCode || !country || items.length === 0) {
                 // Use default calculation if location not available
                 const DEFAULT_SHIPPING = 4.99;
                 const FREE_SHIPPING_THRESHOLD = 50;
-                
+
                 const itemsByVendor = new Map<string, typeof items>();
                 items.forEach(item => {
                     const vendorId = item.vendorId || 'default';
@@ -140,7 +146,7 @@ export default function PaymentScreen() {
                         const price = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
                         return sum + price * item.quantity;
                     }, 0);
-                    
+
                     const itemCount = vendorItems.reduce((sum, item) => sum + item.quantity, 0);
                     const shipping = vendorSubtotal >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING;
                     totalShipping += shipping;
@@ -177,7 +183,7 @@ export default function PaymentScreen() {
                 // Fallback to default calculation
                 const DEFAULT_SHIPPING = 4.99;
                 const FREE_SHIPPING_THRESHOLD = 50;
-                
+
                 const itemsByVendor = new Map<string, typeof items>();
                 items.forEach(item => {
                     const vendorId = item.vendorId || 'default';
@@ -195,7 +201,7 @@ export default function PaymentScreen() {
                         const price = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
                         return sum + price * item.quantity;
                     }, 0);
-                    
+
                     const itemCount = vendorItems.reduce((sum, item) => sum + item.quantity, 0);
                     const shipping = vendorSubtotal >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING;
                     totalShipping += shipping;
@@ -239,33 +245,60 @@ export default function PaymentScreen() {
 
     const formatCurrency = (amount: number) => `$${amount.toFixed(2)}`;
 
-    const handleCardNumber = (value: string) => {
-        const digitsOnly = value.replace(/\D+/g, '').slice(0, 16);
-        const spaced = digitsOnly.replace(/(\d{4})(?=\d)/g, '$1 ').trim();
-        setCardNumber(spaced);
-    };
-
-    const handleExpiry = (value: string) => {
-        const digits = value.replace(/\D+/g, '').slice(0, 4);
-        if (digits.length <= 2) {
-            setExpiry(digits);
-        } else {
-            setExpiry(`${digits.slice(0, 2)}/${digits.slice(2)}`);
-        }
-    };
-
-    const handleCvv = (value: string) => {
-        setCvv(value.replace(/\D+/g, '').slice(0, 4));
-    };
-
     const onPay = async () => {
-        setPayment({ name, cardNumber, expiry, cvv });
+        if (!cardDetails?.complete) {
+            alert('Incomplete Card', 'Please complete your card details to proceed.');
+            return;
+        }
+
+        setPayment({ name, cardNumber: '', expiry: '', cvv: '' });
         setLoading(true);
 
         try {
-            // Extract last 4 digits of card number
-            const last4 = cardNumber.replace(/\s/g, '').slice(-4);
-            
+            // Extract last 4 digits of card number from Stripe listener
+            const last4 = cardDetails?.last4 || '****';
+            const paymentBrand = cardDetails?.brand || 'Stripe';
+
+            const amountInCents = Math.round(total * 100);
+            if (amountInCents < 50) {
+                alert('Payment Error', 'The minimum amount for this transaction is $0.50.');
+                setLoading(false);
+                return;
+            }
+
+            // 1. Fetch Payment Intent from Edge Function
+            // Prioritize sender (user) email for receipt, fallback to recipient or guest
+            const senderEmail = user?.email || recipient.email || 'guest@giftyy.app';
+
+            const { data, error: intentError } = await supabase.functions.invoke('create-payment-intent', {
+                body: {
+                    amount: amountInCents,
+                    customerEmail: senderEmail
+                }
+            });
+
+            if (intentError || !data?.paymentIntent) {
+                console.error('[Payment] Edge Function Error:', intentError || data);
+                alert('Payment Initialization Failed', 'Could not initialize secure payment session. Please try again.');
+                setLoading(false);
+                return;
+            }
+
+            // 2. Confirm Payment via Stripe UI Component
+            const { error: stripeError, paymentIntent } = await confirmPayment(data.paymentIntent, {
+                paymentMethodType: 'Card',
+                paymentMethodData: {
+                    billingDetails: { name }
+                }
+            });
+
+            if (stripeError) {
+                console.error('[Payment] Stripe confirmation error:', stripeError);
+                alert('Payment Failed', stripeError.message || 'Your card was declined or another error occurred.');
+                setLoading(false);
+                return;
+            }
+
             // Upload video if localVideoUri exists (video was recorded but not yet uploaded)
             let videoMessageId: string | undefined;
             if (localVideoUri && videoTitle) {
@@ -283,8 +316,8 @@ export default function PaymentScreen() {
                     }
 
                     // Convert duration from milliseconds to seconds
-                    const durationSeconds = videoDurationMs && videoDurationMs > 0 
-                        ? Math.round(videoDurationMs / 1000) 
+                    const durationSeconds = videoDurationMs && videoDurationMs > 0
+                        ? Math.round(videoDurationMs / 1000)
                         : undefined;
 
                     // Upload video to Supabase Storage
@@ -314,7 +347,7 @@ export default function PaymentScreen() {
 
             // Determine primary vendor ID if all items are from the same vendor
             const vendorIds = Array.from(new Set(items.map(item => item.vendorId).filter(Boolean) as string[]));
-            const primaryVendorId = vendorIds.length === 1 ? vendorIds[0] : null;
+            const primaryVendorId = vendorIds.length === 1 ? vendorIds[0] : undefined;
 
             // Create the order
             const { order, error } = await createOrder(
@@ -328,7 +361,7 @@ export default function PaymentScreen() {
                 tax,
                 total,
                 last4,
-                undefined, // paymentBrand - can be detected from card number if needed
+                paymentBrand, // Passing the detected brand
                 videoMessageId,
                 sharedMemoryId,
                 primaryVendorId // Pass primary vendor ID if all items are from one vendor
@@ -336,7 +369,7 @@ export default function PaymentScreen() {
 
             if (error || !order) {
                 console.error('Error creating order:', error);
-                Alert.alert('Payment failed', 'We could not place your order. Please try again.');
+                alert('Payment failed', 'We could not place your order. Please try again.');
                 return;
             }
 
@@ -345,14 +378,14 @@ export default function PaymentScreen() {
             resetCheckout();
 
             // Navigate to confirmation with order ID
-            router.push({
+            router.replace({
                 pathname: '/(buyer)/checkout/confirmation',
                 params: { orderId: order.id },
             });
         } catch (err) {
             console.error('Unexpected error during payment:', err);
             // Still navigate to confirmation
-            router.push('/(buyer)/checkout/confirmation');
+            router.replace('/(buyer)/checkout/confirmation');
         } finally {
             setLoading(false);
         }
@@ -362,7 +395,7 @@ export default function PaymentScreen() {
         <View style={{ flex: 1, backgroundColor: '#fff' }}>
             <StepBar current={6} total={7} label="Payment" />
             <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
-                <ScrollView 
+                <ScrollView
                     contentContainerStyle={styles.content}
                     refreshControl={
                         <RefreshControl
@@ -396,52 +429,53 @@ export default function PaymentScreen() {
                                 value={name}
                                 onChangeText={setName}
                                 autoComplete="name"
-                                returnKeyType="next"
                             />
-                            <InputField
-                                label="Card number"
-                                placeholder="1234 5678 9012 3456"
-                                keyboardType="number-pad"
-                                value={cardNumber}
-                                onChangeText={handleCardNumber}
-                            />
-                            <View style={{ flexDirection: 'row', gap: 12 }}>
-                                <InputField
-                                    style={{ flex: 1 }}
-                                    label="Expiry"
-                                    placeholder="MM/YY"
-                                    keyboardType="number-pad"
-                                    value={expiry}
-                                    onChangeText={handleExpiry}
-                                />
-                                <InputField
-                                    style={{ flex: 1 }}
-                                    label="CVV"
-                                    placeholder="123"
-                                    keyboardType="number-pad"
-                                    secureTextEntry
-                                    value={cvv}
-                                    onChangeText={handleCvv}
+
+                            <View style={styles.inputGroup}>
+                                <Text style={styles.inputLabel}>Card Details</Text>
+                                <SafeCardField
+                                    postalCodeEnabled={false}
+                                    onCardChange={(details: any) => setCardDetails(details)}
+                                    style={styles.cardField}
+                                    cardStyle={{
+                                        backgroundColor: '#FFFFFF',
+                                        textColor: '#000000',
+                                        placeholderColor: '#9CA3AF',
+                                        fontSize: 16,
+                                    }}
                                 />
                             </View>
 
-                            <BrandButton
-                                title={loading ? 'Processing...' : `Pay ${formatCurrency(total)}`}
-                                onPress={onPay}
-                                disabled={loading}
-                                style={{ marginTop: GIFTYY_THEME.spacing.md }}
-                            />
-                            {loading && <ActivityIndicator style={{ marginTop: GIFTYY_THEME.spacing.md }} color={GIFTYY_THEME.colors.primary} />}
-                            <Pressable 
-                                style={{ marginTop: GIFTYY_THEME.spacing.md, alignSelf: 'center', paddingVertical: GIFTYY_THEME.spacing.md, paddingHorizontal: GIFTYY_THEME.spacing.xl }}
-                                onPress={() => router.back()}
-                            >
-                                <Text style={{ color: GIFTYY_THEME.colors.gray500, fontWeight: GIFTYY_THEME.typography.weights.bold, fontSize: GIFTYY_THEME.typography.sizes.base }}>Back to memory</Text>
-                            </Pressable>
                             <Text style={styles.finePrint}>By tapping pay you authorize Giftyy to charge this card for the total shown. You'll receive an email confirmation immediately.</Text>
                         </View>
+                        <View style={{ height: bottom + 120 }} />
                     </View>
                 </ScrollView>
+
+                {/* Floating Bottom CTA */}
+                <View style={[styles.stickyBar, { bottom: bottom > 0 ? bottom + 8 : 24 }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Pressable
+                            style={{ paddingVertical: 12, paddingRight: 16 }}
+                            onPress={() => router.back()}
+                        >
+                            <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 13 }}>Back</Text>
+                        </Pressable>
+                        <Pressable
+                            style={{ flex: 1, backgroundColor: GIFTYY_THEME.colors.primary, paddingVertical: 14, borderRadius: 999, alignItems: 'center', opacity: loading ? 0.7 : 1 }}
+                            onPress={onPay}
+                            disabled={loading}
+                        >
+                            {loading ? (
+                                <ActivityIndicator color="#fff" />
+                            ) : (
+                                <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>
+                                    Pay {formatCurrency(total)}
+                                </Text>
+                            )}
+                        </Pressable>
+                    </View>
+                </View>
             </KeyboardAvoidingView>
         </View>
     );
@@ -452,7 +486,7 @@ type InputProps = {
     value: string;
     onChangeText: (value: string) => void;
     placeholder?: string;
-    style?: object;
+    style?: any;
 } & React.ComponentProps<typeof TextInput>;
 
 function InputField({ label, style, ...props }: InputProps) {
@@ -594,6 +628,28 @@ const styles = StyleSheet.create({
         color: GIFTYY_THEME.colors.gray900,
         fontWeight: GIFTYY_THEME.typography.weights.semibold,
         fontSize: GIFTYY_THEME.typography.sizes.md,
+    },
+    cardField: {
+        width: '100%',
+        height: 54, // Match typical input height
+        borderRadius: GIFTYY_THEME.radius.lg,
+        borderWidth: 1,
+        borderColor: GIFTYY_THEME.colors.gray200,
+        backgroundColor: GIFTYY_THEME.colors.white,
+    },
+    stickyBar: {
+        position: 'absolute',
+        left: 16,
+        right: 16,
+        backgroundColor: '#fff',
+        borderRadius: 24,
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        shadowColor: '#000',
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 10,
     },
 });
 

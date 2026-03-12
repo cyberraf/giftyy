@@ -1,49 +1,49 @@
-import React, { useMemo, useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, Alert, Modal, Pressable, ScrollView, Switch, KeyboardAvoidingView, Platform, RefreshControl, ViewStyle } from 'react-native';
-import { useRouter } from 'expo-router';
+import { RecipientFormModal } from '@/components/recipients/RecipientFormModal';
 import StepBar from '@/components/StepBar';
-import BrandButton from '@/components/BrandButton';
-import { COUNTRY_LIST, RecipientFormModal, SelectListModal } from '@/components/recipients/RecipientFormModal';
-import { useCheckout } from '@/lib/CheckoutContext';
-import { useCart } from '@/contexts/CartContext';
-import { useRecipients } from '@/contexts/RecipientsContext';
-import { useProducts } from '@/contexts/ProductsContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { GIFTYY_THEME } from '@/constants/giftyy-theme';
+import PremiumNotice from '@/components/ui/PremiumNotice';
 import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
-import { calculateVendorShippingSync, calculateVendorShippingByZone } from '@/lib/shipping-utils';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { GIFTYY_THEME } from '@/constants/giftyy-theme';
+import { useAlert } from '@/contexts/AlertContext';
+import { useCart } from '@/contexts/CartContext';
+import { useProducts } from '@/contexts/ProductsContext';
+import { useRecipients } from '@/contexts/RecipientsContext';
+import { useCheckout } from '@/lib/CheckoutContext';
+import { calculateVendorShippingByZone } from '@/lib/shipping-utils';
 import { supabase } from '@/lib/supabase';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { KeyboardAvoidingView, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function RecipientScreen() {
     const router = useRouter();
     const { recipient, setRecipient, notifyRecipient, setNotifyRecipient, cardPrice } = useCheckout();
     const { items } = useCart();
     const { recipients, refreshRecipients } = useRecipients();
+    const { alert } = useAlert();
     const { refreshProducts, refreshCollections } = useProducts();
     const { bottom } = useSafeAreaInsets();
     const [selectedRecipientId, setSelectedRecipientId] = useState<string | null>(null);
-    const [firstName, setFirstName] = useState(recipient.firstName);
-    const [lastName, setLastName] = useState(recipient.lastName);
-    const [street, setStreet] = useState(recipient.street);
-    const [apartment, setApartment] = useState(recipient.apartment ?? '');
-    const [city, setCity] = useState(recipient.city);
-    const [stateCode, setStateCode] = useState(recipient.state);
-    const [country, setCountry] = useState(recipient.country || 'United States');
-    const [zip, setZip] = useState(recipient.zip);
-    const [phone, setPhone] = useState(recipient.phone ?? '');
-    const [email, setEmail] = useState(recipient.email ?? '');
     const [countryModalOpen, setCountryModalOpen] = useState(false);
     const [stateModalOpen, setStateModalOpen] = useState(false);
     const [vendorNames, setVendorNames] = useState<Map<string, string>>(new Map());
     const [refreshing, setRefreshing] = useState(false);
-    const [shippingBreakdown, setShippingBreakdown] = useState<{ total: number; breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number }> }>({ total: 0, breakdown: [] });
+    const [shippingBreakdown, setShippingBreakdown] = useState<{
+        total: number;
+        hasShippingError: boolean;
+        breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number; doesNotShip?: boolean }>
+    }>({ total: 0, hasShippingError: false, breakdown: [] });
     const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
     const [addRecipientVisible, setAddRecipientVisible] = useState(false);
 
+    const selectedRecipient = useMemo(() => {
+        return recipients.find(r => r.id === selectedRecipientId);
+    }, [recipients, selectedRecipientId]);
+
     const isFreshRecipient = useMemo(() => {
-        return !firstName && !lastName && !street && !city && !zip && !phone && !email;
-    }, [firstName, lastName, street, city, zip, phone, email]);
+        return !selectedRecipient;
+    }, [selectedRecipient]);
 
     useEffect(() => {
         // Ensure the toggle is on by default for new recipient flows.
@@ -163,11 +163,14 @@ export default function RecipientScreen() {
     // Calculate shipping based on zones when recipient location is available
     useEffect(() => {
         const calculateShipping = async () => {
+            const stateCode = selectedRecipient?.state;
+            const country = selectedRecipient?.country;
+
             if (!stateCode || !country || items.length === 0) {
                 // Use default calculation if location not available
                 const DEFAULT_SHIPPING = 4.99;
                 const FREE_SHIPPING_THRESHOLD = 50;
-                
+
                 const itemsByVendor = new Map<string, typeof items>();
                 items.forEach(item => {
                     const vendorId = item.vendorId || 'default';
@@ -177,7 +180,7 @@ export default function RecipientScreen() {
                     itemsByVendor.get(vendorId)!.push(item);
                 });
 
-                const breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number }> = [];
+                const breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number; doesNotShip?: boolean }> = [];
                 let totalShipping = 0;
 
                 itemsByVendor.forEach((vendorItems, vendorId) => {
@@ -185,7 +188,7 @@ export default function RecipientScreen() {
                         const price = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
                         return sum + price * item.quantity;
                     }, 0);
-                    
+
                     const itemCount = vendorItems.reduce((sum, item) => sum + item.quantity, 0);
                     const shipping = vendorSubtotal >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING;
                     totalShipping += shipping;
@@ -202,10 +205,11 @@ export default function RecipientScreen() {
                         subtotal: vendorSubtotal,
                         shipping,
                         itemCount,
+                        doesNotShip: false
                     });
                 });
 
-                setShippingBreakdown({ breakdown, total: totalShipping });
+                setShippingBreakdown({ breakdown, total: totalShipping, hasShippingError: false });
                 return;
             }
 
@@ -222,7 +226,7 @@ export default function RecipientScreen() {
                 // Fallback to default calculation
                 const DEFAULT_SHIPPING = 4.99;
                 const FREE_SHIPPING_THRESHOLD = 50;
-                
+
                 const itemsByVendor = new Map<string, typeof items>();
                 items.forEach(item => {
                     const vendorId = item.vendorId || 'default';
@@ -232,7 +236,7 @@ export default function RecipientScreen() {
                     itemsByVendor.get(vendorId)!.push(item);
                 });
 
-                const breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number }> = [];
+                const breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number; doesNotShip?: boolean }> = [];
                 let totalShipping = 0;
 
                 itemsByVendor.forEach((vendorItems, vendorId) => {
@@ -240,7 +244,7 @@ export default function RecipientScreen() {
                         const price = parseFloat(item.price.replace(/[^0-9.]/g, '')) || 0;
                         return sum + price * item.quantity;
                     }, 0);
-                    
+
                     const itemCount = vendorItems.reduce((sum, item) => sum + item.quantity, 0);
                     const shipping = vendorSubtotal >= FREE_SHIPPING_THRESHOLD ? 0 : DEFAULT_SHIPPING;
                     totalShipping += shipping;
@@ -257,393 +261,270 @@ export default function RecipientScreen() {
                         subtotal: vendorSubtotal,
                         shipping,
                         itemCount,
+                        doesNotShip: false
                     });
                 });
 
-                setShippingBreakdown({ breakdown, total: totalShipping });
+                setShippingBreakdown({ breakdown, total: totalShipping, hasShippingError: false });
             } finally {
                 setIsCalculatingShipping(false);
             }
         };
 
         calculateShipping();
-    }, [items, stateCode, country, vendorNames]);
+    }, [items, selectedRecipient, vendorNames]);
 
     const shipping = shippingBreakdown.total;
-    const taxRate = useMemo(() => getTaxRateFromState(stateCode), [stateCode]);
-    const taxable = Math.max(0, subtotal + (cardPrice || 0));
-    
-    // Detailed tax breakdown
+    const taxRate = useMemo(() => getTaxRateFromState(selectedRecipient?.state || ''), [selectedRecipient]);
+    const cardAddOn = cardPrice || 0;
+    const taxable = Math.max(0, subtotal + cardAddOn);
+
     const taxBreakdown = useMemo(() => {
         const itemsTax = subtotal * taxRate;
-        const cardTax = (cardPrice || 0) * taxRate;
+        const cardTax = cardAddOn * taxRate;
         return {
             items: itemsTax,
             card: cardTax,
             total: itemsTax + cardTax,
         };
-    }, [subtotal, cardPrice, taxRate]);
-    
+    }, [subtotal, cardAddOn, taxRate]);
+
     const estimatedTax = taxBreakdown.total;
     const orderTotal = taxable + estimatedTax + shipping;
 
     const handleSelectRecipient = (recipientFromList: typeof recipients[0]) => {
         setSelectedRecipientId(recipientFromList.id);
-        setFirstName(recipientFromList.firstName);
-        setLastName(recipientFromList.lastName || '');
-        setStreet(recipientFromList.address);
-        setApartment(recipientFromList.apartment || '');
-        setCity(recipientFromList.city);
-        setStateCode(recipientFromList.state || '');
-        setCountry(recipientFromList.country || 'United States');
-        setZip(recipientFromList.zip);
-        setPhone(recipientFromList.phone || '');
-        setEmail(recipientFromList.email || '');
     };
 
     const handleClearSelection = () => {
         setSelectedRecipientId(null);
-        setFirstName('');
-        setLastName('');
-        setStreet('');
-        setApartment('');
-        setCity('');
-        setStateCode('');
-        setCountry('United States');
-        setZip('');
-        setPhone('');
-        setEmail('');
     };
 
-    const stateOptions = useMemo(() => getStateOptionsForCountry(country), [country]);
-    const hasStateList = stateOptions.length > 0;
-
-    const selectedStateLabel = useMemo(() => {
-        if (!stateCode) return '';
-        if (isUnitedStatesCountry(country)) {
-            const found = US_STATES.find((s) => s.code === stateCode);
-            return found ? `${found.name} (${found.code})` : stateCode;
-        }
-        return stateCode;
-    }, [stateCode, country]);
-
     const onNext = () => {
-        if (!firstName || !street || !city || !stateCode || !zip || !country) {
-            Alert.alert('Missing info', 'Please fill all required fields');
+        if (!selectedRecipient) {
+            alert('Missing info', 'Please select a recipient');
             return;
         }
-        if (notifyRecipient && !phone && !email) {
-            Alert.alert('Contact info', 'Provide at least a phone number or an email');
+
+        if (shippingBreakdown.hasShippingError) {
+            alert('Shipping error', 'One or more vendors do not ship to this location. Please select a different recipient or remove those items from your cart.');
             return;
         }
-        setRecipient({ firstName, lastName, street, apartment, city, state: stateCode, country, zip, phone, email });
+
+        // Notify recipient is always set to true based on user request
+        setNotifyRecipient(true);
+
+        setRecipient({
+            firstName: selectedRecipient.firstName,
+            lastName: selectedRecipient.lastName || '',
+            street: selectedRecipient.address,
+            apartment: selectedRecipient.apartment || '',
+            city: selectedRecipient.city,
+            state: selectedRecipient.state || '',
+            country: selectedRecipient.country || 'United States',
+            zip: selectedRecipient.zip,
+            phone: selectedRecipient.phone || '',
+            email: selectedRecipient.email || ''
+        });
         router.push('/(buyer)/checkout/video');
     };
 
     return (
         <View style={{ flex: 1, backgroundColor: 'white' }}>
-            <StepBar current={3} total={7} label="Recipient details" />
+            <StepBar current={2} total={7} label="Recipient details" />
             <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-            <ScrollView 
-                keyboardShouldPersistTaps="handled" 
-                contentContainerStyle={{ paddingBottom: 20 + bottom + BOTTOM_BAR_TOTAL_SPACE }}
-                refreshControl={
-                    <RefreshControl
-                        refreshing={refreshing}
-                        onRefresh={onRefresh}
-                        tintColor={GIFTYY_THEME.colors.primary}
-                        colors={[GIFTYY_THEME.colors.primary]}
-                    />
-                }
-            >
-            <View style={{ padding: 16, gap: 12 }}>
-                {/* Saved Recipients Section */}
-                {recipients.length > 0 ? (
-                    <View style={styles.savedRecipientsSection}>
-                        <View style={styles.savedRecipientsHeader}>
-                            <Text style={styles.sectionTitle}>Select from saved recipients</Text>
-                            <Pressable onPress={openAddRecipient} style={styles.savedRecipientsAddBtn} accessibilityRole="button">
-                                <IconSymbol name="plus" size={16} color={GIFTYY_THEME.colors.primary} />
-                                <Text style={styles.savedRecipientsAddText}>Add</Text>
-                            </Pressable>
-                        </View>
-                        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recipientsScroll}>
-                            {recipients.map((rec) => {
-                                const isSelected = selectedRecipientId === rec.id;
-                                return (
-                                    <Pressable
-                                        key={rec.id}
-                                        style={[styles.recipientCard, isSelected && styles.recipientCardSelected]}
-                                        onPress={() => handleSelectRecipient(rec)}
-                                    >
-                                        <View style={styles.recipientCardHeader}>
-                                            <View style={[styles.recipientCheckbox, isSelected && styles.recipientCheckboxSelected]}>
-                                                {isSelected && <IconSymbol name="checkmark" size={14} color="#FFFFFF" />}
-                                            </View>
-                                            <View style={{ flex: 1 }}>
-                                                <Text style={styles.recipientName} numberOfLines={1}>
-                                                    {rec.firstName} {rec.lastName || ''}
-                                                </Text>
-                                                <Text style={styles.recipientRelationship} numberOfLines={1}>
-                                                    {rec.relationship}
-                                                </Text>
-                                            </View>
-                                        </View>
-                                        <Text style={styles.recipientAddress} numberOfLines={2}>
-                                            {rec.address}{rec.apartment ? `, ${rec.apartment}` : ''}
-                                        </Text>
-                                        <Text style={styles.recipientLocation} numberOfLines={1}>
-                                            {rec.city}, {rec.state || ''} {rec.zip}
-                                        </Text>
-                                    </Pressable>
-                                );
-                            })}
-                        </ScrollView>
-                        {selectedRecipientId && (
-                            <Pressable onPress={handleClearSelection} style={styles.clearSelectionButton}>
-                                <Text style={styles.clearSelectionText}>Clear selection</Text>
-                            </Pressable>
-                        )}
-                    </View>
-                ) : (
-                    <View style={styles.addRecipientCTACard}>
-                        <View style={styles.addRecipientCTAHeader}>
-                            <View style={styles.addRecipientCTAIcon}>
-                                <IconSymbol name="person.2.fill" size={24} color={GIFTYY_THEME.colors.primary} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.addRecipientCTATitle}>Save recipients for faster checkout</Text>
-                                <Text style={styles.addRecipientCTASubtitle}>
-                                    Add recipients to your profile to speed up future orders and get personalized gift recommendations
-                                </Text>
-                            </View>
-                        </View>
-                        <Pressable
-                            style={styles.addRecipientCTAButton}
-                            onPress={openAddRecipient}
-                        >
-                            <Text style={styles.addRecipientCTAButtonText}>Add recipients</Text>
-                            <IconSymbol name="chevron.right" size={18} color="#FFFFFF" />
-                        </Pressable>
-                    </View>
-                )}
-
-                <View style={styles.divider} />
-
-                <Text style={styles.sectionTitle}>Recipient details</Text>
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                    <Field label="First name" value={firstName} onChangeText={setFirstName} style={{ flex: 1 }} />
-                    <Field label="Last name (optional)" value={lastName} onChangeText={setLastName} style={{ flex: 1 }} />
-                </View>
-                <View style={{ gap: 12 }}>
-                    <Field label="Street address" value={street} onChangeText={setStreet} />
-                    <Field label="Apartment / unit (optional)" value={apartment} onChangeText={setApartment} />
-                    <View style={{ gap: 6 }}>
-                        <Text style={{ fontWeight: '800' }}>
-                            Country<Text style={styles.requiredStar}>*</Text>
-                        </Text>
-                        <Pressable onPress={() => setCountryModalOpen(true)} style={[styles.input, { justifyContent: 'center' }]}>
-                            <Text style={{ color: country ? '#111' : '#9ba1a6' }}>{country || 'Select country'}</Text>
-                        </Pressable>
-                    </View>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <Field
-                            label="ZIP / Postal code"
-                            value={zip}
-                            onChangeText={setZip}
-                            style={{ flex: 1 }}
-                            keyboardType="number-pad"
+                <ScrollView
+                    keyboardShouldPersistTaps="handled"
+                    contentContainerStyle={{ paddingBottom: 20 + bottom + BOTTOM_BAR_TOTAL_SPACE }}
+                    refreshControl={
+                        <RefreshControl
+                            refreshing={refreshing}
+                            onRefresh={onRefresh}
+                            tintColor={GIFTYY_THEME.colors.primary}
+                            colors={[GIFTYY_THEME.colors.primary]}
                         />
-                        <Field label="City" value={city} onChangeText={setCity} style={{ flex: 1 }} />
-                    </View>
-                    {hasStateList ? (
-                        <View style={{ gap: 6 }}>
-                            <Text style={{ fontWeight: '800' }}>
-                                State / Province<Text style={styles.requiredStar}>*</Text>
-                            </Text>
-                            <Pressable onPress={() => setStateModalOpen(true)} style={[styles.input, { justifyContent: 'center' }]}>
-                                <Text style={{ color: stateCode ? '#111' : '#9ba1a6' }}>{selectedStateLabel || 'Select state / province'}</Text>
-                            </Pressable>
-                        </View>
-                    ) : (
-                        <View style={{ gap: 6 }}>
-                            <Text style={{ fontWeight: '800' }}>
-                                State / Province / Region<Text style={styles.requiredStar}>*</Text>
-                            </Text>
-                            <TextInput
-                                value={stateCode}
-                                onChangeText={setStateCode}
-                                placeholder="Enter state / province / region"
-                                placeholderTextColor="#9ba1a6"
-                                style={styles.input}
-                                autoCapitalize="words"
-                            />
-                        </View>
-                    )}
-                </View>
-
-                {/* Notify toggle before contact fields */}
-                <View style={{ gap: 8 }}>
-                    <View style={[styles.rowBetween, { alignItems: 'center' }]}>
-                        <Text style={{ fontWeight: '800' }}>Notify recipient</Text>
-                        <Switch
-                            value={notifyRecipient}
-                            onValueChange={setNotifyRecipient}
-                            trackColor={{ false: '#E5E7EB', true: '#FFE8DC' }}
-                            thumbColor={notifyRecipient ? GIFTYY_THEME.colors.primary : GIFTYY_THEME.colors.white}
-                            ios_backgroundColor="#E5E7EB"
-                        />
-                    </View>
-                    <View style={styles.infoCard}>
-                        <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start' }}>
-                            <View style={styles.infoIconCircle}>
-                                <IconSymbol name="info.circle" size={16} color={GIFTYY_THEME.colors.primary} />
-                            </View>
-                            <View style={{ flex: 1 }}>
-                                <Text style={styles.infoTitle}>Heads up</Text>
-                                <Text style={styles.infoText}>
-                                    We’ll send a discreet message letting them know a surprise gift from Giftyy is on its way. No item details are included.
-                                </Text>
-                            </View>
-                        </View>
-                    </View>
-                </View>
-
-                {notifyRecipient && (
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                        <Field label="Phone number" value={phone} onChangeText={setPhone} style={{ flex: 1 }} keyboardType="phone-pad" />
-                        <Field label="Email address" value={email} onChangeText={setEmail} style={{ flex: 1 }} keyboardType="email-address" />
-                    </View>
-                )}
-
-                <View style={styles.summaryCard}>
-                    <Text style={{ fontWeight: '900', fontSize: 16 }}>Estimated totals</Text>
-                    <View style={styles.rowBetween}>
-                        <Text style={styles.muted}>Items subtotal</Text>
-                        <Text style={styles.bold}>${subtotal.toFixed(2)}</Text>
-                    </View>
-                    <View style={styles.rowBetween}>
-                        <Text style={styles.muted}>Card price</Text>
-                        <Text style={styles.bold}>${(cardPrice || 0).toFixed(2)}</Text>
-                    </View>
-                    
-                    {/* Detailed Shipping Breakdown */}
-                    <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
-                        <View style={[styles.rowBetween, { marginBottom: 6 }]}>
-                            <Text style={{ fontWeight: '800', fontSize: 14, color: '#374151' }}>Shipping breakdown</Text>
-                            {isCalculatingShipping && (
-                                <Text style={{ fontSize: 12, color: '#6b7280' }}>Calculating...</Text>
-                            )}
-                        </View>
-                        {shippingBreakdown.breakdown.map((vendor, idx) => (
-                            <View key={vendor.vendorId || idx} style={[styles.rowBetween, { marginTop: 4 }]}>
-                                <Text style={[styles.muted, { fontSize: 13 }]}>
-                                    {vendor.vendorName} ({vendor.itemCount} item{vendor.itemCount !== 1 ? 's' : ''})
-                                </Text>
-                                <Text style={[styles.bold, { fontSize: 13 }]}>
-                                    {vendor.shipping === 0 ? 'Free' : `$${vendor.shipping.toFixed(2)}`}
-                                </Text>
-                            </View>
-                        ))}
-                        <View style={[styles.rowBetween, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E5E7EB' }]}>
-                            <Text style={styles.muted}>Total shipping</Text>
-                            <Text style={styles.bold}>{shippingBreakdown.total === 0 ? 'Free' : `$${shippingBreakdown.total.toFixed(2)}`}</Text>
-                        </View>
-                    </View>
-
-                    {/* Detailed Tax Breakdown */}
-                    <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
-                        <Text style={{ fontWeight: '800', fontSize: 14, marginBottom: 6, color: '#374151' }}>
-                            Tax breakdown ({(taxRate * 100).toFixed(1)}%)
-                        </Text>
-                        <View style={[styles.rowBetween, { marginTop: 4 }]}>
-                            <Text style={[styles.muted, { fontSize: 13 }]}>Tax on items</Text>
-                            <Text style={[styles.bold, { fontSize: 13 }]}>${taxBreakdown.items.toFixed(2)}</Text>
-                        </View>
-                        {(cardPrice || 0) > 0 && (
-                            <View style={[styles.rowBetween, { marginTop: 4 }]}>
-                                <Text style={[styles.muted, { fontSize: 13 }]}>Tax on card</Text>
-                                <Text style={[styles.bold, { fontSize: 13 }]}>${taxBreakdown.card.toFixed(2)}</Text>
-                            </View>
-                        )}
-                        <View style={[styles.rowBetween, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E5E7EB' }]}>
-                            <Text style={styles.muted}>Total tax</Text>
-                            <Text style={styles.bold}>${estimatedTax.toFixed(2)}</Text>
-                        </View>
-                    </View>
-
-                    <View style={[styles.rowBetween, { marginTop: 8, paddingTop: 8, borderTopWidth: 2, borderTopColor: '#E5E7EB' }]}>
-                        <Text style={{ fontWeight: '900' }}>Order total</Text>
-                        <Text style={{ fontWeight: '900', fontSize: 18 }}>${orderTotal.toFixed(2)}</Text>
-                    </View>
-                    <Text style={{ color: '#9ba1a6', marginTop: 4, fontSize: 12 }}>Tax and shipping are estimated. Final amounts calculated at payment.</Text>
-                </View>
-
-                <BrandButton title="Add Video Message" onPress={onNext} />
-                <Pressable 
-                    style={{ marginTop: 12, alignSelf: 'center', paddingVertical: 12, paddingHorizontal: 20 }}
-                    onPress={() => router.back()}
+                    }
                 >
-                    <Text style={{ color: '#6b7280', fontWeight: '700', fontSize: 15 }}>Back to card selection</Text>
-                </Pressable>
-            </View>
-            </ScrollView>
+                    <View style={{ padding: 16, gap: 12 }}>
+                        {/* Saved Recipients Section */}
+                        {recipients.length > 0 ? (
+                            <View style={styles.savedRecipientsSection}>
+                                <View style={styles.savedRecipientsHeader}>
+                                    <Text style={styles.sectionTitle}>Select from saved recipients</Text>
+                                </View>
+                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recipientsScroll}>
+                                    {recipients.map((rec) => {
+                                        const isSelected = selectedRecipientId === rec.id;
+                                        return (
+                                            <Pressable
+                                                key={rec.id}
+                                                style={[styles.recipientCard, isSelected && styles.recipientCardSelected]}
+                                                onPress={() => handleSelectRecipient(rec)}
+                                            >
+                                                <View style={styles.recipientCardHeader}>
+                                                    <View style={[styles.recipientCheckbox, isSelected && styles.recipientCheckboxSelected]}>
+                                                        {isSelected && <IconSymbol name="checkmark" size={14} color="#FFFFFF" />}
+                                                    </View>
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={styles.recipientName} numberOfLines={1}>
+                                                            {rec.firstName} {rec.lastName || ''}
+                                                        </Text>
+                                                        <Text style={styles.recipientRelationship} numberOfLines={1}>
+                                                            {rec.relationship}
+                                                        </Text>
+                                                    </View>
+                                                </View>
+                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, backgroundColor: '#F3F4F6', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-start' }}>
+                                                    <IconSymbol name="lock.fill" size={12} color="#6B7280" />
+                                                    <Text style={{ fontSize: 12, color: '#4B5563', fontWeight: '600' }}>Address hidden for privacy</Text>
+                                                </View>
+                                            </Pressable>
+                                        );
+                                    })}
+                                </ScrollView>
+                                {selectedRecipientId && (
+                                    <Pressable onPress={handleClearSelection} style={styles.clearSelectionButton}>
+                                        <Text style={styles.clearSelectionText}>Clear selection</Text>
+                                    </Pressable>
+                                )}
+                            </View>
+                        ) : (
+                            <View style={styles.summaryCard}>
+                                <Text style={styles.muted}>No saved recipients found. Please add them in your Giftyy Circle.</Text>
+                            </View>
+                        )}
+
+                        {/* Removed manual address and notify configuration fields */}
+
+                        <View style={styles.summaryCard}>
+                            <Text style={{ fontWeight: '900', fontSize: 16 }}>Estimated totals</Text>
+                            <View style={styles.rowBetween}>
+                                <Text style={styles.muted}>Items subtotal</Text>
+                                <Text style={styles.bold}>${subtotal.toFixed(2)}</Text>
+                            </View>
+                            {cardAddOn > 0 && (
+                                <View style={styles.rowBetween}>
+                                    <Text style={styles.muted}>Card price</Text>
+                                    <Text style={styles.bold}>${cardAddOn.toFixed(2)}</Text>
+                                </View>
+                            )}
+
+
+                            {/* Detailed Shipping Breakdown */}
+                            <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
+                                <View style={[styles.rowBetween, { marginBottom: 6 }]}>
+                                    <Text style={{ fontWeight: '800', fontSize: 14, color: '#374151' }}>Shipping breakdown</Text>
+                                    {isCalculatingShipping && (
+                                        <Text style={{ fontSize: 12, color: '#6b7280' }}>Calculating...</Text>
+                                    )}
+                                </View>
+                                {shippingBreakdown.breakdown.map((vendor, idx) => {
+                                    return (
+                                        <View key={vendor.vendorId || idx}>
+                                            <View style={[styles.rowBetween, { marginTop: 4 }]}>
+                                                <Text style={[styles.muted, { fontSize: 13 }]}>
+                                                    {vendor.vendorName} ({vendor.itemCount} item{vendor.itemCount !== 1 ? 's' : ''})
+                                                </Text>
+                                                <Text style={[styles.bold, { fontSize: 13, color: vendor.doesNotShip ? '#ef4444' : '#111827' }]}>
+                                                    {vendor.doesNotShip ? 'Not supported' : (vendor.shipping === 0 ? 'Free' : `$${vendor.shipping.toFixed(2)}`)}
+                                                </Text>
+                                            </View>
+                                            {vendor.doesNotShip && (
+                                                <PremiumNotice
+                                                    message={`This vendor does not ship to ${selectedRecipient?.state || 'this location'}`}
+                                                    type="error"
+                                                    style={{ marginTop: 6 }}
+                                                />
+                                            )}
+                                        </View>
+                                    );
+                                })}
+                                <View style={[styles.rowBetween, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E5E7EB' }]}>
+                                    <Text style={styles.muted}>Total shipping</Text>
+                                    <Text style={styles.bold}>{shippingBreakdown.total === 0 ? 'Free' : `$${shippingBreakdown.total.toFixed(2)}`}</Text>
+                                </View>
+                            </View>
+
+                            {/* Detailed Tax Breakdown */}
+                            <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
+                                <Text style={{ fontWeight: '800', fontSize: 14, marginBottom: 6, color: '#374151' }}>
+                                    Tax breakdown ({(taxRate * 100).toFixed(1)}%)
+                                </Text>
+                                <View style={[styles.rowBetween, { marginTop: 4 }]}>
+                                    <Text style={[styles.muted, { fontSize: 13 }]}>Tax on items</Text>
+                                    <Text style={[styles.bold, { fontSize: 13 }]}>${taxBreakdown.items.toFixed(2)}</Text>
+                                </View>
+                                {cardAddOn > 0 && (
+                                    <View style={[styles.rowBetween, { marginTop: 4 }]}>
+                                        <Text style={[styles.muted, { fontSize: 13 }]}>Tax on card</Text>
+                                        <Text style={[styles.bold, { fontSize: 13 }]}>${taxBreakdown.card.toFixed(2)}</Text>
+                                    </View>
+                                )}
+
+                                <View style={[styles.rowBetween, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E5E7EB' }]}>
+                                    <Text style={styles.muted}>Total tax</Text>
+                                    <Text style={styles.bold}>${estimatedTax.toFixed(2)}</Text>
+                                </View>
+                            </View>
+
+                            <View style={[styles.rowBetween, { marginTop: 8, paddingTop: 8, borderTopWidth: 2, borderTopColor: '#E5E7EB' }]}>
+                                <Text style={{ fontWeight: '900' }}>Order total</Text>
+                                <Text style={{ fontWeight: '900', fontSize: 18 }}>${orderTotal.toFixed(2)}</Text>
+                            </View>
+                            <Text style={{ color: '#9ba1a6', marginTop: 4, fontSize: 12 }}>Tax and shipping are estimated. Final amounts calculated at payment.</Text>
+                        </View>
+
+                        <View style={{ height: bottom + 120 }} />
+                    </View>
+                </ScrollView>
+
+                <View style={[styles.stickyBar, { bottom: bottom > 0 ? bottom + 8 : 24 }]}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <Pressable
+                            style={{ paddingVertical: 12, paddingRight: 16 }}
+                            onPress={() => router.back()}
+                        >
+                            <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 13 }}>Back</Text>
+                        </Pressable>
+                        <Pressable
+                            onPress={onNext}
+                            disabled={!selectedRecipient || isCalculatingShipping || shippingBreakdown.hasShippingError}
+                            style={{
+                                flex: 1,
+                                backgroundColor: (!selectedRecipient || isCalculatingShipping || shippingBreakdown.hasShippingError) ? '#cbd5e1' : GIFTYY_THEME.colors.primary,
+                                paddingVertical: 14,
+                                borderRadius: 999,
+                                alignItems: 'center',
+                                opacity: (!selectedRecipient || isCalculatingShipping || shippingBreakdown.hasShippingError) ? 0.8 : 1
+                            }}
+                        >
+                            <Text style={{ color: 'white', fontWeight: '800', fontSize: 15 }}>
+                                {isCalculatingShipping
+                                    ? 'Verifying address...'
+                                    : shippingBreakdown.hasShippingError
+                                        ? 'Shipping Unavailable'
+                                        : !selectedRecipient
+                                            ? 'Select a recipient'
+                                            : 'Add Video Message'}
+                            </Text>
+                        </Pressable>
+                    </View>
+                </View>
+
             </KeyboardAvoidingView>
 
-			<RecipientFormModal
+            <RecipientFormModal
                 visible={addRecipientVisible}
                 mode="add"
                 editingRecipient={null}
                 onClose={() => setAddRecipientVisible(false)}
                 onSaved={refreshRecipients}
             />
-
-            <SelectListModal
-                visible={countryModalOpen}
-                title="Select country"
-                options={COUNTRY_LIST}
-                selectedValue={country}
-                searchable
-                searchPlaceholder="Search countries…"
-                onClose={() => setCountryModalOpen(false)}
-                onSelect={(value) => {
-                    setCountry(value);
-                    // If the new country doesn't require a state, clear it (keeps shipping/tax logic sane).
-                    const requiresState = getStateOptionsForCountry(value).length > 0;
-                    if (!requiresState) {
-                        setStateCode('');
-                    }
-                    setCountryModalOpen(false);
-                }}
-            />
-            <SelectListModal
-                visible={stateModalOpen}
-                title="Select state / province"
-                options={stateOptions}
-                selectedValue={selectedStateLabel}
-                onClose={() => setStateModalOpen(false)}
-                onSelect={(value) => {
-                    const match = value.match(/\(([A-Z]{2})\)\s*$/);
-                    setStateCode(match?.[1] ?? value);
-                    setStateModalOpen(false);
-                }}
-            />
-        </View>
-    );
-}
-
-function Field({ label, multiline, style, ...props }: { label: string; multiline?: boolean; value: string; onChangeText: (t: string) => void; style?: ViewStyle } & Partial<TextInput['props']>) {
-    return (
-        <View style={[{ gap: 6 }, style]}>
-            <Text style={{ fontWeight: '800' }}>{label}</Text>
-            <TextInput {...props} multiline={multiline} style={[styles.input, multiline && { height: 90, textAlignVertical: 'top' }]} placeholderTextColor="#9ba1a6" />
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    input: { borderWidth: 1, borderColor: '#eee', borderRadius: 12, padding: 12, backgroundColor: '#fafafa', color: '#111', height: 44 },
-    requiredStar: { color: GIFTYY_THEME.colors.primary, fontWeight: '900' },
     summaryCard: { marginTop: 6, backgroundColor: 'white', borderWidth: 1, borderColor: '#eee', borderRadius: 14, padding: 12, gap: 6 },
     rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
     muted: { color: '#6b7280', fontWeight: '700' },
@@ -785,164 +666,20 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         fontSize: 15,
     },
+    stickyBar: {
+        position: 'absolute',
+        left: 16,
+        right: 16,
+        backgroundColor: '#fff',
+        borderRadius: 24,
+        paddingHorizontal: 20,
+        paddingVertical: 16,
+        shadowColor: '#000',
+        shadowOpacity: 0.08,
+        shadowRadius: 16,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 10,
+    },
 });
-
-const US_STATES = [
-    { code: 'AL', name: 'Alabama' }, { code: 'AK', name: 'Alaska' }, { code: 'AZ', name: 'Arizona' },
-    { code: 'AR', name: 'Arkansas' }, { code: 'CA', name: 'California' }, { code: 'CO', name: 'Colorado' },
-    { code: 'CT', name: 'Connecticut' }, { code: 'DE', name: 'Delaware' }, { code: 'FL', name: 'Florida' },
-    { code: 'GA', name: 'Georgia' }, { code: 'HI', name: 'Hawaii' }, { code: 'ID', name: 'Idaho' },
-    { code: 'IL', name: 'Illinois' }, { code: 'IN', name: 'Indiana' }, { code: 'IA', name: 'Iowa' },
-    { code: 'KS', name: 'Kansas' }, { code: 'KY', name: 'Kentucky' }, { code: 'LA', name: 'Louisiana' },
-    { code: 'ME', name: 'Maine' }, { code: 'MD', name: 'Maryland' }, { code: 'MA', name: 'Massachusetts' },
-    { code: 'MI', name: 'Michigan' }, { code: 'MN', name: 'Minnesota' }, { code: 'MS', name: 'Mississippi' },
-    { code: 'MO', name: 'Missouri' }, { code: 'MT', name: 'Montana' }, { code: 'NE', name: 'Nebraska' },
-    { code: 'NV', name: 'Nevada' }, { code: 'NH', name: 'New Hampshire' }, { code: 'NJ', name: 'New Jersey' },
-    { code: 'NM', name: 'New Mexico' }, { code: 'NY', name: 'New York' }, { code: 'NC', name: 'North Carolina' },
-    { code: 'ND', name: 'North Dakota' }, { code: 'OH', name: 'Ohio' }, { code: 'OK', name: 'Oklahoma' },
-    { code: 'OR', name: 'Oregon' }, { code: 'PA', name: 'Pennsylvania' }, { code: 'RI', name: 'Rhode Island' },
-    { code: 'SC', name: 'South Carolina' }, { code: 'SD', name: 'South Dakota' }, { code: 'TN', name: 'Tennessee' },
-    { code: 'TX', name: 'Texas' }, { code: 'UT', name: 'Utah' }, { code: 'VT', name: 'Vermont' },
-    { code: 'VA', name: 'Virginia' }, { code: 'WA', name: 'Washington' }, { code: 'WV', name: 'West Virginia' },
-    { code: 'WI', name: 'Wisconsin' }, { code: 'WY', name: 'Wyoming' },
-];
-
-const CANADA_PROVINCES = [
-    { code: 'AB', name: 'Alberta' },
-    { code: 'BC', name: 'British Columbia' },
-    { code: 'MB', name: 'Manitoba' },
-    { code: 'NB', name: 'New Brunswick' },
-    { code: 'NL', name: 'Newfoundland and Labrador' },
-    { code: 'NT', name: 'Northwest Territories' },
-    { code: 'NS', name: 'Nova Scotia' },
-    { code: 'NU', name: 'Nunavut' },
-    { code: 'ON', name: 'Ontario' },
-    { code: 'PE', name: 'Prince Edward Island' },
-    { code: 'QC', name: 'Quebec' },
-    { code: 'SK', name: 'Saskatchewan' },
-    { code: 'YT', name: 'Yukon' },
-];
-
-const INDIA_STATES = [
-    'Andhra Pradesh',
-    'Arunachal Pradesh',
-    'Assam',
-    'Bihar',
-    'Chhattisgarh',
-    'Goa',
-    'Gujarat',
-    'Haryana',
-    'Himachal Pradesh',
-    'Jharkhand',
-    'Karnataka',
-    'Kerala',
-    'Madhya Pradesh',
-    'Maharashtra',
-    'Manipur',
-    'Meghalaya',
-    'Mizoram',
-    'Nagaland',
-    'Odisha',
-    'Punjab',
-    'Rajasthan',
-    'Sikkim',
-    'Tamil Nadu',
-    'Telangana',
-    'Tripura',
-    'Uttar Pradesh',
-    'Uttarakhand',
-    'West Bengal',
-    'Andaman and Nicobar Islands',
-    'Chandigarh',
-    'Dadra and Nagar Haveli and Daman and Diu',
-    'Delhi',
-    'Jammu and Kashmir',
-    'Ladakh',
-    'Lakshadweep',
-    'Puducherry',
-];
-
-const UNITED_KINGDOM_REGIONS = [
-    'England',
-    'Scotland',
-    'Wales',
-    'Northern Ireland',
-];
-
-const AUSTRALIA_STATES = [
-    'Australian Capital Territory',
-    'New South Wales',
-    'Northern Territory',
-    'Queensland',
-    'South Australia',
-    'Tasmania',
-    'Victoria',
-    'Western Australia',
-];
-
-const NIGERIA_STATES = [
-    'Abia',
-    'Adamawa',
-    'Akwa Ibom',
-    'Anambra',
-    'Bauchi',
-    'Bayelsa',
-    'Benue',
-    'Borno',
-    'Cross River',
-    'Delta',
-    'Ebonyi',
-    'Edo',
-    'Ekiti',
-    'Enugu',
-    'Gombe',
-    'Imo',
-    'Jigawa',
-    'Kaduna',
-    'Kano',
-    'Katsina',
-    'Kebbi',
-    'Kogi',
-    'Kwara',
-    'Lagos',
-    'Nasarawa',
-    'Niger',
-    'Ogun',
-    'Ondo',
-    'Osun',
-    'Oyo',
-    'Plateau',
-    'Rivers',
-    'Sokoto',
-    'Taraba',
-    'Yobe',
-    'Zamfara',
-    'Federal Capital Territory',
-];
-
-const normalizeCountry = (value: string) => value.trim().toUpperCase();
-
-const isUnitedStatesCountry = (value: string) => {
-    const normalized = normalizeCountry(value);
-    return normalized === 'UNITED STATES' || normalized === 'UNITED STATES OF AMERICA' || normalized === 'USA';
-};
-
-const COUNTRY_STATE_OPTIONS: Record<string, string[]> = {
-    'UNITED STATES': US_STATES.map((s) => `${s.name} (${s.code})`),
-    'UNITED STATES OF AMERICA': US_STATES.map((s) => `${s.name} (${s.code})`),
-    'USA': US_STATES.map((s) => `${s.name} (${s.code})`),
-    'CANADA': CANADA_PROVINCES.map((p) => `${p.name} (${p.code})`),
-    'INDIA': INDIA_STATES,
-    'UNITED KINGDOM': UNITED_KINGDOM_REGIONS,
-    'UK': UNITED_KINGDOM_REGIONS,
-    'GREAT BRITAIN': UNITED_KINGDOM_REGIONS,
-    'AUSTRALIA': AUSTRALIA_STATES,
-    'NIGERIA': NIGERIA_STATES,
-};
-
-const getStateOptionsForCountry = (value: string) => {
-    const normalized = normalizeCountry(value);
-    return COUNTRY_STATE_OPTIONS[normalized] ?? [];
-};
 
 

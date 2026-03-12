@@ -1,0 +1,33 @@
+﻿[dotenv@17.3.1] injecting env (12) from .env.local -- tip: ≡ƒöÉ prevent committing .env to code: https://dotenvx.com/precommit
+--- Comprehensive Occasion Debug v2 ---
+Total Occasions: 6
+Total Connections: 1
+Total Recipient Profiles: 2
+Total Auth Profiles: 28
+
+--- Recipient Profiles Detail ---
+RP ID: bce0370e-eff1-4182-b549-d9029515334d | Name: Komou Tarbari | Owner: Komou (94006097-d311-4625-a606-fdbf9d0c4c78)
+RP ID: 3257c7d1-ea6e-40f7-a718-6238a6c6fc68 | Name: Rafik Tarbari | Owner: Rafik (652e1167-b838-4f60-96a6-1dc88c697007)
+
+--- Connections Detail ---
+ConnID: 955b15b7-fe13-4664-98b5-d514dc62b06c | From: Komou | To: Rafik Tarbari (RP: 3257c7d1-ea6e-40f7-a718-6238a6c6fc68)
+
+--- Occasions Detail ---
+Occasion: Valentine's Day | For: Rafik Tarbari (RP: 3257c7d1-ea6e-40f7-a718-6238a6c6fc68) | Owner: Rafik
+  Linked Connections: 955b15b7-fe13-4664-98b5-d514dc62b06c
+---
+Occasion: Christmas Day | For: Rafik Tarbari (RP: 3257c7d1-ea6e-40f7-a718-6238a6c6fc68) | Owner: Rafik
+  Linked Connections: 955b15b7-fe13-4664-98b5-d514dc62b06c
+---
+Occasion: Ramadan | For: Rafik Tarbari (RP: 3257c7d1-ea6e-40f7-a718-6238a6c6fc68) | Owner: Rafik
+  Linked Connections: 955b15b7-fe13-4664-98b5-d514dc62b06c
+---
+Occasion: Valentine's Day | For: Komou Tarbari (RP: bce0370e-eff1-4182-b549-d9029515334d) | Owner: Komou
+  Linked Connections: NONE
+---
+Occasion: Christmas Day | For: Komou Tarbari (RP: bce0370e-eff1-4182-b549-d9029515334d) | Owner: Komou
+  Linked Connections: NONE
+---
+Occasion: Birthday | For: Komou Tarbari (RP: bce0370e-eff1-4182-b549-d9029515334d) | Owner: Komou
+  Linked Connections: NONE
+---

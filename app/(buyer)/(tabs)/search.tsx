@@ -3,9 +3,9 @@
  * Marketplace-quality search experience with Giftyy's emotional branding
  */
 
+import { MarketplaceProductCard } from '@/components/marketplace/ProductCard';
 import { FilterBar } from '@/components/search/FilterBar';
 import { FilterModal } from '@/components/search/FilterModal';
-import { MarketplaceProductCard } from '@/components/marketplace/ProductCard';
 import { SearchBar } from '@/components/search/SearchBar';
 import { SearchEmptyState } from '@/components/search/SearchEmptyState';
 import { ShimmerLoader } from '@/components/search/ShimmerLoader';
@@ -175,14 +175,11 @@ export default function SearchResultsScreen() {
 	const handleRefresh = useCallback(async () => {
 		setRefreshing(true);
 		try {
-			await Promise.all([
-				refreshProducts(),
-				refreshCategories(),
-			]);
+			await refreshProducts();
 		} finally {
 			setRefreshing(false);
 		}
-	}, [refreshProducts, refreshCategories]);
+	}, [refreshProducts]);
 
 	const handleRemoveFilter = useCallback((chipId: string, chipType: string) => {
 		setFilters(prev => {
@@ -244,7 +241,7 @@ export default function SearchResultsScreen() {
 	};
 
 	return (
-		<View style={[styles.container, { paddingTop: top }]}>
+		<View style={[styles.container, { paddingTop: top + 64 }]}>
 			{/* Search Header */}
 			<View style={styles.header}>
 				<SearchBar
@@ -325,12 +322,12 @@ export default function SearchResultsScreen() {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: GIFTYY_THEME.colors.white,
+		backgroundColor: 'transparent',
 	},
 	header: {
 		paddingHorizontal: GIFTYY_THEME.spacing.lg,
 		paddingVertical: GIFTYY_THEME.spacing.md,
-		backgroundColor: GIFTYY_THEME.colors.white,
+		backgroundColor: 'transparent',
 		borderBottomWidth: 1,
 		borderBottomColor: GIFTYY_THEME.colors.gray200,
 	},

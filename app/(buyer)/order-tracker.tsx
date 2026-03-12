@@ -1,11 +1,11 @@
-import React, { useState, useMemo, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, Pressable, TextInput, RefreshControl } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
-import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
+import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
 import { useOrders } from '@/contexts/OrdersContext';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useMemo, useState } from 'react';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const palette = {
     background: '#fff',
@@ -125,36 +125,36 @@ export default function OrderTrackerScreen() {
                 },
                 ...(o.status === 'shipped' || o.status === 'out_for_delivery' || o.status === 'delivered'
                     ? [
-                          {
-                              id: `e-${o.id}-shipped`,
-                              status: 'shipped' as TrackingStatus,
-                              title: 'Order shipped',
-                              description: 'Package has left our facility',
-                              timestamp: new Date(o.updatedAt).toLocaleString(),
-                          },
-                      ]
+                        {
+                            id: `e-${o.id}-shipped`,
+                            status: 'shipped' as TrackingStatus,
+                            title: 'Order shipped',
+                            description: 'Package has left our facility',
+                            timestamp: new Date(o.updatedAt).toLocaleString(),
+                        },
+                    ]
                     : []),
                 ...(o.status === 'out_for_delivery' || o.status === 'delivered'
                     ? [
-                          {
-                              id: `e-${o.id}-ofd`,
-                              status: 'out-for-delivery' as TrackingStatus,
-                              title: 'Out for delivery',
-                              description: 'Your package is out for delivery',
-                              timestamp: new Date(o.updatedAt).toLocaleString(),
-                          },
-                      ]
+                        {
+                            id: `e-${o.id}-ofd`,
+                            status: 'out-for-delivery' as TrackingStatus,
+                            title: 'Out for delivery',
+                            description: 'Your package is out for delivery',
+                            timestamp: new Date(o.updatedAt).toLocaleString(),
+                        },
+                    ]
                     : []),
                 ...(o.status === 'delivered'
                     ? [
-                          {
-                              id: `e-${o.id}-delivered`,
-                              status: 'delivered' as TrackingStatus,
-                              title: 'Delivered',
-                              description: 'Package was delivered',
-                              timestamp: new Date(o.deliveredAt || o.updatedAt).toLocaleString(),
-                          },
-                      ]
+                        {
+                            id: `e-${o.id}-delivered`,
+                            status: 'delivered' as TrackingStatus,
+                            title: 'Delivered',
+                            description: 'Package was delivered',
+                            timestamp: new Date(o.deliveredAt || o.updatedAt).toLocaleString(),
+                        },
+                    ]
                     : []),
             ],
         }));
@@ -179,7 +179,7 @@ export default function OrderTrackerScreen() {
     const getStatusConfig = (status: TrackingStatus) => STATUS_CONFIG[status];
 
     return (
-        <View style={[styles.screen, { paddingTop: top + 8 }]}>
+        <View style={[styles.screen, { paddingTop: top + 64 }]}>
             <ScrollView
                 contentContainerStyle={[styles.content, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20, flexGrow: 1 }]}
                 showsVerticalScrollIndicator={false}
@@ -402,7 +402,7 @@ export default function OrderTrackerScreen() {
 const styles = StyleSheet.create({
     screen: {
         flex: 1,
-        backgroundColor: palette.background,
+        backgroundColor: 'transparent',
     },
     content: {
         padding: 20,

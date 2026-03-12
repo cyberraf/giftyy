@@ -1,5 +1,6 @@
 import BrandButton from '@/components/BrandButton';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { useAlert } from '@/contexts/AlertContext';
 import { useCart } from '@/contexts/CartContext';
 import { useProducts } from '@/contexts/ProductsContext';
 import { useRouter } from 'expo-router';
@@ -13,7 +14,7 @@ import {
 	Text,
 	View
 } from 'react-native';
-import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { FadeInUp, Layout } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
@@ -57,7 +58,7 @@ export default function CartScreen() {
 
 	return (
 		<GestureHandlerRootView style={{ flex: 1 }}>
-			<View style={[styles.container, { paddingTop: top + 8 }]}>
+			<View style={[styles.container, { paddingTop: top + 64 }]}>
 				<Header />
 
 				{items.length === 0 ? (
@@ -93,7 +94,7 @@ export default function CartScreen() {
 										estimatedTax={estimatedTax}
 										total={total}
 										itemCount={totalQuantity}
-										onCheckout={() => router.push('/(buyer)/checkout/design')}
+										onCheckout={() => router.push('/(buyer)/checkout/recipient')}
 									/>
 									<ClearRow count={totalQuantity} onClear={clear} />
 								</View>
@@ -105,7 +106,7 @@ export default function CartScreen() {
 							bottomInset={bottom}
 							total={total}
 							count={totalQuantity}
-							onCheckout={() => router.push('/(buyer)/checkout/design')}
+							onCheckout={() => router.push('/(buyer)/checkout/recipient')}
 						/>
 					</>
 				)}
@@ -132,57 +133,65 @@ function CartItemCard({
 	onQtyChange: (qty: number) => void;
 	onRemove: () => void;
 }) {
-	const onQty = (delta: number) => onQtyChange(Math.max(1, item.quantity + delta));
+	const { alert } = useAlert();
+	const onQty = (delta: number) => {
+		const newQty = item.quantity + delta;
+		if (newQty <= 0) {
+			alert(
+				'Remove item',
+				'Are you sure you want to remove this item from your cart?',
+				[
+					{ text: 'Cancel', style: 'cancel' },
+					{ text: 'Remove', style: 'destructive', onPress: onRemove }
+				]
+			);
+		} else {
+			onQtyChange(newQty);
+		}
+	};
 
 	return (
-		<Swipeable
-			renderRightActions={() => (
-				<Pressable style={styles.swipeDelete} onPress={onRemove}>
-					<IconSymbol name="trash" size={18} color="#fff" />
-					<Text style={styles.swipeDeleteText}>Remove</Text>
+		<Animated.View entering={FadeInUp.duration(220)} layout={Layout.springify()} style={styles.card}>
+			<View style={{ flexDirection: 'row', gap: 12 }}>
+				<Pressable style={styles.imageWrap}>
+					{item.image ? (
+						<Image source={{ uri: item.image }} style={styles.image} />
+					) : (
+						<View style={[styles.image, { backgroundColor: SOFT }]} />
+					)}
 				</Pressable>
-			)}
-			overshootRight={false}
-		>
-			<Animated.View entering={FadeInUp.duration(220)} layout={Layout.springify()} style={styles.card}>
-				<View style={{ flexDirection: 'row', gap: 12 }}>
-					<Pressable style={styles.imageWrap}>
-						{item.image ? (
-							<Image source={{ uri: item.image }} style={styles.image} />
-						) : (
-							<View style={[styles.image, { backgroundColor: SOFT }]} />
-						)}
-					</Pressable>
-					<View style={{ flex: 1, gap: 6 }}>
-						<Text numberOfLines={2} style={styles.itemTitle}>
+				<View style={{ flex: 1, gap: 6 }}>
+					<View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+						<Text numberOfLines={2} style={[styles.itemTitle, { flex: 1, paddingRight: 8 }]}>
 							{item.name}
 						</Text>
-						{item.selectedOptions && (
-							<Text style={styles.itemOptions} numberOfLines={1}>
-								{Object.entries(item.selectedOptions)
-									.map(([k, v]) => `${k}: ${v}`)
-									.join(' • ')}
-							</Text>
-						)}
+						<Pressable onPress={onRemove} hitSlop={10} style={{ padding: 4 }}>
+							<IconSymbol name="trash" size={20} color="#94a3b8" />
+						</Pressable>
+					</View>
+
+					{item.selectedOptions && (
+						<Text style={styles.itemOptions} numberOfLines={1}>
+							{Object.entries(item.selectedOptions)
+								.map(([k, v]) => `${k}: ${v}`)
+								.join(' • ')}
+						</Text>
+					)}
+					<View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 10 }}>
 						<Text style={styles.itemPrice}>{item.price}</Text>
-						<View style={styles.actionsRow}>
-							<View style={styles.qtyWrap}>
-								<Pressable onPress={() => onQty(-1)} style={styles.qtyBtn}>
-									<Text style={styles.qtyBtnText}>–</Text>
-								</Pressable>
-								<Text style={styles.qtyValue}>{item.quantity}</Text>
-								<Pressable onPress={() => onQty(1)} style={styles.qtyBtn}>
-									<Text style={styles.qtyBtnText}>+</Text>
-								</Pressable>
-							</View>
-							<Pressable onPress={onRemove}>
-								<Text style={styles.removeText}>Remove</Text>
+						<View style={styles.qtyWrap}>
+							<Pressable onPress={() => onQty(-1)} style={styles.qtyBtn}>
+								<Text style={styles.qtyBtnText}>−</Text>
+							</Pressable>
+							<Text style={styles.qtyValue}>{item.quantity}</Text>
+							<Pressable onPress={() => onQty(1)} style={styles.qtyBtn}>
+								<Text style={styles.qtyBtnText}>+</Text>
 							</Pressable>
 						</View>
 					</View>
 				</View>
-			</Animated.View>
-		</Swipeable>
+			</View>
+		</Animated.View>
 	);
 }
 
@@ -205,36 +214,18 @@ function SummaryCard({
 }) {
 	return (
 		<View style={styles.summaryCard}>
-			<Text style={styles.summaryTitle}>Order summary</Text>
 			<View style={styles.summaryRow}>
 				<Text style={styles.summaryLabel}>Items ({itemCount})</Text>
 				<Text style={styles.summaryValue}>${subtotal.toFixed(2)}</Text>
 			</View>
 			<View style={styles.summaryRow}>
-				<Text style={styles.summaryLabel}>Delivery fee</Text>
-				<Text style={styles.summaryValue}>${deliveryFee.toFixed(2)}</Text>
-			</View>
-			<View style={styles.summaryRow}>
-				<Text style={styles.summaryLabel}>Service fee</Text>
-				<Text style={styles.summaryValue}>${serviceFee.toFixed(2)}</Text>
-			</View>
-			<View style={styles.summaryRow}>
 				<Text style={styles.summaryLabel}>Estimated tax</Text>
 				<Text style={styles.summaryValue}>${estimatedTax.toFixed(2)}</Text>
 			</View>
-			<View style={[styles.summaryRow, { marginTop: 8 }]}>
+			<View style={{ height: 1, backgroundColor: '#f1f5f9', marginVertical: 4 }} />
+			<View style={styles.summaryRow}>
 				<Text style={styles.summaryTotalLabel}>Total</Text>
 				<Text style={styles.summaryTotal}>${total.toFixed(2)}</Text>
-			</View>
-			<Text style={styles.summaryWarning}>
-				Every order includes a Giftyy Card at a separate cost.
-			</Text>
-			<Text style={styles.summaryHint}>Tax and shipping will be finalized at checkout.</Text>
-			<View style={{ marginTop: 16 }}>
-				<BrandButton
-					title="Add Giftyy Card"
-					onPress={onCheckout}
-				/>
 			</View>
 		</View>
 	);
@@ -243,8 +234,8 @@ function SummaryCard({
 function ClearRow({ count, onClear }: { count: number; onClear: () => void }) {
 	return (
 		<View style={styles.clearRow}>
-			<Text style={styles.clearInfo}>{count} item(s)</Text>
-			<Pressable onPress={onClear} style={styles.clearBtn}>
+			<Text style={styles.clearInfo}>{count} item(s) in your cart</Text>
+			<Pressable onPress={onClear} hitSlop={10}>
 				<Text style={styles.clearBtnText}>Clear cart</Text>
 			</Pressable>
 		</View>
@@ -263,13 +254,20 @@ function CheckoutBar({
 	onCheckout: () => void;
 }) {
 	return (
-		<View style={[styles.stickyBar, { paddingBottom: bottomInset + 12 }]}>
-			<View>
-				<Text style={styles.stickyLabel}>Subtotal</Text>
-				<Text style={styles.stickyAmount}>${total.toFixed(2)}</Text>
+		<View style={[styles.stickyBar, { bottom: bottomInset > 0 ? bottomInset + 8 : 24 }]}>
+			<View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+				<View>
+					<Text style={styles.stickyLabel}>SUBTOTAL</Text>
+					<Text style={styles.stickyAmount}>${total.toFixed(2)}</Text>
+				</View>
+				<View style={{ flex: 1, marginLeft: 24 }}>
+					<BrandButton title={`Checkout (${count})`} onPress={onCheckout} />
+				</View>
+			</View>
+			<View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+				<IconSymbol name="lock.fill" size={10} color="#94a3b8" />
 				<Text style={styles.stickyHint}>Secure payment • Easy returns</Text>
 			</View>
-			<BrandButton title={`Add Giftyy Card (${count})`} onPress={onCheckout} />
 		</View>
 	);
 }
@@ -292,7 +290,7 @@ function EmptyState({ onStart }: { onStart: () => void }) {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: '#fff',
+		backgroundColor: 'transparent',
 		paddingHorizontal: 16,
 	},
 	header: {
@@ -311,14 +309,14 @@ const styles = StyleSheet.create({
 	card: {
 		backgroundColor: '#fff',
 		borderRadius: 16,
-		padding: 12,
+		padding: 14,
 		borderWidth: 1,
-		borderColor: '#e5e7eb',
+		borderColor: '#f1f5f9',
 		shadowColor: '#000',
-		shadowOpacity: 0.04,
+		shadowOpacity: 0.02,
 		shadowRadius: 8,
 		shadowOffset: { width: 0, height: 2 },
-		elevation: 2,
+		elevation: 1,
 	},
 	imageWrap: {
 		borderRadius: 12,
@@ -340,6 +338,7 @@ const styles = StyleSheet.create({
 	},
 	itemPrice: {
 		fontWeight: '900',
+		fontSize: 16,
 		color: '#0f172a',
 	},
 	actionsRow: {
@@ -351,30 +350,30 @@ const styles = StyleSheet.create({
 	qtyWrap: {
 		flexDirection: 'row',
 		alignItems: 'center',
-		gap: 10,
-		backgroundColor: SOFT,
-		borderRadius: 12,
-		paddingHorizontal: 10,
-		paddingVertical: 6,
+		borderWidth: 1,
+		borderColor: '#e2e8f0',
+		borderRadius: 999,
+		paddingHorizontal: 8,
+		paddingVertical: 4,
 	},
 	qtyBtn: {
-		width: 28,
-		height: 28,
-		borderRadius: 10,
+		width: 24,
+		height: 24,
+		borderRadius: 12,
 		alignItems: 'center',
 		justifyContent: 'center',
 		backgroundColor: '#fff',
-		borderWidth: 1,
-		borderColor: '#e2e8f0',
 	},
 	qtyBtnText: {
-		fontSize: 18,
-		fontWeight: '900',
-		color: '#0f172a',
+		fontSize: 15,
+		fontWeight: '600',
+		color: '#64748b',
 	},
 	qtyValue: {
-		fontWeight: '900',
+		fontWeight: '800',
 		color: '#0f172a',
+		marginHorizontal: 12,
+		fontSize: 13,
 	},
 	removeText: {
 		color: '#ef4444',
@@ -468,17 +467,10 @@ const styles = StyleSheet.create({
 		fontWeight: '700',
 	},
 	summaryCard: {
-		backgroundColor: '#fff',
+		backgroundColor: '#f8fafc',
 		borderRadius: 16,
-		padding: 14,
-		borderWidth: 1,
-		borderColor: '#e5e7eb',
-		shadowColor: '#000',
-		shadowOpacity: 0.04,
-		shadowRadius: 6,
-		shadowOffset: { width: 0, height: 2 },
-		elevation: 1,
-		gap: 8,
+		padding: 20,
+		gap: 12,
 	},
 	summaryTitle: {
 		fontWeight: '900',
@@ -493,14 +485,16 @@ const styles = StyleSheet.create({
 	summaryLabel: {
 		color: '#475569',
 		fontWeight: '700',
+		fontSize: 14,
 	},
 	summaryValue: {
 		color: '#0f172a',
 		fontWeight: '800',
+		fontSize: 14,
 	},
 	summaryTotalLabel: {
 		fontWeight: '900',
-		fontSize: 15,
+		fontSize: 16,
 		color: '#0f172a',
 	},
 	summaryTotal: {
@@ -532,8 +526,9 @@ const styles = StyleSheet.create({
 		paddingHorizontal: 4,
 	},
 	clearInfo: {
-		color: '#475569',
+		color: '#64748b',
 		fontWeight: '700',
+		fontSize: 14,
 	},
 	clearBtn: {
 		backgroundColor: '#ef4444',
@@ -542,32 +537,29 @@ const styles = StyleSheet.create({
 		borderRadius: 12,
 	},
 	clearBtnText: {
-		color: '#fff',
+		color: '#ef4444',
 		fontWeight: '800',
+		fontSize: 14,
 	},
 	stickyBar: {
 		position: 'absolute',
-		left: 0,
-		right: 0,
-		bottom: 0,
-		flexDirection: 'row',
-		alignItems: 'center',
-		justifyContent: 'space-between',
-		paddingHorizontal: 16,
-		paddingVertical: 12,
+		left: 16,
+		right: 16,
 		backgroundColor: '#fff',
-		borderTopWidth: 1,
-		borderTopColor: '#e2e8f0',
-		gap: 12,
+		borderRadius: 24,
+		paddingHorizontal: 20,
+		paddingVertical: 16,
 		shadowColor: '#000',
-		shadowOpacity: 0.06,
-		shadowRadius: 8,
-		shadowOffset: { width: 0, height: -2 },
+		shadowOpacity: 0.08,
+		shadowRadius: 16,
+		shadowOffset: { width: 0, height: 4 },
 		elevation: 10,
 	},
 	stickyLabel: {
-		color: '#475569',
-		fontWeight: '700',
+		color: '#64748b',
+		fontWeight: '800',
+		fontSize: 11,
+		letterSpacing: 0.5,
 	},
 	stickyAmount: {
 		fontSize: 20,
@@ -576,7 +568,7 @@ const styles = StyleSheet.create({
 	},
 	stickyHint: {
 		color: '#94a3b8',
-		fontSize: 12,
+		fontSize: 11,
 		fontWeight: '600',
 	},
 	emptyWrap: {

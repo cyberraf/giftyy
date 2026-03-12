@@ -1,8 +1,9 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { Platform } from 'react-native';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 // Platform-specific storage adapter
-// Use a factory function to avoid importing AsyncStorage on web during build
 function getStorageAdapter() {
 	if (Platform.OS === 'web') {
 		// Use localStorage for web
@@ -27,27 +28,8 @@ function getStorageAdapter() {
 			},
 		};
 	} else {
-		// Use AsyncStorage for React Native (iOS/Android)
-		// Use require to avoid bundling on web
-		try {
-			const AsyncStorage = require('@react-native-async-storage/async-storage').default;
-			return AsyncStorage;
-		} catch (error) {
-			console.warn('AsyncStorage not available, using in-memory storage');
-			// Fallback to in-memory storage if AsyncStorage fails
-			const memoryStorage: Record<string, string> = {};
-			return {
-				getItem: (key: string) => Promise.resolve(memoryStorage[key] || null),
-				setItem: (key: string, value: string) => {
-					memoryStorage[key] = value;
-					return Promise.resolve();
-				},
-				removeItem: (key: string) => {
-					delete memoryStorage[key];
-					return Promise.resolve();
-				},
-			};
-		}
+		// Use standard imported AsyncStorage for React Native
+		return AsyncStorage;
 	}
 }
 
@@ -72,7 +54,7 @@ const hasValidConfig = !!(supabaseUrl && supabaseAnonKey && supabaseUrl.length >
 let supabase: SupabaseClient;
 
 if (!hasValidConfig) {
-	const errorMessage = 
+	const errorMessage =
 		'\n' +
 		'═══════════════════════════════════════════════════════════════\n' +
 		'⚠️  SUPABASE ENVIRONMENT VARIABLES NOT CONFIGURED  ⚠️\n' +
@@ -89,14 +71,14 @@ if (!hasValidConfig) {
 		'  3. Restart the server\n' +
 		'\n' +
 		'═══════════════════════════════════════════════════════════════\n';
-	
+
 	console.error(errorMessage);
-	
+
 	// Use placeholder values that have valid format but won't work
 	// This prevents the app from crashing at startup
 	const placeholderUrl = supabaseUrl || 'https://placeholder.supabase.co';
 	const placeholderKey = supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBsYWNlaG9sZGVyIiwicm9sZSI6ImFub24iLCJpYXQiOjE2NDUxOTIwMDAsImV4cCI6MTk2MDc2ODAwMH0.placeholder';
-	
+
 	supabase = createClient(placeholderUrl, placeholderKey, {
 		auth: {
 			storage: storage,
@@ -108,8 +90,8 @@ if (!hasValidConfig) {
 } else {
 	// Create client with actual credentials
 	supabase = createClient(
-		supabaseUrl, 
-		supabaseAnonKey, 
+		supabaseUrl,
+		supabaseAnonKey,
 		{
 			auth: {
 				storage: storage,

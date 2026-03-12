@@ -1,13 +1,13 @@
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { MemoryThumbnail } from '@/components/memory/MemoryThumbnail';
-import { VideoPreview } from '@/components/VideoPreview';
+import { IconSymbol } from '@/components/ui/icon-symbol';
 import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
+import { useAlert } from '@/contexts/AlertContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { useBottomBarVisibility } from '@/contexts/BottomBarVisibility';
+import { useNotifications } from '@/contexts/NotificationsContext';
 import { useOrders } from '@/contexts/OrdersContext';
 import { useSharedMemories, type SharedMemory } from '@/contexts/SharedMemoriesContext';
-import { useNotifications } from '@/contexts/NotificationsContext';
 import { useVaults } from '@/contexts/VaultsContext';
 import { useVideoMessages, VideoMessage } from '@/contexts/VideoMessagesContext';
 import { useSignedVideoUrl } from '@/hooks/useSignedVideoUrl';
@@ -17,7 +17,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, Alert, Dimensions, FlatList, Image, InteractionManager, Modal, NativeScrollEvent, NativeSyntheticEvent, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Dimensions, FlatList, Image, InteractionManager, Modal, NativeScrollEvent, NativeSyntheticEvent, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const baseTabs = ['Overview', 'Messages', 'Reactions', 'Shared memories'] as const;
@@ -143,6 +143,7 @@ export default function MemoryTabScreen() {
     const [viewerIndex, setViewerIndex] = useState(0);
     const [viewerData, setViewerData] = useState<MemoryVideoItem[]>([]);
     const [refreshing, setRefreshing] = useState(false);
+    const { alert } = useAlert();
 
     // Convert video messages to memory items
     const messageVideos = useMemo(() => {
@@ -202,7 +203,7 @@ export default function MemoryTabScreen() {
             const createdAt = Date.now();
 
             // In-app alert
-            Alert.alert(
+            alert(
                 'Vaults unlocked',
                 'You just unlocked Vaults. Organize and replay all your memories in one place.',
                 [
@@ -322,7 +323,7 @@ export default function MemoryTabScreen() {
                 try {
                     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
                     if (!permission.granted) {
-                        Alert.alert('Permission required', 'Please allow media library access to upload a memory.');
+                        alert('Permission required', 'Please allow media library access to upload a memory.');
                         return;
                     }
 
@@ -349,7 +350,7 @@ export default function MemoryTabScreen() {
 
                     const asset = result.assets?.[0];
                     if (!asset?.uri) {
-                        Alert.alert('No media selected', 'Please try selecting a photo or video again.');
+                        alert('No media selected', 'Please try selecting a photo or video again.');
                         return;
                     }
 
@@ -358,7 +359,7 @@ export default function MemoryTabScreen() {
                     setTitleModalVisible(true);
                 } catch (err: any) {
                     console.error('[Shared memories] Image picker failed:', err);
-                    Alert.alert('Could not open gallery', err?.message || 'Please try again.');
+                    alert('Could not open gallery', err?.message || 'Please try again.');
                 } finally {
                     !cancelled && setPendingPickerType(null);
                 }
@@ -378,7 +379,7 @@ export default function MemoryTabScreen() {
 
     const handleUploadWithTitle = useCallback(async () => {
         if (!selectedAsset || !memoryTitle.trim()) {
-            Alert.alert('Title required', 'Please enter a title for your memory.');
+            alert('Title required', 'Please enter a title for your memory.');
             return;
         }
 
@@ -392,14 +393,14 @@ export default function MemoryTabScreen() {
             );
 
             if (error) {
-                Alert.alert('Upload failed', error.message);
+                alert('Upload failed', error.message);
             } else {
-                Alert.alert('Success', 'Your memory has been uploaded!');
+                alert('Success', 'Your memory has been uploaded!');
                 setMemoryTitle('');
                 setSelectedAsset(null);
             }
         } catch (err: any) {
-            Alert.alert('Upload failed', err.message || 'An error occurred while uploading.');
+            alert('Upload failed', err.message || 'An error occurred while uploading.');
         }
     }, [selectedAsset, memoryTitle, addSharedMemory]);
 
@@ -409,7 +410,7 @@ export default function MemoryTabScreen() {
 
     const { bottom } = useSafeAreaInsets();
     return (
-        <View style={[styles.screen, { paddingTop: top + 6 }]}>
+        <View style={[styles.screen, { paddingTop: top + 64 }]}>
             <View style={styles.fixedTabContainer}>
                 <Text style={styles.fixedTabTitle}>Memories</Text>
                 <ScrollView
@@ -1430,7 +1431,7 @@ function SharedMemoriesPanel({ sharedMemories, loading, onUpload, refreshing, on
     }, []);
 
     const handleDeleteSharedMemory = useCallback(async (memoryId: string) => {
-        Alert.alert(
+        alert(
             'Delete Shared Memory',
             'Are you sure you want to delete this shared memory? This action cannot be undone.',
             [
@@ -1441,7 +1442,7 @@ function SharedMemoriesPanel({ sharedMemories, loading, onUpload, refreshing, on
                     onPress: async () => {
                         const { error } = await deleteSharedMemory(memoryId);
                         if (error) {
-                            Alert.alert('Error', 'Failed to delete shared memory. Please try again.');
+                            alert('Error', 'Failed to delete shared memory. Please try again.');
                             console.error('Error deleting shared memory:', error);
                         }
                     }
@@ -2376,13 +2377,13 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
         try {
             const { error } = await updateVideoMessageFeatured(videoMessage.id, !isFeatured);
             if (error) {
-                Alert.alert('Error', 'Failed to update featured status. Please try again.');
+                alert('Error', 'Failed to update featured status. Please try again.');
                 console.error('Error updating featured status:', error);
             } else {
                 setShowFeatureDialog(false);
             }
         } catch (err) {
-            Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+            alert('Error', 'An unexpected error occurred. Please try again.');
             console.error('Unexpected error:', err);
         } finally {
             setIsFeaturing(false);
@@ -2412,25 +2413,25 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                 // Delete shared memory
                 const { error } = await deleteSharedMemory(sharedMemory.id);
                 if (error) {
-                    Alert.alert('Error', 'Failed to delete shared memory. Please try again.');
+                    alert('Error', 'Failed to delete shared memory. Please try again.');
                     console.error('Error deleting shared memory:', error);
                 } else {
-                    Alert.alert('Deleted', 'Shared memory deleted successfully.');
+                    alert('Deleted', 'Shared memory deleted successfully.');
                     onClose(); // Close viewer after deletion
                 }
             } else if (!isPhoto && videoMessage) {
                 // Delete video message
                 const { error } = await deleteVideoMessage(videoMessage.id);
                 if (error) {
-                    Alert.alert('Error', 'Failed to delete video message. Please try again.');
+                    alert('Error', 'Failed to delete video message. Please try again.');
                     console.error('Error deleting video message:', error);
                 } else {
-                    Alert.alert('Deleted', 'Video message deleted successfully.');
+                    alert('Deleted', 'Video message deleted successfully.');
                     onClose(); // Close viewer after deletion
                 }
             }
         } catch (err) {
-            Alert.alert('Error', 'An unexpected error occurred. Please try again.');
+            alert('Error', 'An unexpected error occurred. Please try again.');
             console.error('Unexpected error deleting:', err);
         } finally {
             setIsDeleting(false);
@@ -2440,7 +2441,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
 
     const handleDeletePress = useCallback(() => {
         setShowMenu(false); // Close menu first
-        Alert.alert(
+        alert(
             'Delete Memory',
             isPhoto
                 ? 'Are you sure you want to delete this shared memory? This action cannot be undone.'
@@ -2974,7 +2975,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
 const styles = StyleSheet.create({
     screen: {
         flex: 1,
-        backgroundColor: palette.background,
+        backgroundColor: '#fff5f0',
     },
     scrollArea: {
         flex: 1,
@@ -2984,7 +2985,7 @@ const styles = StyleSheet.create({
         paddingBottom: 40,
     },
     fixedTabContainer: {
-        backgroundColor: palette.background,
+        backgroundColor: '#fff5f0',
         paddingHorizontal: 20,
         paddingTop: 12,
         paddingBottom: 14,
@@ -2996,6 +2997,7 @@ const styles = StyleSheet.create({
         fontFamily: BRAND_FONT,
         fontSize: 24,
         color: palette.textPrimary,
+        fontWeight: '800',
     },
     tabBarContainer: {
         marginHorizontal: -20,

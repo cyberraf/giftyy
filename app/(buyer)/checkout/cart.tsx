@@ -1,9 +1,9 @@
-import React from 'react';
-import { View, Text, StyleSheet, FlatList, Image, Pressable } from 'react-native';
-import StepBar from '@/components/StepBar';
-import { useRouter } from 'expo-router';
-import { useCart } from '@/contexts/CartContext';
 import BrandButton from '@/components/BrandButton';
+import StepBar from '@/components/StepBar';
+import { useCart } from '@/contexts/CartContext';
+import { useRouter } from 'expo-router';
+import React from 'react';
+import { FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 
 function priceToNumber(p: string) { const n = parseFloat(p.replace(/[^0-9.]/g, '')); return isNaN(n) ? 0 : n; }
 
@@ -32,7 +32,7 @@ export default function CheckoutCart() {
                     )}
                 />
                 <View style={{ height: 12 }} />
-                <BrandButton title="Choose a card style" onPress={() => router.push('/(buyer)/checkout/design')} />
+                <BrandButton title="Proceed to recipient details" onPress={() => router.push('/(buyer)/checkout/recipient')} />
                 <Pressable style={{ marginTop: 10, alignSelf: 'center' }} onPress={() => router.back()}>
                     <Text style={{ color: '#2563eb', fontWeight: '700' }}>Back to shopping</Text>
                 </Pressable>

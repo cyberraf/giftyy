@@ -3,34 +3,32 @@
  * Redesigned with emotional, nostalgic, and highly optional feel
  */
 
-import React, { useEffect, useCallback, useMemo, useState } from 'react';
+import { useAlert } from '@/contexts/AlertContext';
+import * as ImagePicker from 'expo-image-picker';
+import { useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-	View,
-	Text,
-	ScrollView,
-	StyleSheet,
-	Pressable,
-	KeyboardAvoidingView,
-	Platform,
 	FlatList,
 	Image,
+	KeyboardAvoidingView,
+	Platform,
+	Pressable,
 	RefreshControl,
-	Alert,
+	StyleSheet,
+	Text,
+	View
 } from 'react-native';
-import { useRouter } from 'expo-router';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, {
 	FadeInDown,
 	FadeInUp,
 } from 'react-native-reanimated';
-import * as ImagePicker from 'expo-image-picker';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 import StepBar from '@/components/StepBar';
-import { useCheckout } from '@/lib/CheckoutContext';
-import { GIFTYY_THEME } from '@/constants/giftyy-theme';
-import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { useSharedMemories } from '@/contexts/SharedMemoriesContext';
+import { useCheckout } from '@/lib/CheckoutContext';
 
 export default function SharedMemoryScreen() {
 	const router = useRouter();
@@ -50,6 +48,7 @@ export default function SharedMemoryScreen() {
 	const { sharedMemories, loading, refreshSharedMemories, addSharedMemory } = useSharedMemories();
 	const [selectedId, setSelectedId] = useState<string | undefined>(undefined);
 	const [uploading, setUploading] = useState(false);
+	const { alert } = useAlert();
 
 	// Hydrate selection from checkout state
 	useEffect(() => {
@@ -89,7 +88,7 @@ export default function SharedMemoryScreen() {
 
 	// Handle continue
 	const handleContinue = () => {
-		router.push('/(buyer)/checkout/payment');
+		router.push('/(buyer)/checkout/design');
 	};
 
 	const handleUploadNewMemory = useCallback(async () => {
@@ -97,7 +96,7 @@ export default function SharedMemoryScreen() {
 
 		const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
 		if (!perm.granted) {
-			Alert.alert('Permission needed', 'Please allow access to upload a memory.');
+			alert('Permission needed', 'Please allow access to upload a memory.');
 			return;
 		}
 
@@ -117,7 +116,7 @@ export default function SharedMemoryScreen() {
 		try {
 			const { memory, error } = await addSharedMemory(asset.uri, title, mediaType);
 			if (error) {
-				Alert.alert('Upload failed', error.message);
+				alert('Upload failed', error.message);
 				return;
 			}
 			if (memory?.id) {
@@ -128,10 +127,10 @@ export default function SharedMemoryScreen() {
 				setMemoryText(undefined);
 				setLocalMemoryPhotoUri(undefined);
 				await refreshSharedMemories();
-				Alert.alert('Uploaded', 'Memory added and selected for this order.');
+				alert('Uploaded', 'Memory added and selected for this order.');
 			}
 		} catch (err: any) {
-			Alert.alert('Upload failed', err.message || 'Please try again.');
+			alert('Upload failed', err.message || 'Please try again.');
 		} finally {
 			setUploading(false);
 		}
@@ -154,13 +153,14 @@ export default function SharedMemoryScreen() {
 			behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
 			keyboardVerticalOffset={0}
 		>
-			<StepBar current={5} total={7} label="Add a Shared Memory" />
+			<StepBar current={4} total={7} label="Add a Shared Memory" />
 
 			<FlatList
+				key="single-column"
 				style={styles.scrollView}
 				contentContainerStyle={[
 					styles.scrollContent,
-					{ paddingBottom: BOTTOM_BAR_TOTAL_SPACE + bottom + 120 },
+					{ paddingBottom: bottom + 120 },
 				]}
 				showsVerticalScrollIndicator={false}
 				refreshControl={
@@ -173,14 +173,14 @@ export default function SharedMemoryScreen() {
 				}
 				data={memoryItems}
 				keyExtractor={(item) => item.id}
-				numColumns={2}
-				columnWrapperStyle={memoryItems.length > 0 ? { gap: 12, marginBottom: 12 } : undefined}
+				numColumns={1}
+				ItemSeparatorComponent={() => <View style={{ height: 20 }} />}
 				ListHeaderComponent={
 					<>
 						{/* Intro Block */}
 						<Animated.View style={styles.introBlock} entering={FadeInDown.duration(400)}>
 							<View style={styles.introIconContainer}>
-								<IconSymbol name="heart.circle.fill" size={56} color={GIFTYY_THEME.colors.primary} />
+								<IconSymbol name="heart.fill" size={64} color={GIFTYY_THEME.colors.primary} />
 							</View>
 							<Text style={styles.introTitle}>
 								Choose a shared memory from your vault.
@@ -229,32 +229,22 @@ export default function SharedMemoryScreen() {
 				)}
 			/>
 
-			{/* Sticky Bottom CTA */}
-			<View
-				style={[
-					styles.stickyFooter,
-					{
-						bottom: BOTTOM_BAR_TOTAL_SPACE + bottom,
-					},
-				]}
-			>
-				<View style={styles.buttonContainer}>
+			{/* Floating Bottom CTA */}
+			<View style={[styles.stickyBar, { bottom: bottom > 0 ? bottom + 8 : 24 }]}>
+				<View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
 					<Pressable
-						style={({ pressed }) => [
-							styles.continueButton,
-							pressed && styles.continueButtonPressed,
-						]}
-						onPress={handleContinue}
-					>
-						<Text style={styles.continueButtonText}>
-							{continueButtonText}
-						</Text>
-					</Pressable>
-					<Pressable 
-						style={styles.backButton}
+						style={{ paddingVertical: 12, paddingRight: 16 }}
 						onPress={() => router.back()}
 					>
-						<Text style={styles.backButtonText}>Back to video</Text>
+						<Text style={{ color: '#64748b', fontWeight: '800', fontSize: 13 }}>Back</Text>
+					</Pressable>
+					<Pressable
+						style={{ flex: 1, backgroundColor: GIFTYY_THEME.colors.primary, paddingVertical: 14, borderRadius: 999, alignItems: 'center' }}
+						onPress={handleContinue}
+					>
+						<Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>
+							{continueButtonText}
+						</Text>
 					</Pressable>
 				</View>
 			</View>
@@ -288,6 +278,9 @@ function MemoryLibraryCard({ memory, isSelected, onSelect }: LibraryCardProps) {
 					</View>
 				)}
 				{isSelected && (
+					<View style={styles.selectedOverlay} />
+				)}
+				{isSelected && (
 					<View style={styles.checkCircle}>
 						<IconSymbol name="checkmark" size={16} color="#fff" />
 					</View>
@@ -306,13 +299,14 @@ function MemoryLibraryCard({ memory, isSelected, onSelect }: LibraryCardProps) {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: GIFTYY_THEME.colors.white,
+		backgroundColor: '#FFF5F0', // Premium cream background
 	},
 	scrollView: {
 		flex: 1,
 	},
 	scrollContent: {
 		padding: GIFTYY_THEME.spacing.xl,
+		paddingTop: GIFTYY_THEME.spacing['2xl'],
 	},
 	introBlock: {
 		alignItems: 'center',
@@ -320,54 +314,65 @@ const styles = StyleSheet.create({
 		paddingVertical: GIFTYY_THEME.spacing.xl,
 	},
 	introIconContainer: {
-		marginBottom: GIFTYY_THEME.spacing.lg,
+		marginBottom: GIFTYY_THEME.spacing.xl,
+		shadowColor: GIFTYY_THEME.colors.primary,
+		shadowOffset: { width: 0, height: 8 },
+		shadowOpacity: 0.3,
+		shadowRadius: 16,
+		elevation: 10,
 	},
 	introTitle: {
-		fontSize: GIFTYY_THEME.typography.sizes['2xl'],
-		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+		fontSize: 32,
+		fontWeight: '900',
 		color: GIFTYY_THEME.colors.gray900,
 		textAlign: 'center',
 		marginBottom: GIFTYY_THEME.spacing.md,
-		lineHeight: GIFTYY_THEME.typography.sizes['2xl'] * 1.3,
+		lineHeight: 38,
+		letterSpacing: -0.5,
 	},
 	introSubtitle: {
-		fontSize: GIFTYY_THEME.typography.sizes.base,
+		fontSize: 16,
 		color: GIFTYY_THEME.colors.gray600,
 		textAlign: 'center',
-		lineHeight: GIFTYY_THEME.typography.sizes.base * 1.5,
-		paddingHorizontal: GIFTYY_THEME.spacing.xl,
+		lineHeight: 24,
+		paddingHorizontal: GIFTYY_THEME.spacing.md,
 	},
 	libraryHeader: {
-		marginBottom: GIFTYY_THEME.spacing.lg,
+		marginBottom: GIFTYY_THEME.spacing.xl,
 	},
 	libraryTitle: {
-		fontSize: GIFTYY_THEME.typography.sizes.xl,
-		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+		fontSize: 22,
+		fontWeight: '900',
 		color: GIFTYY_THEME.colors.gray900,
 		marginBottom: 6,
+		letterSpacing: -0.3,
 	},
 	librarySubtitle: {
-		fontSize: GIFTYY_THEME.typography.sizes.sm,
+		fontSize: 15,
 		color: GIFTYY_THEME.colors.gray600,
 	},
 	card: {
 		flex: 1,
-		borderRadius: GIFTYY_THEME.radius.lg,
-		borderWidth: 1,
-		borderColor: GIFTYY_THEME.colors.gray200,
+		borderRadius: 24,
+		borderWidth: 2,
+		borderColor: 'transparent',
 		overflow: 'hidden',
 		backgroundColor: '#fff',
-		...GIFTYY_THEME.shadows.sm,
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 6 },
+		shadowOpacity: 0.1,
+		shadowRadius: 12,
+		elevation: 4,
+		marginBottom: 4,
 	},
 	cardSelected: {
 		borderColor: GIFTYY_THEME.colors.primary,
-		borderWidth: 2,
-		shadowOpacity: 0.25,
+		transform: [{ scale: 0.98 }],
 	},
 	cardMedia: {
 		position: 'relative',
 		width: '100%',
-		aspectRatio: 1.1,
+		aspectRatio: 4 / 3, // Premium landscape ratio
 		backgroundColor: GIFTYY_THEME.colors.gray100,
 	},
 	cardImage: {
@@ -379,100 +384,90 @@ const styles = StyleSheet.create({
 		alignItems: 'center',
 		justifyContent: 'center',
 	},
+	selectedOverlay: {
+		...StyleSheet.absoluteFillObject,
+		backgroundColor: 'rgba(247, 85, 7, 0.15)',
+	},
 	checkCircle: {
 		position: 'absolute',
-		top: 10,
-		right: 10,
-		width: 26,
-		height: 26,
-		borderRadius: 13,
+		top: 16,
+		right: 16,
+		width: 32,
+		height: 32,
+		borderRadius: 16,
 		backgroundColor: GIFTYY_THEME.colors.primary,
 		alignItems: 'center',
 		justifyContent: 'center',
-		...GIFTYY_THEME.shadows.md,
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.2,
+		shadowRadius: 6,
+		elevation: 4,
 	},
 	cardBody: {
-		padding: GIFTYY_THEME.spacing.md,
-		gap: 6,
+		padding: 20,
+		gap: 4,
 	},
 	cardTitle: {
-		fontSize: GIFTYY_THEME.typography.sizes.base,
-		fontWeight: GIFTYY_THEME.typography.weights.bold,
+		fontSize: 18,
+		fontWeight: '800',
 		color: GIFTYY_THEME.colors.gray900,
 	},
 	cardSubtitle: {
-		fontSize: GIFTYY_THEME.typography.sizes.sm,
-		color: GIFTYY_THEME.colors.gray600,
+		fontSize: 14,
+		color: GIFTYY_THEME.colors.gray500,
 	},
 	emptyState: {
 		alignItems: 'center',
 		justifyContent: 'center',
-		paddingVertical: GIFTYY_THEME.spacing['2xl'],
-		gap: 8,
+		paddingVertical: 48,
+		backgroundColor: '#fff',
+		borderRadius: 24,
+		gap: 12,
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 8 },
+		shadowOpacity: 0.05,
+		shadowRadius: 16,
+		elevation: 2,
 	},
 	emptyTitle: {
-		fontSize: GIFTYY_THEME.typography.sizes.lg,
-		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+		fontSize: 20,
+		fontWeight: '800',
 		color: GIFTYY_THEME.colors.gray900,
 	},
 	emptySubtitle: {
-		fontSize: GIFTYY_THEME.typography.sizes.base,
-		color: GIFTYY_THEME.colors.gray600,
+		fontSize: 15,
+		color: GIFTYY_THEME.colors.gray500,
 		textAlign: 'center',
 		paddingHorizontal: GIFTYY_THEME.spacing.lg,
-		lineHeight: 20,
+		lineHeight: 22,
 	},
 	manageButton: {
 		marginTop: 8,
-		paddingHorizontal: GIFTYY_THEME.spacing.xl,
-		paddingVertical: GIFTYY_THEME.spacing.md,
-		borderRadius: GIFTYY_THEME.radius.full,
-		backgroundColor: GIFTYY_THEME.colors.primary,
+		paddingHorizontal: 28,
+		paddingVertical: 14,
+		borderRadius: 999,
+		backgroundColor: GIFTYY_THEME.colors.gray900,
 	},
 	manageButtonText: {
 		color: '#fff',
-		fontWeight: GIFTYY_THEME.typography.weights.bold,
+		fontWeight: '800',
+		fontSize: 15,
 	},
-	stickyFooter: {
+	stickyBar: {
 		position: 'absolute',
-		left: 0,
-		right: 0,
-		backgroundColor: GIFTYY_THEME.colors.white,
-		borderTopWidth: 1,
-		borderTopColor: GIFTYY_THEME.colors.gray200,
-	},
-	buttonContainer: {
-		paddingHorizontal: GIFTYY_THEME.spacing.xl,
-		paddingTop: 12,
-		paddingBottom: 0,
-		marginBottom: 0,
-	},
-	continueButton: {
-		backgroundColor: GIFTYY_THEME.colors.primary,
-		borderRadius: 10,
-		paddingVertical: 14,
-		alignItems: 'center',
-		justifyContent: 'center',
-	},
-	continueButtonPressed: {
-		opacity: 0.9,
-		transform: [{ scale: 0.98 }],
-	},
-	continueButtonText: {
-		color: '#fff',
-		fontSize: 16,
-		fontWeight: GIFTYY_THEME.typography.weights.bold,
-	},
-	backButton: {
-		marginTop: 6,
-		marginBottom: 8,
-		alignSelf: 'center',
-		paddingVertical: 8,
-		paddingHorizontal: 16,
-	},
-	backButtonText: {
-		color: GIFTYY_THEME.colors.gray600,
-		fontWeight: '600',
-		fontSize: 14,
+		left: 16,
+		right: 16,
+		backgroundColor: 'rgba(255, 255, 255, 0.95)',
+		borderRadius: 32,
+		paddingHorizontal: 20,
+		paddingVertical: 16,
+		shadowColor: '#000',
+		shadowOpacity: 0.1,
+		shadowRadius: 24,
+		shadowOffset: { width: 0, height: 8 },
+		elevation: 20,
+		borderWidth: 1,
+		borderColor: 'rgba(0,0,0,0.05)',
 	},
 });

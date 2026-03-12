@@ -1,12 +1,13 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ScrollView, Alert, ActivityIndicator, Modal } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
-import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { supabase } from '@/lib/supabase';
+import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
+import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
+import { useAlert } from '@/contexts/AlertContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/lib/supabase';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const palette = {
     background: '#fff',
@@ -55,6 +56,7 @@ export default function SubscriptionScreen() {
     const { top, bottom } = useSafeAreaInsets();
     const router = useRouter();
     const { user } = useAuth();
+    const { alert } = useAlert();
 
     const [plans, setPlans] = useState<BuyerPlan[]>([]);
     const [loadingPlans, setLoadingPlans] = useState(true);
@@ -177,14 +179,14 @@ export default function SubscriptionScreen() {
 
     const handleChangePlan = async (planId: string) => {
         if (!user) {
-            Alert.alert('Sign in required', 'Please sign in to change your plan.');
+            alert('Sign in required', 'Please sign in to change your plan.');
             return;
         }
         const plan = plans.find(p => p.id === planId);
         if (!plan) return;
 
         if (assignment?.plan_id === planId && assignment.status === 'active') {
-            Alert.alert('Already subscribed', 'You are already on this plan.');
+            alert('Already subscribed', 'You are already on this plan.');
             return;
         }
 
@@ -199,7 +201,7 @@ export default function SubscriptionScreen() {
                     .eq('buyer_id', user.id)
                     .eq('status', 'active');
                 if (cancelError) {
-                    Alert.alert('Error', cancelError.message || 'Unable to update current subscription. Please try again.');
+                    alert('Error', cancelError.message || 'Unable to update current subscription. Please try again.');
                     return;
                 }
             }
@@ -213,7 +215,7 @@ export default function SubscriptionScreen() {
                     billing_period: 'monthly',
                 } as any);
             if (insertError) {
-                Alert.alert('Error', insertError.message || 'Unable to change plan');
+                alert('Error', insertError.message || 'Unable to change plan');
             } else {
                 setConfirmTitle('Success');
                 setConfirmMessage(`You are now on the ${plan.name} plan.`);
@@ -228,7 +230,7 @@ export default function SubscriptionScreen() {
                 setAssignment((data as unknown as Assignment) || null);
             }
         } catch (err: any) {
-            Alert.alert('Error', err?.message || 'Unable to change plan');
+            alert('Error', err?.message || 'Unable to change plan');
         } finally {
             setIsChangingPlan(false);
             setSelectedPlan(null);
@@ -237,10 +239,10 @@ export default function SubscriptionScreen() {
 
     const handleCancelSubscription = () => {
         if (!user) {
-            Alert.alert('Sign in required', 'Please sign in to manage your subscription.');
+            alert('Sign in required', 'Please sign in to manage your subscription.');
             return;
         }
-        Alert.alert(
+        alert(
             'Cancel subscription',
             'Are you sure you want to cancel your subscription? You will be moved to the Free plan.',
             [
@@ -258,7 +260,7 @@ export default function SubscriptionScreen() {
                                 .eq('buyer_id', user.id)
                                 .eq('status', 'active');
                             if (cancelError) {
-                                Alert.alert('Error', cancelError.message || 'Unable to cancel subscription. Please try again.');
+                                alert('Error', cancelError.message || 'Unable to cancel subscription. Please try again.');
                                 return;
                             }
 
@@ -276,7 +278,7 @@ export default function SubscriptionScreen() {
                                 }
                             }
                             if (!free) {
-                                Alert.alert('Error', 'No Free plan configured. Please contact support.');
+                                alert('Error', 'No Free plan configured. Please contact support.');
                                 return;
                             }
 
@@ -290,7 +292,7 @@ export default function SubscriptionScreen() {
                                     billing_period: 'monthly',
                                 } as any);
                             if (insertError) {
-                                Alert.alert('Error', insertError.message || 'Unable to activate Free plan.');
+                                alert('Error', insertError.message || 'Unable to activate Free plan.');
                                 return;
                             }
 
@@ -308,7 +310,7 @@ export default function SubscriptionScreen() {
                             setConfirmMessage('You are now on the Free plan.');
                             setConfirmVisible(true);
                         } catch (err: any) {
-                            Alert.alert('Error', err?.message || 'Unable to cancel subscription.');
+                            alert('Error', err?.message || 'Unable to cancel subscription.');
                         } finally {
                             setIsChangingPlan(false);
                         }
@@ -319,7 +321,7 @@ export default function SubscriptionScreen() {
     };
 
     const handleToggleAutoRenew = () => {
-        Alert.alert('Coming soon', 'Auto-renew management is coming soon.');
+        alert('Coming soon', 'Auto-renew management is coming soon.');
     };
 
     const formatDate = (dateString: string) => {
@@ -403,7 +405,7 @@ export default function SubscriptionScreen() {
     };
 
     return (
-        <View style={[styles.screen, { paddingTop: top + 8 }]}>
+        <View style={[styles.screen, { paddingTop: top + 64 }]}>
             <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20 }]}>
                 {/* Header */}
                 <View style={styles.header}>
@@ -621,7 +623,7 @@ export default function SubscriptionScreen() {
 const styles = StyleSheet.create({
     screen: {
         flex: 1,
-        backgroundColor: palette.background,
+        backgroundColor: 'transparent',
     },
     content: {
         padding: 20,

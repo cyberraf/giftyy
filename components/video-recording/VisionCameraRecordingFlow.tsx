@@ -45,6 +45,8 @@ export type VideoRecordingFlowProps = {
   initialDurationMs?: number;
   /** Called when user chooses to retake and discard the video */
   onRetake?: () => void;
+  /** First name of the recipient for personalized copy */
+  recipientName?: string;
 };
 
 export function VisionCameraRecordingFlow({
@@ -53,6 +55,7 @@ export function VisionCameraRecordingFlow({
   initialVideoUri,
   initialDurationMs,
   onRetake,
+  recipientName,
 }: VideoRecordingFlowProps) {
   const didApplyInitialRef = useRef(false);
   const [screen, setScreen] = useState<Screen>(() => (initialVideoUri ? 'preview' : 'welcome'));
@@ -330,22 +333,43 @@ export function VisionCameraRecordingFlow({
 
   if (screen === 'welcome') {
     return (
-      <View style={styles.container}>
-        <LinearGradient colors={[GIFTYY_THEME.colors.cream, GIFTYY_THEME.colors.softPink]} style={StyleSheet.absoluteFill} />
-        <Animated.View entering={FadeInDown.duration(400)} style={styles.welcomeContent}>
-          <View style={styles.sparkleContainer}>
-            <IconSymbol name="sparkles" size={48} color={PRIMARY + '40'} />
-          </View>
-          <Text style={styles.welcomeTitle}>Record Your Video Message 💛</Text>
-          <Text style={styles.welcomeSubtext}>Share your feelings in up to 30 seconds.</Text>
-          <Pressable onPress={handleRequestPermissions} style={styles.startButton}>
-            <LinearGradient colors={[PRIMARY, GIFTYY_THEME.colors.primaryLight]} style={styles.startButtonGradient}>
-              <Text style={styles.startButtonText}>Start Recording</Text>
+      <View style={[styles.container, { backgroundColor: '#0F1014' }]}>
+        <Animated.View entering={FadeInDown.duration(400)} style={styles.welcomeContentDark}>
+          <View style={styles.darkCameraIconOuter}>
+            <LinearGradient colors={['#F97316', '#EA580C']} style={styles.darkCameraIconInner}>
+              <IconSymbol name="video.fill" size={36} color="#fff" />
             </LinearGradient>
+          </View>
+
+          <Text style={styles.darkStepText}>STEP 4 OF 7</Text>
+          <Text style={styles.darkWelcomeTitle}>Record Your{'\n'}Video Message</Text>
+          <Text style={styles.darkWelcomeSubtext}>
+            A personal touch that {recipientName || 'they'} will treasure forever.
+          </Text>
+
+          <View style={styles.darkFeaturesRow}>
+            <View style={styles.darkFeatureItem}>
+              <IconSymbol name="clock" size={14} color="#F97316" />
+              <Text style={styles.darkFeatureText}>Up to 30s</Text>
+            </View>
+            <View style={styles.darkFeatureDivider} />
+            <View style={styles.darkFeatureItem}>
+              <Text style={styles.darkFeatureText}>Private</Text>
+            </View>
+            <View style={styles.darkFeatureDivider} />
+            <View style={styles.darkFeatureItem}>
+              <IconSymbol name="heart.fill" size={14} color="#F97316" />
+              <Text style={styles.darkFeatureText}>Heartfelt</Text>
+            </View>
+          </View>
+
+          <Pressable onPress={handleRequestPermissions} style={styles.darkStartButton}>
+            <IconSymbol name="video.fill" size={20} color="#fff" />
+            <Text style={styles.darkStartButtonText}>Start Recording</Text>
           </Pressable>
           {onCancel && (
-            <Pressable onPress={onCancel} style={styles.cancelButton}>
-              <Text style={styles.cancelButtonText}>Back</Text>
+            <Pressable onPress={onCancel} style={styles.darkCancelButton}>
+              <Text style={styles.darkCancelButtonText}>Back</Text>
             </Pressable>
           )}
         </Animated.View>
@@ -355,19 +379,18 @@ export function VisionCameraRecordingFlow({
 
   if (screen === 'permission') {
     return (
-      <View style={styles.container}>
-        <LinearGradient colors={[GIFTYY_THEME.colors.cream, GIFTYY_THEME.colors.softPink]} style={StyleSheet.absoluteFill} />
-        <Animated.View entering={FadeIn.duration(300)} style={styles.permissionContent}>
-          <IconSymbol name="camera.fill" size={64} color={PRIMARY} />
-          <Text style={styles.permissionTitle}>Camera & Microphone Access Required</Text>
-          <Text style={styles.permissionText}>
+      <View style={[styles.container, { backgroundColor: '#0F1014' }]}>
+        <Animated.View entering={FadeIn.duration(300)} style={styles.welcomeContentDark}>
+          <IconSymbol name="camera.fill" size={64} color="#F97316" style={{ marginBottom: 24 }} />
+          <Text style={styles.darkWelcomeTitle}>Camera & Mic{'\n'}Access Required</Text>
+          <Text style={styles.darkWelcomeSubtext}>
             We need access to your camera and microphone to record your heartfelt video message.
           </Text>
-          <Pressable onPress={handleRequestPermissions} style={styles.enableButton}>
-            <Text style={styles.enableButtonText}>Enable Access</Text>
+          <Pressable onPress={handleRequestPermissions} style={styles.darkStartButton}>
+            <Text style={styles.darkStartButtonText}>Enable Access</Text>
           </Pressable>
-          <Pressable onPress={() => Linking.openSettings()} style={styles.settingsButton}>
-            <Text style={styles.settingsButtonText}>Open Settings</Text>
+          <Pressable onPress={() => Linking.openSettings()} style={styles.darkCancelButton}>
+            <Text style={styles.darkCancelButtonText}>Open Settings</Text>
           </Pressable>
         </Animated.View>
       </View>
@@ -486,22 +509,20 @@ const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
-  welcomeContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  sparkleContainer: { marginBottom: 24 },
-  welcomeTitle: { fontSize: 32, fontWeight: '900', color: GIFTYY_THEME.colors.gray900, textAlign: 'center', marginBottom: 12 },
-  welcomeSubtext: { fontSize: 18, color: GIFTYY_THEME.colors.gray600, textAlign: 'center', marginBottom: 48 },
-  startButton: { width: '100%', borderRadius: 20, overflow: 'hidden', marginBottom: 16 },
-  startButtonGradient: { paddingVertical: 18, paddingHorizontal: 32, alignItems: 'center', justifyContent: 'center' },
-  startButtonText: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  cancelButton: { paddingVertical: 12, paddingHorizontal: 24 },
-  cancelButtonText: { color: GIFTYY_THEME.colors.gray600, fontSize: 16, fontWeight: '600' },
-  permissionContent: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 },
-  permissionTitle: { fontSize: 24, fontWeight: '900', color: GIFTYY_THEME.colors.gray900, textAlign: 'center', marginTop: 24, marginBottom: 16 },
-  permissionText: { fontSize: 16, color: GIFTYY_THEME.colors.gray600, textAlign: 'center', marginBottom: 32, lineHeight: 24 },
-  enableButton: { width: '100%', backgroundColor: PRIMARY, paddingVertical: 18, paddingHorizontal: 32, borderRadius: 20, alignItems: 'center', marginBottom: 16 },
-  enableButtonText: { color: '#fff', fontSize: 18, fontWeight: '800' },
-  settingsButton: { paddingVertical: 12, paddingHorizontal: 24 },
-  settingsButtonText: { color: GIFTYY_THEME.colors.gray600, fontSize: 16, fontWeight: '600' },
+  welcomeContentDark: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 28 },
+  darkCameraIconOuter: { width: 220, height: 220, borderRadius: 110, backgroundColor: 'rgba(255, 255, 255, 0.05)', justifyContent: 'center', alignItems: 'center', marginBottom: 24, marginTop: 40 },
+  darkCameraIconInner: { width: 80, height: 80, borderRadius: 40, justifyContent: 'center', alignItems: 'center', shadowColor: '#F97316', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 10, elevation: 6 },
+  darkStepText: { fontSize: 11, fontWeight: '800', color: '#F97316', letterSpacing: 2.5, marginBottom: 12 },
+  darkWelcomeTitle: { fontSize: 36, fontWeight: '900', color: '#fff', textAlign: 'center', marginBottom: 20, lineHeight: 42, letterSpacing: -0.5 },
+  darkWelcomeSubtext: { fontSize: 16, color: '#A1A1AA', textAlign: 'center', marginBottom: 40, paddingHorizontal: 10, lineHeight: 24 },
+  darkFeaturesRow: { flexDirection: 'row', alignItems: 'center', backgroundColor: '#1C1C1E', borderRadius: 20, paddingVertical: 18, paddingHorizontal: 20, marginBottom: 48, width: '100%', borderWidth: 1, borderColor: 'rgba(255, 255, 255, 0.05)' },
+  darkFeatureItem: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 },
+  darkFeatureText: { color: '#E4E4E7', fontSize: 13, fontWeight: '600' },
+  darkFeatureDivider: { width: 1, height: 20, backgroundColor: '#3F3F46' },
+  darkStartButton: { width: '100%', backgroundColor: '#F97316', paddingVertical: 20, borderRadius: 24, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, shadowColor: '#F97316', shadowOffset: { width: 0, height: 8 }, shadowOpacity: 0.3, shadowRadius: 16, elevation: 8, marginBottom: 16 },
+  darkStartButtonText: { color: '#fff', fontSize: 18, fontWeight: '800' },
+  darkCancelButton: { paddingVertical: 14, paddingHorizontal: 24 },
+  darkCancelButtonText: { color: '#A1A1AA', fontSize: 16, fontWeight: '600' },
   countdownContainer: { flex: 1, backgroundColor: '#000' },
   countdownOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(0, 0, 0, 0.5)' },
   countdownNumber: { fontSize: 120, fontWeight: '900', color: PRIMARY },

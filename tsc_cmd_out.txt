@@ -1,0 +1,11 @@
+app/(buyer)/checkout/recipient.tsx(1,36): error TS2307: Cannot find module '@/components/recipients/RecipientFormModal' or its corresponding type declarations.
+app/(buyer)/checkout/recipient.tsx(2,21): error TS2307: Cannot find module '@/components/StepBar' or its corresponding type declarations.
+app/(buyer)/checkout/recipient.tsx(3,28): error TS2307: Cannot find module '@/components/ui/icon-symbol' or its corresponding type declarations.
+app/(buyer)/checkout/recipient.tsx(4,40): error TS2307: Cannot find module '@/constants/bottom-bar' or its corresponding type declarations.
+app/(buyer)/checkout/recipient.tsx(5,30): error TS2307: Cannot find module '@/constants/giftyy-theme' or its corresponding type declarations.
+app/(buyer)/checkout/recipient.tsx(6,25): error TS2307: Cannot find module '@/contexts/CartContext' or its corresponding type declarations.
+app/(buyer)/checkout/recipient.tsx(7,29): error TS2307: Cannot find module '@/contexts/ProductsContext' or its corresponding type declarations.
+app/(buyer)/checkout/recipient.tsx(8,31): error TS2307: Cannot find module '@/contexts/RecipientsContext' or its corresponding type declarations.
+app/(buyer)/checkout/recipient.tsx(9,29): error TS2307: Cannot find module '@/lib/CheckoutContext' or its corresponding type declarations.
+app/(buyer)/checkout/recipient.tsx(10,47): error TS2307: Cannot find module '@/lib/shipping-utils' or its corresponding type declarations.
+app/(buyer)/checkout/recipient.tsx(11,26): error TS2307: Cannot find module '@/lib/supabase' or its corresponding type declarations.
