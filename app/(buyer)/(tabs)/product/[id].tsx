@@ -20,7 +20,7 @@ import { useCheckout } from '@/lib/CheckoutContext';
 import { logProductAnalyticsEvent } from '@/lib/product-analytics';
 import { supabase } from '@/lib/supabase';
 import { getVendorsInfo } from '@/lib/vendor-utils';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	ActivityIndicator,
@@ -72,7 +72,8 @@ type VariationOption = {
 
 export default function ProductDetailsScreen() {
 	const router = useRouter();
-	const params = useLocalSearchParams<{ id?: string }>();
+	const params = useLocalSearchParams<{ id?: string; returnTo?: string }>();
+	const pathname = usePathname();
 	const productId = params.id;
 	const { top, bottom } = useSafeAreaInsets();
 	const { videoUri, setVideoUri } = useCheckout();
@@ -1134,7 +1135,10 @@ export default function ProductDetailsScreen() {
 							vendorId={vendor.id}
 							vendorName={vendor.storeName}
 							profileImageUrl={vendor.profileImageUrl}
-							onPress={() => router.push(`/(buyer)/vendor/${vendor.id}`)}
+							onPress={() => router.push({
+								pathname: '/(buyer)/vendor/[id]' as any,
+								params: { id: vendor.id, returnTo: pathname as any }
+							})}
 							loading={vendorLoading}
 						/>
 					</Animated.View>

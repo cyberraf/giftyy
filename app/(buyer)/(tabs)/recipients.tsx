@@ -325,7 +325,7 @@ export default function RecipientsScreen() {
 	const { top, bottom } = useSafeAreaInsets();
 	const router = useRouter();
 	const { profile: authProfile, user } = useAuth();
-	const { recipients, loading, refreshRecipients, approveConnection, rejectConnection, addRecipient, deleteRecipient } = useRecipients();
+	const { recipients, loading, refreshRecipients, approveConnection, rejectConnection, addRecipient, deleteRecipient, syncContacts } = useRecipients();
 
 	const { upcomingOccasions, myProfileOccasions, refreshOccasions, myPreferences, myProfileId } = useHome();
 
@@ -613,13 +613,16 @@ export default function RecipientsScreen() {
 	const onRefresh = React.useCallback(async () => {
 		setRefreshing(true);
 		try {
-			await refreshRecipients();
+			await Promise.all([
+				refreshRecipients(),
+				syncContacts(true)
+			]);
 		} catch (error) {
 			console.error('Error refreshing recipients:', error);
 		} finally {
 			setRefreshing(false);
 		}
-	}, [refreshRecipients]);
+	}, [refreshRecipients, syncContacts]);
 
 	const closeModal = () => {
 		setRecipientModalVisible(false);
@@ -710,24 +713,30 @@ export default function RecipientsScreen() {
 			>
 
 				<View style={styles.tabContainer}>
-					<Pressable
-						onPress={() => setActiveTab('circle')}
-						style={[styles.tab, activeTab === 'circle' && styles.activeTab]}
-					>
-						<Text style={[styles.tabText, activeTab === 'circle' && styles.activeTabText]}>My Circle</Text>
-					</Pressable>
-					<Pressable
-						onPress={() => setActiveTab('occasions')}
-						style={[styles.tab, activeTab === 'occasions' && styles.activeTab]}
-					>
-						<Text style={[styles.tabText, activeTab === 'occasions' && styles.activeTabText]}>My Occasions</Text>
-					</Pressable>
-					<Pressable
-						onPress={() => setActiveTab('preferences')}
-						style={[styles.tab, activeTab === 'preferences' && styles.activeTab]}
-					>
-						<Text style={[styles.tabText, activeTab === 'preferences' && styles.activeTabText]}>My Preferences</Text>
-					</Pressable>
+					<TourAnchor step="circle_tab">
+						<Pressable
+							onPress={() => setActiveTab('circle')}
+							style={[styles.tab, activeTab === 'circle' && styles.activeTab]}
+						>
+							<Text style={[styles.tabText, activeTab === 'circle' && styles.activeTabText]}>My Circle</Text>
+						</Pressable>
+					</TourAnchor>
+					<TourAnchor step="occasions_tab">
+						<Pressable
+							onPress={() => setActiveTab('occasions')}
+							style={[styles.tab, activeTab === 'occasions' && styles.activeTab]}
+						>
+							<Text style={[styles.tabText, activeTab === 'occasions' && styles.activeTabText]}>My Occasions</Text>
+						</Pressable>
+					</TourAnchor>
+					<TourAnchor step="preferences_tab">
+						<Pressable
+							onPress={() => setActiveTab('preferences')}
+							style={[styles.tab, activeTab === 'preferences' && styles.activeTab]}
+						>
+							<Text style={[styles.tabText, activeTab === 'preferences' && styles.activeTabText]}>My Preferences</Text>
+						</Pressable>
+					</TourAnchor>
 				</View>
 
 				{activeTab === 'circle' ? (
@@ -766,30 +775,28 @@ export default function RecipientsScreen() {
 							</View>
 						)}
 
-						<TourAnchor step="recipients_intro">
-							<View style={styles.welcomeSection}>
-								<View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-									<View>
-										<Text style={styles.welcomeTitle}>Your Gifting Circle</Text>
-										<Text style={styles.welcomeSubtitle}>Browse and manage your recipients.</Text>
-									</View>
-									<Pressable
-										style={[styles.syncButton, isSyncing && { opacity: 0.7 }]}
-										onPress={handleSyncContacts}
-										disabled={isSyncing}
-									>
-										<IconSymbol
-											name={isSyncing ? "arrow.2.circlepath" : "person.badge.plus"}
-											size={18}
-											color="#FFF"
-										/>
-										<Text style={styles.syncButtonText}>
-											{isSyncing ? 'Syncing...' : 'Find Friends'}
-										</Text>
-									</Pressable>
+						<View style={styles.welcomeSection}>
+							<View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+								<View>
+									<Text style={styles.welcomeTitle}>Your Gifting Circle</Text>
+									<Text style={styles.welcomeSubtitle}>Browse and manage your recipients.</Text>
 								</View>
+								<Pressable
+									style={[styles.syncButton, isSyncing && { opacity: 0.7 }]}
+									onPress={handleSyncContacts}
+									disabled={isSyncing}
+								>
+									<IconSymbol
+										name={isSyncing ? "arrow.2.circlepath" : "person.badge.plus"}
+										size={18}
+										color="#FFF"
+									/>
+									<Text style={styles.syncButtonText}>
+										{isSyncing ? 'Syncing...' : 'Find Friends'}
+									</Text>
+								</Pressable>
 							</View>
-						</TourAnchor>
+						</View>
 
 						{groupedRecipients.map(([category, items]) => (
 							<View key={category} style={styles.section}>
@@ -1265,30 +1272,38 @@ const styles = StyleSheet.create({
 	},
 	tabContainer: {
 		flexDirection: 'row',
-		backgroundColor: GIFTYY_THEME.colors.gray100,
-		borderRadius: 16,
-		padding: 4,
-		marginHorizontal: scale(16),
-		marginBottom: verticalScale(24),
+		backgroundColor: 'rgba(47,35,24,0.04)',
+		borderRadius: 20,
+		padding: 6,
+		marginHorizontal: scale(20),
+		marginBottom: verticalScale(28),
+		borderWidth: 1,
+		borderColor: 'rgba(47,35,24,0.02)',
 	},
 	tab: {
 		flex: 1,
-		paddingVertical: 10,
+		paddingVertical: 12,
+		paddingHorizontal: 8,
 		alignItems: 'center',
-		borderRadius: 12,
+		justifyContent: 'center',
+		borderRadius: 16,
 	},
 	activeTab: {
 		backgroundColor: '#FFF',
-		...GIFTYY_THEME.shadows.sm,
+		...GIFTYY_THEME.shadows.md,
+		borderWidth: 1,
+		borderColor: 'rgba(47,35,24,0.03)',
 	},
 	tabText: {
 		fontSize: 14,
-		fontWeight: '600',
-		color: GIFTYY_THEME.colors.gray500,
+		fontFamily: 'Outfit-SemiBold',
+		color: 'rgba(47,35,24,0.45)',
+		letterSpacing: -0.2,
 	},
 	activeTabText: {
-		color: GIFTYY_THEME.colors.gray900,
-		fontWeight: '700',
+		color: '#2F2318',
+		fontFamily: 'Outfit-Bold',
+		fontSize: 15,
 	},
 	profileTabContent: {
 		paddingHorizontal: scale(24),

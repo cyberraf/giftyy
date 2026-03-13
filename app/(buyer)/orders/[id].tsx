@@ -82,18 +82,6 @@ export default function OrderDetailsScreen() {
   if (loading) {
     return (
       <View style={styles.screen}>
-        <Stack.Screen
-          options={{
-            title: 'Order details',
-            headerStyle: { backgroundColor: palette.background },
-            headerShadowVisible: false,
-            headerLeft: () => (
-              <Pressable onPress={() => router.back()} style={styles.headerBackButton}>
-                <Text style={styles.headerBackLabel}>Back</Text>
-              </Pressable>
-            ),
-          }}
-        />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
           <ActivityIndicator size="large" color={BRAND_COLOR} />
         </View>
@@ -104,18 +92,6 @@ export default function OrderDetailsScreen() {
   if (!order) {
     return (
       <View style={styles.screen}>
-        <Stack.Screen
-          options={{
-            title: 'Order details',
-            headerStyle: { backgroundColor: palette.background },
-            headerShadowVisible: false,
-            headerLeft: () => (
-              <Pressable onPress={() => router.back()} style={styles.headerBackButton}>
-                <Text style={styles.headerBackLabel}>Back</Text>
-              </Pressable>
-            ),
-          }}
-        />
         <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
           <Text style={{ color: palette.textSecondary, textAlign: 'center' }}>Order not found</Text>
         </View>
@@ -143,25 +119,7 @@ export default function OrderDetailsScreen() {
 
   return (
     <View style={styles.screen}>
-      <Stack.Screen
-        options={{
-          title: 'Order details',
-          headerStyle: { backgroundColor: palette.background },
-          headerShadowVisible: false,
-          headerLeft: () => (
-            <Pressable onPress={() => router.back()} style={styles.headerBackButton}>
-              <Text style={styles.headerBackLabel}>Back</Text>
-            </Pressable>
-          ),
-        }}
-      />
-      <ScrollView contentContainerStyle={[styles.content, { paddingTop: top + 12, paddingBottom: 96 + bottom }]}>
-        <View style={styles.inlineHeader}>
-          <Pressable onPress={() => router.back()} style={styles.inlineBackButton}>
-            <Text style={styles.inlineBackLabel}>Back</Text>
-          </Pressable>
-          <Text style={styles.inlineTitle}>Order details</Text>
-        </View>
+      <ScrollView contentContainerStyle={[styles.content, { paddingTop: top + 70, paddingBottom: 96 + bottom }]}>
         <View style={styles.headerCard}>
           <Text style={styles.orderCode}>Order #{orderCode}</Text>
           <View style={styles.statusPill}>
@@ -247,35 +205,6 @@ const styles = StyleSheet.create({
   content: {
     padding: 20,
     gap: 18,
-  },
-  inlineHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 4,
-  },
-  inlineBackButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 6,
-  },
-  inlineBackLabel: {
-    color: BRAND_COLOR,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  inlineTitle: {
-    fontFamily: BRAND_FONT,
-    color: palette.textPrimary,
-    fontSize: 18,
-    fontWeight: '800',
-  },
-  headerBackButton: {
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-  },
-  headerBackLabel: {
-    color: BRAND_COLOR,
-    fontWeight: '700',
   },
   headerCard: {
     borderRadius: 22,

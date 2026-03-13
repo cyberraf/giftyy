@@ -273,7 +273,7 @@ export default function InviteRecipientModal() {
                         accessibilityRole="button"
                         accessibilityLabel="Send invite"
                     >
-                        <Text style={styles.primaryButtonText}>Send invite</Text>
+                        <Text style={styles.primaryButtonText}>Send invite to Giftyy</Text>
                     </Pressable>
                     <Pressable
                         style={styles.secondaryButton}

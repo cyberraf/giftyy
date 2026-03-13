@@ -1,5 +1,6 @@
 import { MemoryThumbnail } from '@/components/memory/MemoryThumbnail';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { TourAnchor } from '@/components/tour/TourAnchor';
 import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
 import { useAlert } from '@/contexts/AlertContext';
@@ -411,24 +412,26 @@ export default function MemoryTabScreen() {
     const { bottom } = useSafeAreaInsets();
     return (
         <View style={[styles.screen, { paddingTop: top + 64 }]}>
-            <View style={styles.fixedTabContainer}>
-                <Text style={styles.fixedTabTitle}>Memories</Text>
-                <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    contentContainerStyle={styles.tabBar}
-                    style={styles.tabBarContainer}
-                >
-                    {tabs.map((tab) => {
-                        const isActive = tab === activeTab;
-                        return (
-                            <Pressable key={tab} style={[styles.tabPill, isActive && styles.tabPillActive]} onPress={() => setActiveTab(tab)}>
-                                <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]} numberOfLines={1}>{tab}</Text>
-                            </Pressable>
-                        );
-                    })}
-                </ScrollView>
-            </View>
+            <TourAnchor step="memories_intro">
+                <View style={styles.fixedTabContainer}>
+                    <Text style={styles.fixedTabTitle}>Memories</Text>
+                    <ScrollView
+                        horizontal
+                        showsHorizontalScrollIndicator={false}
+                        contentContainerStyle={styles.tabBar}
+                        style={styles.tabBarContainer}
+                    >
+                        {tabs.map((tab) => {
+                            const isActive = tab === activeTab;
+                            return (
+                                <Pressable key={tab} style={[styles.tabPill, isActive && styles.tabPillActive]} onPress={() => setActiveTab(tab)}>
+                                    <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]} numberOfLines={1}>{tab}</Text>
+                                </Pressable>
+                            );
+                        })}
+                    </ScrollView>
+                </View>
+            </TourAnchor>
             {activeTab === 'Messages' ? (
                 <MessagesPanel
                     messageVideos={messageVideos}
@@ -482,17 +485,17 @@ export default function MemoryTabScreen() {
                     {activeTab === 'Overview' && (
                         <View style={styles.heroContainer}>
                             <View style={styles.heroCard}>
-                                <View style={styles.heroHeaderSection}>
-                                    <View style={styles.heroTitleRow}>
-                                        <Text style={styles.heroHeading}>Memories</Text>
-                                        {stats.new > 0 && (
-                                            <View style={styles.heroNewBadge}>
-                                                <Text style={styles.heroNewBadgeText}>{stats.new} new</Text>
-                                            </View>
-                                        )}
+                                    <View style={styles.heroHeaderSection}>
+                                        <View style={styles.heroTitleRow}>
+                                            <Text style={styles.heroHeading}>Memories</Text>
+                                            {stats.new > 0 && (
+                                                <View style={styles.heroNewBadge}>
+                                                    <Text style={styles.heroNewBadgeText}>{stats.new} new</Text>
+                                                </View>
+                                            )}
+                                        </View>
+                                        <Text style={styles.heroSubtitle}>{description}</Text>
                                     </View>
-                                    <Text style={styles.heroSubtitle}>{description}</Text>
-                                </View>
 
                                 <View style={styles.heroStatsGrid}>
                                     <View style={styles.heroStatItem}>

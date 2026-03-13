@@ -46,7 +46,7 @@ type RecipientsContextValue = {
     recipients: Recipient[];
     loading: boolean;
     setRecipients: (recipients: Recipient[]) => void;
-    addRecipient: (recipient: any) => Promise<{ error: Error | null }>;
+    addRecipient: (recipient: any) => Promise<{ id?: string; error: Error | null }>;
     updateRecipient: (id: string, updates: any) => Promise<{ error: Error | null }>;
     deleteRecipient: (id: string) => Promise<{ error: Error | null }>;
     refreshRecipients: () => Promise<void>;
@@ -236,10 +236,10 @@ export function RecipientsProvider({ children }: { children: React.ReactNode }) 
             }
 
             await refreshRecipients();
-            return { error: null };
+            return { id: data?.profileId, error: null };
         } catch (err: any) {
             console.error('[RecipientsContext] Error adding recipient:', err);
-            return { error: err };
+            return { id: undefined, error: err };
         }
     }, [user, refreshRecipients]);
 
@@ -328,14 +328,50 @@ export function RecipientsProvider({ children }: { children: React.ReactNode }) 
             // Normalize for matching
             const normalizedPhones = phoneNumbers.map(p => normalizeForMatching(p));
 
-            // 3. Match against recipient_profiles table by phone/email
-            const { data: matchedProfiles, error: matchErr } = await supabase
-                .from('recipient_profiles')
-                .select('id, full_name, phone, email, avatar_url, user_id, is_claimed');
-
-            if (matchErr) {
-                console.error('[syncContacts] Error matching profiles:', matchErr);
-                // Fall through and show device contacts without matching
+            // optimization: Query profiles matching the phones of device contacts
+            // We include both raw digits and '+' prefixed versions to be safe
+            const searchTerms = [
+                ...normalizedPhones,
+                ...normalizedPhones.map(p => `+${p}`)
+            ];
+            
+            let matchedProfiles: any[] = [];
+            
+            // Query by phone in batches to avoid URL length issues or Supabase limits
+            const batchSize = 100;
+            for (let i = 0; i < searchTerms.length; i += batchSize) {
+                const batch = searchTerms.slice(i, i + batchSize);
+                const { data: phoneBatch, error: phoneErr } = await supabase
+                    .from('recipient_profiles')
+                    .select('id, full_name, phone, email, avatar_url, user_id, is_claimed')
+                    .in('phone', batch); 
+                
+                if (phoneErr) console.warn('[syncContacts] Phone match batch error:', phoneErr);
+                if (phoneBatch) matchedProfiles = [...matchedProfiles, ...phoneBatch];
+            }
+            
+            // Also matching by email if available in device contacts
+            const emails = deviceContacts.flatMap(c => c.emails || []).filter(Boolean);
+            if (emails.length > 0) {
+                for (let i = 0; i < emails.length; i += batchSize) {
+                    const batch = emails.slice(i, i + batchSize);
+                    const { data: emailBatch, error: emailErr } = await supabase
+                        .from('recipient_profiles')
+                        .select('id, full_name, phone, email, avatar_url, user_id, is_claimed')
+                        .in('email', batch);
+                    
+                    if (emailErr) console.warn('[syncContacts] Email match batch error:', emailErr);
+                    if (emailBatch) {
+                        // Merge without duplicates
+                        const existingIds = new Set(matchedProfiles.map(p => p.id));
+                        emailBatch.forEach(p => {
+                            if (!existingIds.has(p.id)) {
+                                matchedProfiles.push(p);
+                                existingIds.add(p.id);
+                            }
+                        });
+                    }
+                }
             }
 
             // 4. Fetch existing connections for this user
@@ -352,7 +388,9 @@ export function RecipientsProvider({ children }: { children: React.ReactNode }) 
                     // Store both the raw normalized and also try different variations
                     const normalized = normalizeForMatching(p.phone);
                     profilesByPhone.set(normalized, p);
-                    // Also store last 10 digits for more lenient matching
+                    profilesByPhone.set(`+${normalized}`, p);
+                    
+                    // Also store last 10 digits for more lenient matching (extremely important for international vs local)
                     if (normalized.length >= 10) {
                         profilesByPhone.set(normalized.slice(-10), p);
                     }
@@ -374,6 +412,12 @@ export function RecipientsProvider({ children }: { children: React.ReactNode }) 
                 const normalizedPhone = contact.phone ? normalizeForMatching(contact.phone) : '';
                 // Try full number match first, then last-10-digits match
                 let profile = normalizedPhone ? profilesByPhone.get(normalizedPhone) : null;
+                
+                // Extra check for '+' prefix if it was stored that way in the map
+                if (!profile && normalizedPhone) {
+                    profile = profilesByPhone.get(`+${normalizedPhone}`);
+                }
+
                 if (!profile && normalizedPhone.length >= 10) {
                     profile = profilesByPhone.get(normalizedPhone.slice(-10));
                 }
@@ -425,6 +469,14 @@ export function RecipientsProvider({ children }: { children: React.ReactNode }) 
             setIsSyncingContacts(false);
         }
     }, [user]);
+
+    // Proactive background contact sync on app load / login
+    useEffect(() => {
+        if (user && !syncedContacts.length && !syncingRef.current) {
+            console.log('[RecipientsContext] Starting proactive background sync');
+            syncContacts();
+        }
+    }, [user, syncContacts, syncedContacts.length]);
 
     const value = useMemo(() => ({
         recipients,

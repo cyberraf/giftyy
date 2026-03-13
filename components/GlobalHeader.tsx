@@ -1,3 +1,5 @@
+import { TourAnchor } from '@/components/tour/TourAnchor';
+import { LinearGradient } from 'expo-linear-gradient';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -48,7 +50,7 @@ export default function GlobalHeader() {
 
     const handleNavPress = (path: string) => {
         handleToggleMenu();
-        router.push(path as any);
+        router.navigate(path as any);
     };
 
     const handleSignOut = async () => {
@@ -116,9 +118,16 @@ export default function GlobalHeader() {
 
     const handleSearchSubmit = () => {
         if (!searchInputValue.trim()) return;
-        router.push({
+        
+        // Use navigate to prevent pushing search pages onto each other
+        router.navigate({
             pathname: '/(buyer)/(tabs)/search',
-            params: { ...params, q: searchInputValue.trim(), returnTo: isSearchPage ? params.returnTo : pathname }
+            params: { 
+                ...params, 
+                q: searchInputValue.trim(), 
+                // Preserve returnTo if it exists, otherwise use current pathname
+                returnTo: params.returnTo || (isSearchPage ? undefined : pathname)
+            }
         });
     };
 
@@ -128,36 +137,50 @@ export default function GlobalHeader() {
             router.setParams({ filtersOpen: isFiltersOpen ? 'false' : 'true' });
         } else {
             // Navigate to search with filters open
-            router.push({
+            router.navigate({
                 pathname: '/(buyer)/(tabs)/search',
-                params: { ...params, filtersOpen: 'true', returnTo: pathname }
+                params: { 
+                    ...params, 
+                    filtersOpen: 'true', 
+                    // Preserve returnTo if it exists, otherwise use current pathname
+                    returnTo: params.returnTo || pathname 
+                }
             });
         }
     };
 
     return (
         <View style={[styles.container, { paddingTop: top + 12 }]}>
-            {/* Left Section: Back Button + Optional Search (Side-by-Side) */}
+            <LinearGradient
+                colors={['rgba(0,0,0,0.15)', 'rgba(0,0,0,0.05)', 'transparent']}
+                style={[StyleSheet.absoluteFill, { height: top + 60 }]}
+                pointerEvents="none"
+            />
             <View style={[styles.leftSection, showSearchBar && { flex: 1, width: 'auto' }]}>
                 {showBackButton && (
-                    <Pressable
-                        onPress={() => {
-                            if (isConfirmationPage) {
-                                router.replace('/(buyer)/(tabs)');
-                            } else if (isCartPage) {
-                                router.back();
-                            } else if (params.returnTo) {
-                                router.push(params.returnTo as any);
-                            } else if (isSearchPage) {
-                                router.push('/(buyer)/(tabs)/shop');
-                            } else {
-                                router.back();
-                            }
-                        }}
-                        style={({ pressed }) => [styles.backButton, pressed && styles.pressed, { marginRight: 10 }]}
-                    >
-                        <IconSymbol name="chevron.left" size={24} color={GIFTYY_THEME.colors.gray800} />
-                    </Pressable>
+                    <TourAnchor step="home_burger_menu">
+                        <Pressable
+                            onPress={() => {
+                                if (isConfirmationPage) {
+                                    router.replace('/(buyer)/(tabs)');
+                                } else if (params.returnTo) {
+                                    // Use navigate or replace for returnTo to avoid growing the stack
+                                    router.navigate(params.returnTo as any);
+                                } else if (isSearchPage) {
+                                    // Default fallback for search if no returnTo
+                                    router.navigate('/(buyer)/(tabs)/shop');
+                                } else if (router.canGoBack()) {
+                                    router.back();
+                                } else {
+                                    // Global fallback
+                                    router.navigate('/(buyer)/(tabs)');
+                                }
+                            }}
+                            style={({ pressed }) => [styles.backButton, pressed && styles.pressed, { marginRight: 10 }]}
+                        >
+                            <IconSymbol name="chevron.left" size={24} color={GIFTYY_THEME.colors.gray800} />
+                        </Pressable>
+                    </TourAnchor>
                 )}
 
                 {showSearchBar && (
@@ -226,24 +249,26 @@ export default function GlobalHeader() {
                         </Pressable>
                     )}
 
-                    <Pressable
-                        onPress={handleToggleMenu}
-                        style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
-                    >
-                        {profile?.profile_image_url ? (
-                            <Image
-                                source={{ uri: profile.profile_image_url }}
-                                style={styles.profileImage}
-                            />
-                        ) : (
-                            <IconSymbol name="person.circle.fill" size={32} color={GIFTYY_THEME.colors.gray800} />
-                        )}
-                        {unreadCount > 0 && (
-                            <View style={styles.badge}>
-                                <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
-                            </View>
-                        )}
-                    </Pressable>
+                    <TourAnchor step="global_profile">
+                        <Pressable
+                            onPress={handleToggleMenu}
+                            style={({ pressed }) => [styles.iconButton, pressed && styles.pressed]}
+                        >
+                            {profile?.profile_image_url ? (
+                                <Image
+                                    source={{ uri: profile.profile_image_url }}
+                                    style={styles.profileImage}
+                                />
+                            ) : (
+                                <IconSymbol name="person.circle.fill" size={32} color={GIFTYY_THEME.colors.gray800} />
+                            )}
+                            {unreadCount > 0 && (
+                                <View style={styles.badge}>
+                                    <Text style={styles.badgeText}>{unreadCount > 99 ? '99+' : unreadCount}</Text>
+                                </View>
+                            )}
+                        </Pressable>
+                    </TourAnchor>
                 </View>
             </View>
 
@@ -307,6 +332,7 @@ const styles = StyleSheet.create({
         justifyContent: 'space-between',
         paddingHorizontal: GIFTYY_THEME.spacing.md,
         paddingBottom: 12,
+        backgroundColor: 'transparent',
         pointerEvents: 'box-none',
     },
     leftSection: {

@@ -13,7 +13,7 @@ import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { useCategories } from '@/contexts/CategoriesContext';
 import { useProducts } from '@/contexts/ProductsContext';
 import { getVendorsInfo } from '@/lib/vendor-utils';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
 	Dimensions,
@@ -32,11 +32,15 @@ const CARD_WIDTH = (SCREEN_WIDTH - 48) / 3; // 3 columns with padding and gap
 type FilterState = {
 	categories: string[];
 	priceRange: { min: number; max: number };
+	vendors: string[];
+	verifiedVendorsOnly: boolean;
+	minRating: number;
 	sortBy: 'recommended' | 'popular' | 'price-low' | 'price-high' | 'newest' | 'rating';
 };
 
 export default function SearchResultsScreen() {
 	const router = useRouter();
+	const pathname = usePathname();
 	const params = useLocalSearchParams<{
 		q?: string;
 		categories?: string;
@@ -63,6 +67,9 @@ export default function SearchResultsScreen() {
 				min: params.minPrice ? parseInt(params.minPrice, 10) : 0,
 				max: params.maxPrice ? parseInt(params.maxPrice, 10) : 1000,
 			},
+			vendors: [],
+			verifiedVendorsOnly: false,
+			minRating: 0,
 			sortBy: (params.sortBy as any) || 'recommended',
 		};
 		return initialFilters;
@@ -76,6 +83,9 @@ export default function SearchResultsScreen() {
 				min: params.minPrice ? parseInt(params.minPrice, 10) : 0,
 				max: params.maxPrice ? parseInt(params.maxPrice, 10) : 1000,
 			},
+			vendors: [],
+			verifiedVendorsOnly: false,
+			minRating: 0,
 			sortBy: (params.sortBy as any) || 'recommended',
 		});
 	}, [params.categories, params.minPrice, params.maxPrice, params.sortBy]);
@@ -200,6 +210,9 @@ export default function SearchResultsScreen() {
 		setFilters({
 			categories: [],
 			priceRange: { min: 0, max: 1000 },
+			vendors: [],
+			verifiedVendorsOnly: false,
+			minRating: 0,
 			sortBy: 'recommended',
 		});
 	}, []);
@@ -233,7 +246,10 @@ export default function SearchResultsScreen() {
 					discountPercentage={item.discountPercentage || item.discount}
 					image={imageUrl}
 					vendorName={vendor?.storeName}
-					onPress={() => router.push({ pathname: '/(buyer)/(tabs)/product/[id]', params: { id: item.id } })}
+					onPress={() => router.push({ 
+						pathname: '/(buyer)/(tabs)/product/[id]', 
+						params: { id: item.id, returnTo: pathname || '/(buyer)/(tabs)/search' } 
+					})}
 					width={CARD_WIDTH}
 				/>
 			</Animated.View>

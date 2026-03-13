@@ -51,6 +51,8 @@ import { WishlistProvider } from '@/contexts/WishlistContext';
 import { initializeGlobalAlert } from '@/lib/AlertManager';
 import { CheckoutProvider } from '@/lib/CheckoutContext';
 import { SafeStripeProvider } from '@/lib/stripe-safe';
+import { TourProvider } from '@/contexts/TourContext';
+import { TourOverlay } from '@/components/tour/TourOverlay';
 
 export const unstable_settings = {
   anchor: '(buyer)',
@@ -164,8 +166,9 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={AppTheme}>
       <SafeStripeProvider publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY}>
-        <AlertProvider>
-          <ToastProvider>
+        <TourProvider>
+          <AlertProvider>
+            <ToastProvider>
             <AuthProvider>
               <CartProvider>
                 <WishlistProvider>
@@ -207,7 +210,8 @@ export default function RootLayout() {
             </AuthProvider>
           </ToastProvider>
         </AlertProvider>
-      </SafeStripeProvider>
+      </TourProvider>
+    </SafeStripeProvider>
       <StatusBar style="auto" />
 
       {showLoader && (

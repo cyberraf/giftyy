@@ -1,39 +1,46 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useState } from 'react';
+import { TourOverlay } from '@/components/tour/TourOverlay';
 
 // The steps of our interactive tour mapping to specific features
 export type TourStep =
-    | 'home_ai_chat'
-    | 'home_burger_menu'
-    | 'home_tagging'
-    | 'shop_intro'
-    | 'recipients_intro'
-    | 'profile_occasions'
-    | 'profile_circle'
-    | 'profile_preferences'
-    | 'memories_intro'
-    | 'memory_messages'
-    | 'memory_reactions'
-    | 'memory_shared'
-    | 'tour_complete';
+	| 'welcome'
+	| 'home_ai_chat'
+	| 'home_burger_menu'
+	| 'global_profile'
+	| 'shop_intro'
+	| 'circle_tab'
+	| 'occasions_tab'
+	| 'preferences_tab'
+	| 'memories_intro'
+	| 'tour_complete';
 
 // Order of the tour
 const TOUR_SEQUENCE: TourStep[] = [
-    'shop_intro',
-    'recipients_intro',
-    'profile_circle',
-    'profile_preferences',
+	'welcome',
+	'home_ai_chat',
+	'home_burger_menu',
+	'global_profile',
+	'shop_intro',
+	'circle_tab',
+	'occasions_tab',
+	'preferences_tab',
+	'memories_intro',
+	'tour_complete',
 ];
 
 // Mapping from step -> the screen route that must be visible for that step
 const STEP_ROUTES: Partial<Record<TourStep, string>> = {
-    'home_ai_chat': '/(buyer)/(tabs)',
-    'shop_intro': '/(buyer)/(tabs)/shop',
-    'recipients_intro': '/(buyer)/(tabs)/recipients',
-    'profile_occasions': '/(buyer)/(tabs)/recipients?tab=occasions',
-    'profile_circle': '/(buyer)/(tabs)/recipients?tab=circle',
-    'profile_preferences': '/(buyer)/(tabs)/recipients?tab=preferences',
-    'memories_intro': '/(buyer)/(tabs)/memory',
+	'welcome': '/(buyer)/(tabs)',
+	'home_ai_chat': '/(buyer)/(tabs)',
+	'home_burger_menu': '/(buyer)/(tabs)',
+	'global_profile': '/(buyer)/(tabs)',
+	'shop_intro': '/(buyer)/(tabs)/shop',
+	'circle_tab': '/(buyer)/(tabs)/recipients?tab=circle',
+	'occasions_tab': '/(buyer)/(tabs)/recipients?tab=occasions',
+	'preferences_tab': '/(buyer)/(tabs)/recipients?tab=preferences',
+	'memories_intro': '/(buyer)/(tabs)/memory',
+	'tour_complete': '/(buyer)/(tabs)',
 };
 
 export type TourElementMap = Record<TourStep, { x: number; y: number; width: number; height: number; ready: boolean } | null>;
@@ -57,7 +64,9 @@ const TourContext = createContext<TourContextType | undefined>(undefined);
 const TOUR_COMPLETED_KEY = 'giftyy_interactive_tour_completed_v1';
 
 export function TourProvider({ children }: { children: React.ReactNode }) {
+    console.log('[TOUR] TourProvider Render init');
     const [isActive, setIsActive] = useState(false);
+    console.log('[TOUR] TourProvider Render, isActive:', isActive);
     const [currentStep, setCurrentStep] = useState<TourStep | null>(null);
     const [elements, setElements] = useState<TourElementMap>({} as TourElementMap);
     const [targetRoute, setTargetRoute] = useState<string | null>(null);
@@ -77,8 +86,9 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const startTour = useCallback(() => {
-        console.log('[TOUR] startTour() called! Setting isActive=true, step=home_ai_chat');
+        console.log('[TOUR] startTour() called! Current Sequence:', TOUR_SEQUENCE);
         const firstStep = TOUR_SEQUENCE[0];
+        console.log('[TOUR] setting first step:', firstStep);
         setIsActive(true);
         setCurrentStep(firstStep);
         setTargetRoute(STEP_ROUTES[firstStep] ?? null);
@@ -142,6 +152,7 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
             }}
         >
             {children}
+            <TourOverlay />
         </TourContext.Provider>
     );
 }

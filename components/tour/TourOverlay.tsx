@@ -21,14 +21,16 @@ const STATUS_BAR_HEIGHT = StatusBar.currentHeight ?? 0;
 const OVERLAY_COLOR = 'rgba(0,0,0,0.72)';
 
 const STEP_CONTENT: Record<TourStep, { title: string; body: string }> = {
-    'home_ai_chat': { title: '🎁 Meet Giftyy', body: "Type anything here — ask for gift ideas for any occasion, person, or budget. Your AI gift concierge is ready." },
-    'shop_intro': { title: '🛍️ The Shop', body: 'Browse curated gifts, deals, and featured vendors. Find the perfect gift for anyone in your Circle.' },
-    'recipients_intro': { title: '🫂 Your Gifting Circle', body: 'Everyone you gift regularly lives here. Add family, friends and colleagues so Giftyy can recommend personalised gifts for them.' },
-    'profile_occasions': { title: '📅 Never Miss a Date', body: 'Add your own occasions so friends get automated reminders when they need to start shopping for you.' },
-    'profile_circle': { title: '🫂 Your Circle', body: 'Invite friends and family so you can view their upcoming events and preferences.' },
-    'profile_preferences': { title: '⭐ Your Preferences', body: 'Set your tastes. Giftyy uses this to recommend the best gifts when your Circle shops for you.' },
-    'memories_intro': { title: '📼 Digital Archive', body: 'Every gift card you send or receive becomes a portal. Watch reactions and revisit your digital memories here.' },
-    'tour_complete': { title: "🎉 You're All Set!", body: 'Start adding to your Giftyy Circle or drop a message to the AI.' }
+	'welcome': { title: '👋 Welcome to Giftyy', body: 'Let’s take a quick tour to show you how to find the perfect gifts for your loved ones.' },
+	'home_ai_chat': { title: '🎁 AI Gift Concierge', body: 'Type anything here! Ask for gift ideas for any occasion, person, or budget. Giftyy AI is here to help.' },
+	'home_burger_menu': { title: '🍔 Quick Navigation', body: 'Access all areas of the app quickly through the side menu.' },
+	'global_profile': { title: '👤 Your Profile', body: 'Manage your settings, notifications, and orders from your profile menu.' },
+	'shop_intro': { title: '🛍️ Premium Shop', body: 'Browse curated gifts from top vendors. We’ve handpicked the best items for your Circle.' },
+	'circle_tab': { title: '🫂 My Circle', body: 'This is where your loved ones live. Add friends and family to see their preferences and occasions.' },
+	'occasions_tab': { title: '📅 My Occasions', body: 'Keep track of your own important dates so your Circle never misses a celebration!' },
+	'preferences_tab': { title: '⭐ My Preferences', body: 'Tell your Circle what you love. We use these to suggest the perfect gifts for you.' },
+	'memories_intro': { title: '📼 Digital Memories', body: 'Relive the joy! Every gift card comes with photos, videos, and reactions saved forever.' },
+	'tour_complete': { title: "🎉 You're All Set!", body: 'You’re ready to start gifting. Add someone to your Circle to get started!' }
 };
 
 export function TourOverlay() {
@@ -43,6 +45,10 @@ export function TourOverlay() {
             router.push(targetRoute as any);
         }
     }, [isActive, targetRoute]);
+
+    if (isActive) {
+        console.log('[TOUR] Overlay Rendering! isActive=true, currentStep=', currentStep);
+    }
 
     if (!isActive || !currentStep) return null;
 
@@ -70,27 +76,23 @@ export function TourOverlay() {
 
     // Tooltip placement: above element when bottom space is tight
     const spaceBelow = SCREEN_HEIGHT - (cy + ch);
-    const tooltipTop = spaceBelow < 250
-        ? Math.max(STATUS_BAR_HEIGHT + 20, cy - 20 - 210)
-        : cy + ch + 16;
+    const tooltipTop = spaceBelow < 300
+        ? Math.max(STATUS_BAR_HEIGHT + 20, cy - 30 - 240) // More clearance above
+        : cy + ch + 20;
 
-    const isLastStep = currentStep === 'memories_intro';
-    const isFirstStep = currentStep === 'home_ai_chat';
+    const isLastStep = currentStep === 'tour_complete';
+    const isFirstStep = currentStep === 'welcome';
 
     return (
-        <Modal
-            transparent
-            animationType="fade"
-            visible={isActive && !!currentStep}
-            statusBarTranslucent
-            onRequestClose={skipTour}
+        <Animated.View
+            entering={FadeIn.duration(300)}
+            exiting={FadeOut.duration(250)}
+            style={[StyleSheet.absoluteFill, { zIndex: 9999, pointerEvents: 'box-none' }]}
         >
             {/*
              * 4-panel spotlight approach:
              * The element is left UNCOVERED (transparent hole).
              * Four dark panels surround it — top, bottom, left, right.
-             * The corners of the hole show the element's own background, giving a naturally
-             * rounded appearance matching the pill shape of the input field.
              */}
             {/* Top */}
             <View style={[styles.panel, { top: 0, left: 0, right: 0, height: Math.max(0, cy) }]} />
@@ -129,76 +131,83 @@ export function TourOverlay() {
                     </View>
                 </Animated.View>
             )}
-        </Modal>
+        </Animated.View>
     );
 }
 
 const styles = StyleSheet.create({
-    panel: {
-        position: 'absolute',
-        backgroundColor: OVERLAY_COLOR,
-    },
-    tooltipCard: {
-        position: 'absolute',
-        left: 20,
-        right: 20,
-        backgroundColor: '#fff',
-        borderRadius: 20,
-        padding: 22,
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 8 },
-        shadowOpacity: 0.18,
-        shadowRadius: 16,
-        elevation: 14,
-    },
-    tooltipTitle: {
-        fontSize: 18,
-        fontWeight: '700',
-        color: '#111',
-        marginBottom: 8,
-    },
-    tooltipBody: {
-        fontSize: 14,
-        color: '#555',
-        lineHeight: 21,
-        marginBottom: 20,
-    },
-    tooltipActions: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-    },
-    rightActions: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    skipText: {
-        color: '#aaa',
-        fontWeight: '600',
-        fontSize: 14,
-    },
-    backBtn: {
-        borderWidth: 1.5,
-        borderColor: '#ddd',
-        paddingHorizontal: 16,
-        paddingVertical: 10,
-        borderRadius: 10,
-    },
-    backText: {
-        color: '#666',
-        fontWeight: '600',
-        fontSize: 14,
-    },
-    nextBtn: {
-        backgroundColor: '#FF6B35',
-        paddingHorizontal: 24,
-        paddingVertical: 11,
-        borderRadius: 10,
-    },
-    nextText: {
-        color: '#fff',
-        fontWeight: '700',
-        fontSize: 15,
-    },
+	panel: {
+		position: 'absolute',
+		backgroundColor: OVERLAY_COLOR,
+	},
+	tooltipCard: {
+		position: 'absolute',
+		left: 20,
+		right: 20,
+		backgroundColor: '#fff',
+		borderRadius: 24,
+		padding: 24,
+		shadowColor: '#000',
+		shadowOffset: { width: 0, height: 12 },
+		shadowOpacity: 0.22,
+		shadowRadius: 20,
+		elevation: 16,
+		borderWidth: 1,
+		borderColor: 'rgba(0,0,0,0.05)',
+	},
+	tooltipTitle: {
+		fontSize: 22,
+		fontWeight: '800',
+		color: '#111',
+		marginBottom: 10,
+		fontFamily: 'Cooper BT',
+	},
+	tooltipBody: {
+		fontSize: 16,
+		color: '#4b5563',
+		lineHeight: 24,
+		marginBottom: 24,
+	},
+	tooltipActions: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+	},
+	rightActions: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 12,
+	},
+	skipText: {
+		color: '#9ca3af',
+		fontWeight: '600',
+		fontSize: 15,
+	},
+	backBtn: {
+		paddingHorizontal: 16,
+		paddingVertical: 12,
+		borderRadius: 14,
+		backgroundColor: '#f3f4f6',
+	},
+	backText: {
+		color: '#4b5563',
+		fontWeight: '700',
+		fontSize: 15,
+	},
+	nextBtn: {
+		backgroundColor: '#f75507', // Giftyy Primary
+		paddingHorizontal: 28,
+		paddingVertical: 12,
+		borderRadius: 14,
+		shadowColor: '#f75507',
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.2,
+		shadowRadius: 8,
+		elevation: 4,
+	},
+	nextText: {
+		color: '#fff',
+		fontWeight: '800',
+		fontSize: 16,
+	},
 });

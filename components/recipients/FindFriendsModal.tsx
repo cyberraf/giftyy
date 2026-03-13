@@ -13,6 +13,7 @@ import {
     Modal,
     Platform,
     Pressable,
+    RefreshControl,
     StyleSheet,
     Text,
     TextInput,
@@ -132,7 +133,7 @@ export function FindFriendsModal({ visible, onClose, onConnect, onInvite }: Find
                         {item.connectionStatus === 'approved' ? 'Connected' :
                             item.isIncomingInvitation ? 'Accept' :
                                 item.connectionStatus === 'pending' ? 'Pending' :
-                                    item.isGiftyyUser ? 'Connect' : 'Invite'}
+                                    item.isGiftyyUser ? 'Connect' : 'Invite to Giftyy'}
                     </Text>
                 </Pressable>
             </View>
@@ -191,6 +192,14 @@ export function FindFriendsModal({ visible, onClose, onConnect, onInvite }: Find
                         renderItem={renderContactItem}
                         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 20 }]}
                         ItemSeparatorComponent={() => <View style={styles.separator} />}
+                        refreshControl={
+                            <RefreshControl
+                                refreshing={isSyncingContacts}
+                                onRefresh={() => syncContacts(true)}
+                                tintColor={GIFTYY_THEME.colors.primary}
+                                colors={[GIFTYY_THEME.colors.primary]}
+                            />
+                        }
                         ListEmptyComponent={
                             <View style={styles.emptyState}>
                                 <IconSymbol name="person.crop.circle.badge.exclamationmark" size={48} color={GIFTYY_THEME.colors.gray200} />
@@ -314,7 +323,7 @@ const styles = StyleSheet.create({
         borderRadius: scale(20),
         justifyContent: 'center',
         alignItems: 'center',
-        minWidth: scale(80),
+        minWidth: scale(110),
     },
     connectButton: {
         backgroundColor: GIFTYY_THEME.colors.primary,

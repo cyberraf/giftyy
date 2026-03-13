@@ -4,7 +4,7 @@
  * Uses the same design and functionality as CustomTabBar
  */
 
-import { IconSymbol } from '@/components/ui/icon-symbol';
+import { IconSymbol, IconSymbolName } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { useBottomBarVisibility } from '@/contexts/BottomBarVisibility';
 import { useCart } from '@/contexts/CartContext';
@@ -34,8 +34,8 @@ const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 type TabIcon = {
 	name: string;
-	inactive: string;
-	active: string;
+	inactive: IconSymbolName;
+	active: IconSymbolName;
 	label: string;
 	route: string;
 };
@@ -301,7 +301,14 @@ export default function GlobalBottomBar() {
 					const isFocused = activeTab === iconConfig.name;
 
 					const onPress = () => {
-						router.push(iconConfig.route as any);
+						if (isFocused) {
+							// For smart navigation: if already on tab, navigate to its base route
+							// This can help "reset" the tab view if it's a nested stack
+							router.navigate(iconConfig.route as any);
+						} else {
+							// Use navigate instead of push to prevent stack bloat for top-level tabs
+							router.navigate(iconConfig.route as any);
+						}
 					};
 
 					return (

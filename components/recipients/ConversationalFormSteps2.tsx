@@ -1009,7 +1009,7 @@ export function Step13_Summary({ formData, updateFormData, isSelf, ...props }: S
                         style={styles.inviteButton}
                         onPress={() => setShowShareModal(true)}
                     >
-                        <Text style={styles.inviteButtonText}>Send Invitation</Text>
+                        <Text style={styles.inviteButtonText}>Invite to Giftyy</Text>
                     </Pressable>
                 </View>
             )}

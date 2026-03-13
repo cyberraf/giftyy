@@ -59,7 +59,7 @@ export default function CartScreen() {
 				<Header />
 
 				{items.length === 0 ? (
-					<EmptyState onStart={() => router.push('/(buyer)/(tabs)/shop')} />
+					<EmptyState onStart={() => router.navigate('/(buyer)/(tabs)/shop')} />
 				) : (
 					<>
 						<FlatList
@@ -91,7 +91,7 @@ export default function CartScreen() {
 										estimatedTax={estimatedTax}
 										total={total}
 										itemCount={totalQuantity}
-										onCheckout={() => router.push('/(buyer)/checkout/recipient')}
+										onCheckout={() => router.push({ pathname: '/(buyer)/checkout/recipient', params: { returnTo: '/(buyer)/(tabs)/cart' } })}
 									/>
 									<ClearRow count={totalQuantity} onClear={clear} />
 								</View>
