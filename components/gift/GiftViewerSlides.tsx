@@ -2,7 +2,8 @@ import ReactionRecorder from '@/components/gift/ReactionRecorder';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { responsiveFontSize, scale, verticalScale } from '@/utils/responsive';
-import { Audio, ResizeMode, Video } from 'expo-av';
+import { setAudioModeAsync } from 'expo-audio';
+import { SimpleVideo } from '@/components/SimpleVideo';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -70,9 +71,6 @@ export default function GiftViewerSlides({
 }: GiftViewerProps) {
     const [currentSlide, setCurrentSlide] = useState(0);
     const slideAnim = useSharedValue(0);
-    const videoRef = useRef<Video>(null);
-    const memoryVideoRef = useRef<Video>(null);
-    const reactionVideoRef = useRef<Video>(null);
     const [videoEnded, setVideoEnded] = useState(false);
     const [showConfetti, setShowConfetti] = useState(false);
 
@@ -98,7 +96,7 @@ export default function GiftViewerSlides({
 
     // Enable audio playback in silent mode
     useEffect(() => {
-        Audio.setAudioModeAsync({
+        setAudioModeAsync({
             playsInSilentModeIOS: true,
             staysActiveInBackground: false,
         }).catch(() => { });
@@ -130,37 +128,9 @@ export default function GiftViewerSlides({
         return () => clearTimeout(timer);
     }, [videoEnded, currentSlide, totalSlides, slides, goToSlide]);
 
-    // Pause/resume video when navigating away/to the video slide
+    // Show recording prompt when entering video slide (only once, only if no reaction exists)
     useEffect(() => {
         const videoSlideIndex = slides.indexOf('video');
-        if (videoRef.current) {
-            // Only play video if we're on the video slide AND the prompt is not showing
-            if (currentSlide === videoSlideIndex && !showRecordingPrompt) {
-                videoRef.current.playAsync().catch(() => { });
-            } else {
-                videoRef.current.pauseAsync().catch(() => { });
-            }
-        }
-        // Same for memory video
-        const memorySlideIndex = slides.indexOf('memory');
-        if (memoryVideoRef.current) {
-            if (currentSlide === memorySlideIndex) {
-                memoryVideoRef.current.playAsync().catch(() => { });
-            } else {
-                memoryVideoRef.current.pauseAsync().catch(() => { });
-            }
-        }
-        // Same for reaction video
-        const reactionSlideIndex = slides.indexOf('reaction');
-        if (reactionVideoRef.current) {
-            if (currentSlide === reactionSlideIndex) {
-                reactionVideoRef.current.playAsync().catch(() => { });
-            } else {
-                reactionVideoRef.current.pauseAsync().catch(() => { });
-            }
-        }
-
-        // Show recording prompt when entering video slide (only once, only if no reaction exists)
         if (
             currentSlide === videoSlideIndex &&
             videoSlideIndex !== -1 &&
@@ -172,7 +142,7 @@ export default function GiftViewerSlides({
             hasShownPromptRef.current = true;
             setShowRecordingPrompt(true);
         }
-    }, [currentSlide, slides, reactionUrl, userId, videoMessageId, showRecordingPrompt]);
+    }, [currentSlide, slides, reactionUrl, userId, videoMessageId]);
 
     // Pan responder for swipe gestures
     const panResponder = useMemo(() =>
@@ -305,18 +275,14 @@ export default function GiftViewerSlides({
                 </BlurView>
             )}
             <View style={styles.videoContainer}>
-                <Video
-                    ref={videoRef}
+                <SimpleVideo
                     source={{ uri: videoUrl! }}
                     style={styles.video}
-                    resizeMode={ResizeMode.CONTAIN}
-                    useNativeControls
-                    shouldPlay={currentSlide === slides.indexOf('video')}
-                    onPlaybackStatusUpdate={(status) => {
-                        if (status.isLoaded && status.didJustFinish) {
-                            setVideoEnded(true);
-                        }
-                    }}
+                    contentFit="contain"
+                    useNativeControls={true}
+                    shouldPlay={currentSlide === slides.indexOf('video') && !showRecordingPrompt}
+                    isMuted={false}
+                    onPlayToEnd={() => setVideoEnded(true)}
                 />
             </View>
             {senderFirstName && (
@@ -366,13 +332,13 @@ export default function GiftViewerSlides({
                         resizeMode="contain"
                     />
                 ) : (
-                    <Video
-                        ref={memoryVideoRef}
+                    <SimpleVideo
                         source={{ uri: sharedMemoryUrl! }}
                         style={styles.memoryVideo}
-                        resizeMode={ResizeMode.CONTAIN}
-                        useNativeControls
+                        contentFit="contain"
+                        useNativeControls={true}
                         shouldPlay={currentSlide === slides.indexOf('memory')}
+                        isMuted={false}
                     />
                 )}
             </View>
@@ -385,13 +351,13 @@ export default function GiftViewerSlides({
                 <Text style={styles.videoTitleText}>Your Reaction</Text>
             </BlurView>
             <View style={styles.videoContainer}>
-                <Video
-                    ref={reactionVideoRef}
+                <SimpleVideo
                     source={{ uri: reactionUrl! }}
                     style={styles.video}
-                    resizeMode={ResizeMode.CONTAIN}
-                    useNativeControls
+                    contentFit="contain"
+                    useNativeControls={true}
                     shouldPlay={currentSlide === slides.indexOf('reaction')}
+                    isMuted={false}
                 />
             </View>
             <View style={styles.videoSenderRow}>

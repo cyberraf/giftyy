@@ -4,7 +4,7 @@
  */
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
-import { ResizeMode, Video } from 'expo-av';
+import { SimpleVideo } from '@/components/SimpleVideo';
 import {
   CameraView,
   useCameraPermissions,
@@ -65,7 +65,6 @@ export function ExpoCameraRecordingFlow({
   const hasMicrophonePermission = micPermission?.granted ?? false;
 
   const cameraRef = useRef<CameraView>(null);
-  const previewRef = useRef<Video>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const recordPromiseRef = useRef<Promise<{ uri: string } | undefined> | null>(null);
@@ -209,16 +208,8 @@ export function ExpoCameraRecordingFlow({
     else startCountdown();
   }, [recording, startCountdown, stopRecording]);
 
-  const handleRetake = useCallback(async () => {
+  const handleRetake = useCallback(() => {
     didApplyInitialRef.current = true;
-    try {
-      if (previewRef.current) {
-        await previewRef.current.pauseAsync();
-        await previewRef.current.unloadAsync();
-      }
-    } catch (error) {
-      console.warn('Error stopping video preview:', error);
-    }
     setVideoUri(null);
     setElapsedMs(0);
     setDurationMs(0);
@@ -227,16 +218,8 @@ export function ExpoCameraRecordingFlow({
     startCountdown();
   }, [onRetake, startCountdown]);
 
-  const handleUseVideo = useCallback(async () => {
+  const handleUseVideo = useCallback(() => {
     if (!videoUri) return;
-    try {
-      if (previewRef.current) {
-        await previewRef.current.pauseAsync();
-        await previewRef.current.unloadAsync();
-      }
-    } catch (error) {
-      console.warn('Error stopping video preview:', error);
-    }
     setIsPlaying(false);
     onVideoRecorded(videoUri, durationMs || elapsedMs);
   }, [videoUri, durationMs, elapsedMs, onVideoRecorded]);
@@ -245,8 +228,6 @@ export function ExpoCameraRecordingFlow({
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
       if (countdownRef.current) clearInterval(countdownRef.current);
-      previewRef.current?.pauseAsync().catch(console.warn);
-      previewRef.current?.unloadAsync().catch(console.warn);
     };
   }, []);
 
@@ -389,16 +370,13 @@ export function ExpoCameraRecordingFlow({
   if (screen === 'preview' && videoUri) {
     return (
       <View style={styles.container}>
-        <Video
-          ref={previewRef}
+        <SimpleVideo
           style={StyleSheet.absoluteFill}
           source={{ uri: videoUri }}
-          resizeMode={ResizeMode.COVER}
+          contentFit="cover"
           shouldPlay={isPlaying}
           isLooping
-          onPlaybackStatusUpdate={(status: any) => {
-            if (status?.isLoaded) setDurationMs(status.durationMillis || durationMs);
-          }}
+          isMuted={false}
         />
         <Pressable style={styles.previewTapOverlay} onPress={() => setIsPlaying((p) => !p)} accessibilityRole="button">
           <View style={styles.previewCenterIcon}>

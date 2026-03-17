@@ -1,6 +1,7 @@
-import React, { useRef, useState, useEffect } from 'react';
+import { useEvent } from 'expo';
+import { useVideoPlayer, VideoView } from 'expo-video';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, View, ViewStyle } from 'react-native';
-import { Video, ResizeMode, AVPlaybackStatus } from 'expo-av';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
@@ -12,59 +13,55 @@ type Props = {
 };
 
 export function MemoryThumbnail({ fallbackUrl, style, showPlay = true }: Props) {
-	const [loaded, setLoaded] = useState(false);
 	const [hasError, setHasError] = useState(false);
-	const videoRef = useRef<Video>(null);
 
-	// Seek to first frame when video loads
-	useEffect(() => {
-		if (loaded && videoRef.current && fallbackUrl) {
-			videoRef.current.setPositionAsync(0).catch((err) => {
-				console.warn('[MemoryThumbnail] Failed to seek to first frame:', err);
-			});
-		}
-	}, [loaded, fallbackUrl]);
-
-	const handlePlaybackStatusUpdate = (status: AVPlaybackStatus) => {
-		if (status.isLoaded && !loaded) {
-			setLoaded(true);
-			// Pause immediately after loading to show first frame
-			if (videoRef.current) {
-				videoRef.current.pauseAsync().catch(() => {});
-			}
-		}
-	};
-
-	return (
-		<View style={[styles.container, style]}>
-			{fallbackUrl && !hasError ? (
-				<>
-					<Video
-						ref={videoRef}
-						source={{ uri: fallbackUrl }}
-						style={StyleSheet.absoluteFill}
-						resizeMode={ResizeMode.COVER}
-						shouldPlay={false}
-						isMuted={true}
-						onPlaybackStatusUpdate={handlePlaybackStatusUpdate}
-						onError={(error) => {
-							console.warn('[MemoryThumbnail] Video failed to load:', fallbackUrl, error);
-							setHasError(true);
-							setLoaded(true);
-						}}
-						// Use poster blur hash or placeholder while loading
-						usePoster={true}
-						posterSource={{ uri: fallbackUrl }}
-						posterStyle={{ resizeMode: 'cover' }}
-					/>
-				</>
-			) : (
+	if (!fallbackUrl || hasError) {
+		return (
+			<View style={[styles.container, style]}>
 				<View style={[StyleSheet.absoluteFill, styles.placeholder]}>
 					<IconSymbol name="video" size={22} color={GIFTYY_THEME.colors.gray400} />
 				</View>
-			)}
+			</View>
+		);
+	}
 
-			{showPlay && loaded && !hasError && (
+	return (
+		<MemoryThumbnailInner fallbackUrl={fallbackUrl} style={style} showPlay={showPlay} onError={() => setHasError(true)} />
+	);
+}
+
+function MemoryThumbnailInner({ fallbackUrl, style, showPlay, onError }: Props & { onError: () => void }) {
+	const [loaded, setLoaded] = useState(false);
+	const player = useVideoPlayer(fallbackUrl!, (p) => {
+		p.muted = true;
+		p.loop = false;
+	});
+
+	const { status, error } = useEvent(player, 'statusChange', { status: player.status, error: player.error });
+
+	useEffect(() => {
+		if (error) onError();
+	}, [error, onError]);
+
+	// Seek to first frame and pause when loaded
+	useEffect(() => {
+		if (status === 'readyToPlay' && !loaded) {
+			setLoaded(true);
+			player.currentTime = 0;
+			player.pause();
+		}
+	}, [status, loaded]);
+
+	return (
+		<View style={[styles.container, style]}>
+			<VideoView
+				player={player}
+				style={StyleSheet.absoluteFill}
+				contentFit="cover"
+				nativeControls={false}
+				allowsFullscreen={false}
+			/>
+			{showPlay && loaded && (
 				<Animated.View
 					entering={FadeIn}
 					exiting={FadeOut}
@@ -100,4 +97,3 @@ const styles = StyleSheet.create({
 		justifyContent: 'center',
 	},
 });
-

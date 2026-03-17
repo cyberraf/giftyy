@@ -8,7 +8,7 @@ import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { useCart } from '@/contexts/CartContext';
 import { useWishlist } from '@/contexts/WishlistContext';
 import * as Haptics from 'expo-haptics';
-import React, { useState } from 'react';
+import React, { memo, useState } from 'react';
 import { Dimensions, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
 	useAnimatedStyle,
@@ -36,10 +36,10 @@ export type MarketplaceProductCardProps = {
 	reviewCount?: number;
 	onPress?: () => void;
 	showWishlist?: boolean;
-	showAddToCart?: boolean;
+	width?: number;
 };
 
-export function MarketplaceProductCard({
+export const MarketplaceProductCard = memo(({
 	id,
 	name,
 	price,
@@ -52,10 +52,10 @@ export function MarketplaceProductCard({
 	reviewCount,
 	onPress,
 	showWishlist = true,
-	showAddToCart = true,
-}: MarketplaceProductCardProps) {
+	width,
+}: MarketplaceProductCardProps) => {
 	const { isWishlisted, toggleWishlist } = useWishlist();
-	const { addToCart } = useCart();
+	const { addItem } = useCart();
 	const [isWishlist, setIsWishlist] = useState(isWishlisted(id));
 
 	const scale = useSharedValue(1);
@@ -96,21 +96,6 @@ export function MarketplaceProductCard({
 		await toggleWishlist(id);
 	};
 
-	const handleAddToCart = async (e: any) => {
-		e?.stopPropagation();
-		Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-
-		const product = {
-			id,
-			name,
-			price: `$${price.toFixed(2)}`,
-			image: imageUrl,
-			vendorId,
-		};
-
-		await addToCart(product);
-	};
-
 	const imageUri = imageUrl ? (() => {
 		try {
 			const parsed = JSON.parse(imageUrl);
@@ -129,7 +114,7 @@ export function MarketplaceProductCard({
 			onPress={onPress}
 			onPressIn={handlePressIn}
 			onPressOut={handlePressOut}
-			style={[styles.card, animatedCardStyle]}
+			style={[styles.card, animatedCardStyle, width ? { width } : {}]}
 		>
 			{/* Product Image */}
 			<View style={styles.imageContainer}>
@@ -162,17 +147,6 @@ export function MarketplaceProductCard({
 								color={isWishlist ? GIFTYY_THEME.colors.error : "#FFFFFF"}
 							/>
 						</Animated.View>
-					</Pressable>
-				)}
-
-				{/* Quick Add to Cart */}
-				{showAddToCart && (
-					<Pressable
-						onPress={handleAddToCart}
-						style={styles.addToCartButton}
-						hitSlop={8}
-					>
-						<IconSymbol name="plus" size={14} color="#FFFFFF" />
 					</Pressable>
 				)}
 			</View>
@@ -212,7 +186,7 @@ export function MarketplaceProductCard({
 			</View>
 		</AnimatedPressable>
 	);
-}
+});
 
 const styles = StyleSheet.create({
 	card: {
@@ -265,18 +239,7 @@ const styles = StyleSheet.create({
 		justifyContent: 'center',
 		backdropFilter: 'blur(10px)',
 	},
-	addToCartButton: {
-		position: 'absolute',
-		bottom: 6,
-		right: 6,
-		width: 28,
-		height: 28,
-		borderRadius: 14,
-		backgroundColor: GIFTYY_THEME.colors.primary,
-		alignItems: 'center',
-		justifyContent: 'center',
-		...GIFTYY_THEME.shadows.md,
-	},
+
 	info: {
 		padding: 8,
 		gap: 4,
@@ -326,4 +289,3 @@ const styles = StyleSheet.create({
 		fontWeight: '500',
 	},
 });
-

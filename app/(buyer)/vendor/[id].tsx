@@ -6,12 +6,13 @@ import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
 import { useProducts } from '@/contexts/ProductsContext';
 import { supabase } from '@/lib/supabase';
-import { ResizeMode, Video } from 'expo-av';
+import { SimpleVideo } from '@/components/SimpleVideo';
 import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Dimensions, FlatList, Image, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { ActivityIndicator, Dimensions, FlatList, Image, Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MarketplaceProductCard } from '@/components/marketplace/MarketplaceProductCard';
 
 const { width, height } = Dimensions.get('window');
 
@@ -19,10 +20,10 @@ const { width, height } = Dimensions.get('window');
 function VideoThumbnail({ videoUrl }: { videoUrl: string }) {
 	return (
 		<View style={styles.videoThumbnailContainer}>
-			<Video
+			<SimpleVideo
 				source={{ uri: videoUrl }}
 				style={styles.videoThumbnail}
-				resizeMode={ResizeMode.COVER}
+				contentFit="cover"
 				shouldPlay
 				isLooping
 				isMuted
@@ -153,12 +154,13 @@ function MediaViewerItem({ media, width, height }: { media: VendorMedia; width: 
 					resizeMode="contain"
 				/>
 			) : media.mediaType === 'video' ? (
-				<Video
+				<SimpleVideo
 					source={{ uri: media.mediaUrl }}
 					style={styles.fullscreenVideo}
-					resizeMode={ResizeMode.CONTAIN}
+					contentFit="contain"
 					useNativeControls={true}
 					shouldPlay
+					isMuted={false}
 				/>
 			) : (
 				<View style={styles.loadingContainer}>
@@ -202,12 +204,42 @@ export default function VendorProfileScreen() {
 	const [imageError, setImageError] = useState(false);
 	const [selectedMediaIndex, setSelectedMediaIndex] = useState<number | null>(null);
 	const [mediaViewerVisible, setMediaViewerVisible] = useState(false);
+	const [shopPage, setShopPage] = useState(1);
+	const [innerVisibleCount, setInnerVisibleCount] = useState(9);
+	const [searchQuery, setSearchQuery] = useState('');
 
 	// Get vendor's products
 	const vendorProducts = useMemo(() => {
 		if (!vendorId) return [];
-		return products.filter(p => p.vendorId === vendorId && p.isActive);
-	}, [products, vendorId]);
+		let filtered = products.filter(p => p.vendorId === vendorId && p.isActive && p.stockQuantity > 0);
+		
+		if (searchQuery.trim()) {
+			const query = searchQuery.toLowerCase();
+			filtered = filtered.filter(p => p.name?.toLowerCase().includes(query));
+		}
+		
+		return filtered;
+	}, [products, vendorId, searchQuery]);
+
+	// Hybrid Pagination logic
+	const itemsForCurrentPage = useMemo(() => {
+		const start = (shopPage - 1) * 15;
+		const end = shopPage * 15;
+		return vendorProducts.slice(start, end);
+	}, [vendorProducts, shopPage]);
+
+	const visibleProducts = useMemo(() => {
+		return itemsForCurrentPage.slice(0, innerVisibleCount);
+	}, [itemsForCurrentPage, innerVisibleCount]);
+
+	const hasMoreInner = innerVisibleCount < itemsForCurrentPage.length;
+	const totalPages = Math.ceil(vendorProducts.length / 15);
+
+	const handleLoadMore = useCallback(() => {
+		if (hasMoreInner) {
+			setInnerVisibleCount(prev => Math.min(prev + 3, itemsForCurrentPage.length));
+		}
+	}, [hasMoreInner, itemsForCurrentPage.length]);
 
 	useEffect(() => {
 		const fetchVendor = async () => {
@@ -364,178 +396,229 @@ export default function VendorProfileScreen() {
 		);
 	}
 
-	return (
-		<View style={styles.container}>
-			<ScrollView
-				contentContainerStyle={{ paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 40 }}
-				showsVerticalScrollIndicator={false}
-			>
-				{/* Hero Background */}
-				<View style={styles.heroContainer}>
-					{heroMedia ? (
-						<View style={styles.heroBackground}>
-							{heroMedia.mediaType === 'image' ? (
+	const renderHeader = () => (
+		<>
+			{/* Hero Background */}
+			<View style={styles.heroContainer}>
+				{heroMedia ? (
+					<View style={styles.heroBackground}>
+						{heroMedia.mediaType === 'image' ? (
+							<Image
+								source={{ uri: heroMedia.mediaUrl }}
+								style={StyleSheet.absoluteFill}
+								resizeMode="cover"
+							/>
+						) : (
+							<SimpleVideo
+								source={{ uri: heroMedia.mediaUrl }}
+								style={StyleSheet.absoluteFill}
+								contentFit="cover"
+								shouldPlay
+								isLooping
+								isMuted
+							/>
+						)}
+						<LinearGradient
+							colors={['rgba(255,245,240,0.1)', 'rgba(255,245,240,0.8)', '#fff5f0']}
+							style={StyleSheet.absoluteFill}
+						/>
+					</View>
+				) : (
+					<View style={[styles.heroBackground, { backgroundColor: '#fff5f0' }]} />
+				)}
+			</View>
+
+			{/* Vendor Info Section */}
+			<View style={[styles.mainContent, { marginTop: -40 }]}>
+				<View style={styles.premiumVendorCard}>
+					<BlurView intensity={20} style={StyleSheet.absoluteFill} />
+					<View style={styles.vendorHeader}>
+						<View style={styles.premiumVendorImageContainer}>
+							{vendor.profileImageUrl && !imageError ? (
 								<Image
-									source={{ uri: heroMedia.mediaUrl }}
-									style={StyleSheet.absoluteFill}
+									source={{ uri: vendor.profileImageUrl }}
+									style={styles.vendorImage}
 									resizeMode="cover"
+									onError={() => setImageError(true)}
 								/>
 							) : (
-								<Video
-									source={{ uri: heroMedia.mediaUrl }}
-									style={StyleSheet.absoluteFill}
-									resizeMode={ResizeMode.COVER}
-									shouldPlay
-									isLooping
-									isMuted
-								/>
+								<View style={styles.vendorImagePlaceholder}>
+									<IconSymbol name="storefront.fill" size={32} color={BRAND_COLOR} />
+								</View>
 							)}
-							<LinearGradient
-								colors={['rgba(255,245,240,0.1)', 'rgba(255,245,240,0.8)', '#fff5f0']}
-								style={StyleSheet.absoluteFill}
-							/>
 						</View>
-					) : (
-						<View style={[styles.heroBackground, { backgroundColor: '#fff5f0' }]} />
-					)}
-				</View>
-
-				{/* Vendor Info Section */}
-				<View style={[styles.mainContent, { marginTop: -60 }]}>
-					<Animated.View entering={FadeInUp.duration(600)} style={styles.premiumVendorCard}>
-						<BlurView intensity={20} style={StyleSheet.absoluteFill} />
-						<View style={styles.vendorHeader}>
-							<View style={styles.premiumVendorImageContainer}>
-								{vendor.profileImageUrl && !imageError ? (
-									<Image
-										source={{ uri: vendor.profileImageUrl }}
-										style={styles.vendorImage}
-										resizeMode="cover"
-										onError={() => setImageError(true)}
-									/>
-								) : (
-									<View style={styles.vendorImagePlaceholder}>
-										<IconSymbol name="storefront.fill" size={32} color={BRAND_COLOR} />
-									</View>
-								)}
-							</View>
-							<View style={styles.vendorTitleContainer}>
-								<Text style={styles.premiumVendorName}>{vendor.storeName || 'Vendor Store'}</Text>
-								<View style={styles.statsBadgeRow}>
-									<View style={styles.statBadge}>
-										<Text style={styles.statBadgeValue}>{vendorProducts.length}</Text>
-										<Text style={styles.statBadgeLabel}>Products</Text>
-									</View>
-									<View style={styles.statBadge}>
-										<Text style={styles.statBadgeValue}>{new Date(vendor.createdAt).getFullYear()}</Text>
-										<Text style={styles.statBadgeLabel}>Since</Text>
-									</View>
+						<View style={styles.vendorTitleContainer}>
+							<Text style={styles.premiumVendorName}>{vendor.storeName || 'Vendor Store'}</Text>
+							<View style={styles.statsBadgeRow}>
+								<View style={styles.statBadge}>
+									<Text style={styles.statBadgeValue}>{vendorProducts.length}</Text>
+									<Text style={styles.statBadgeLabel}>Products</Text>
+								</View>
+								<View style={styles.statBadge}>
+									<Text style={styles.statBadgeValue}>{new Date(vendor.createdAt).getFullYear()}</Text>
+									<Text style={styles.statBadgeLabel}>Since</Text>
 								</View>
 							</View>
 						</View>
-					</Animated.View>
-
-					{/* Media Gallery */}
-					{!mediaLoading && vendorMedia.length > 0 && (
-						<View style={styles.sectionContainer}>
-							<Text style={styles.premiumSectionTitle}>Store Gallery</Text>
-							<ScrollView
-								horizontal
-								showsHorizontalScrollIndicator={false}
-								contentContainerStyle={styles.premiumMediaList}
-							>
-								{vendorMedia.map((item, index) => (
-									<Pressable
-										key={item.id}
-										onPress={() => {
-											setSelectedMediaIndex(index);
-											setMediaViewerVisible(true);
-										}}
-									>
-										<Animated.View
-											entering={FadeInDown.duration(400).delay(index * 100)}
-											style={styles.premiumMediaItem}
-										>
-											{item.mediaType === 'image' ? (
-												<Image
-													source={{ uri: item.mediaUrl }}
-													style={styles.premiumMediaImage}
-													resizeMode="cover"
-												/>
-											) : (
-												<View style={{ flex: 1 }}>
-													<VideoThumbnail videoUrl={item.mediaUrl} />
-													<View style={styles.playButtonOverlay}>
-														<IconSymbol name="play.circle.fill" size={40} color="#fff" />
-													</View>
-												</View>
-											)}
-										</Animated.View>
-									</Pressable>
-								))}
-							</ScrollView>
-						</View>
-					)}
-
-					{/* Products Section */}
-					<View style={styles.sectionContainer}>
-						<Text style={styles.premiumSectionTitle}>Featured Products</Text>
-						{vendorProducts.length > 0 ? (
-							<View style={styles.premiumProductsGrid}>
-								{vendorProducts.map((product, index) => {
-									const imageUrl = product.imageUrl ? (() => {
-										try {
-											const parsed = JSON.parse(product.imageUrl);
-											return Array.isArray(parsed) ? parsed[0] : product.imageUrl;
-										} catch {
-											return product.imageUrl;
-										}
-									})() : undefined;
-
-									return (
-										<Pressable
-											key={product.id}
-											onPress={() => router.push({ 
-												pathname: '/(buyer)/(tabs)/product/[id]', 
-												params: { id: product.id, returnTo: pathname } 
-											})}
-											style={styles.premiumProductCard}
-										>
-											<Animated.View entering={FadeInDown.delay(index * 50)}>
-												<View style={styles.premiumProductImageContainer}>
-													{imageUrl ? (
-														<Image source={{ uri: imageUrl }} style={styles.premiumProductImage} />
-													) : (
-														<View style={styles.productImagePlaceholder}>
-															<IconSymbol name="photo" size={24} color="#d1d5db" />
-														</View>
-													)}
-													{product.discountPercentage > 0 && (
-														<View style={styles.premiumDiscountBadge}>
-															<Text style={styles.premiumDiscountText}>{product.discountPercentage}%</Text>
-														</View>
-													)}
-												</View>
-												<View style={styles.premiumProductInfo}>
-													<Text style={styles.premiumProductName} numberOfLines={1}>{product.name}</Text>
-													<Text style={styles.premiumProductPrice}>
-														${(product.discountPercentage > 0 ? product.price * (1 - product.discountPercentage / 100) : product.price).toFixed(2)}
-													</Text>
-												</View>
-											</Animated.View>
-										</Pressable>
-									);
-								})}
-							</View>
-						) : (
-							<View style={styles.emptyStateContainer}>
-								<IconSymbol name="storefront" size={40} color={GIFTYY_THEME.colors.gray400} />
-								<Text style={styles.emptyText}>No products found</Text>
-							</View>
-						)}
 					</View>
 				</View>
-			</ScrollView>
+				
+				{/* Search Bar */}
+				<View style={styles.searchContainer}>
+					<IconSymbol name="magnifyingglass" size={18} color={GIFTYY_THEME.colors.gray400} />
+					<TextInput
+						style={styles.searchInput}
+						placeholder="Search in this store..."
+						placeholderTextColor={GIFTYY_THEME.colors.gray400}
+						value={searchQuery}
+						onChangeText={(text) => {
+							setSearchQuery(text);
+							setShopPage(1); // Reset to first page on search
+							setInnerVisibleCount(9);
+						}}
+						autoCorrect={false}
+					/>
+					{searchQuery.length > 0 && (
+						<Pressable onPress={() => {
+							setSearchQuery('');
+							setShopPage(1);
+							setInnerVisibleCount(9);
+						}}>
+							<IconSymbol name="xmark.circle.fill" size={16} color={GIFTYY_THEME.colors.gray400} />
+						</Pressable>
+					)}
+				</View>
+
+				{/* Media Gallery */}
+				{!mediaLoading && vendorMedia.length > 0 && (
+					<View style={styles.sectionContainer}>
+						<Text style={styles.premiumSectionTitle}>Store Gallery</Text>
+						<ScrollView
+							horizontal
+							showsHorizontalScrollIndicator={false}
+							contentContainerStyle={styles.premiumMediaList}
+						>
+							{vendorMedia.map((item, index) => (
+								<Pressable
+									key={item.id}
+									onPress={() => {
+										setSelectedMediaIndex(index);
+										setMediaViewerVisible(true);
+									}}
+								>
+									<View style={styles.premiumMediaItem}>
+										{item.mediaType === 'image' ? (
+											<Image
+												source={{ uri: item.mediaUrl }}
+												style={styles.premiumMediaImage}
+												resizeMode="cover"
+											/>
+										) : (
+											<View style={{ flex: 1 }}>
+												<VideoThumbnail videoUrl={item.mediaUrl} />
+												<View style={styles.playButtonOverlay}>
+													<IconSymbol name="play.circle.fill" size={40} color="#fff" />
+												</View>
+											</View>
+										)}
+									</View>
+								</Pressable>
+							))}
+						</ScrollView>
+					</View>
+				)}
+
+				<Text style={[styles.premiumSectionTitle, { marginTop: 32 }]}>
+					{vendorProducts.length} Products
+				</Text>
+			</View>
+		</>
+	);
+
+	const renderFooter = () => (
+		<View style={[styles.footer, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20 }]}>
+			{totalPages > 1 && (
+				<View style={styles.paginationContainer}>
+					<Pressable
+						style={[styles.pageButton, shopPage === 1 && styles.pageButtonDisabled]}
+						onPress={() => {
+							if (shopPage > 1) {
+								setShopPage(prev => prev - 1);
+								setInnerVisibleCount(30);
+							}
+						}}
+						disabled={shopPage === 1}
+					>
+						<IconSymbol name="chevron.left" size={20} color={shopPage === 1 ? '#999' : BRAND_COLOR} />
+					</Pressable>
+					
+					<Text style={styles.pageInfo}>Page {shopPage} of {totalPages}</Text>
+					
+					<Pressable
+						style={[styles.pageButton, shopPage === totalPages && styles.pageButtonDisabled]}
+						onPress={() => {
+							if (shopPage < totalPages) {
+								setShopPage(prev => prev + 1);
+								setInnerVisibleCount(30);
+							}
+						}}
+						disabled={shopPage === totalPages}
+					>
+						<IconSymbol name="chevron.right" size={20} color={shopPage === totalPages ? '#999' : BRAND_COLOR} />
+					</Pressable>
+				</View>
+			)}
+		</View>
+	);
+
+	const renderProductItem = ({ item, index }: { item: any, index: number }) => {
+		const gridGap = 10;
+		const gridPadding = 16;
+		const threeColumnWidth = (width - gridPadding * 2 - gridGap * 2) / 3;
+
+		const imageUrl = item.imageUrl ? (() => {
+			try {
+				const parsed = JSON.parse(item.imageUrl);
+				return Array.isArray(parsed) ? parsed[0] : item.imageUrl;
+			} catch {
+				return item.imageUrl;
+			}
+		})() : undefined;
+
+		return (
+			<View style={{ width: threeColumnWidth, marginLeft: index % 3 === 0 ? 0 : gridGap }}>
+				<MarketplaceProductCard
+					id={item.id}
+					name={item.name}
+					price={item.price}
+					discountPercentage={item.discountPercentage}
+					imageUrl={imageUrl}
+					vendorName={vendor.storeName}
+					vendorId={vendor.id}
+					width={threeColumnWidth}
+					onPress={() => router.push({ 
+						pathname: '/(buyer)/(tabs)/product/[id]', 
+						params: { id: item.id, returnTo: pathname } 
+					})}
+				/>
+			</View>
+		);
+	};
+
+	return (
+		<View style={styles.container}>
+			<FlatList
+				data={visibleProducts}
+				keyExtractor={(item) => item.id}
+				numColumns={3}
+				renderItem={renderProductItem}
+				ListHeaderComponent={renderHeader}
+				ListFooterComponent={renderFooter}
+				onEndReached={handleLoadMore}
+				onEndReachedThreshold={0.5}
+				contentContainerStyle={styles.listContent}
+				columnWrapperStyle={styles.columnWrapper}
+			/>
 
 			<MediaViewerModal
 				visible={mediaViewerVisible}
@@ -556,7 +639,7 @@ const styles = StyleSheet.create({
 		backgroundColor: '#fff5f0',
 	},
 	heroContainer: {
-		height: height * 0.35,
+		height: height * 0.18,
 		width: '100%',
 	},
 	heroBackground: {
@@ -611,6 +694,25 @@ const styles = StyleSheet.create({
 		color: '#111',
 		fontFamily: BRAND_FONT,
 	},
+	searchContainer: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		backgroundColor: GIFTYY_THEME.colors.gray50,
+		borderRadius: 12,
+		paddingHorizontal: 12,
+		paddingVertical: 8,
+		marginTop: 16,
+		marginBottom: 8,
+		borderWidth: 1,
+		borderColor: GIFTYY_THEME.colors.gray200,
+	},
+	searchInput: {
+		flex: 1,
+		marginLeft: 8,
+		fontSize: 15,
+		color: GIFTYY_THEME.colors.gray900,
+		padding: 0,
+	},
 	statsBadgeRow: {
 		flexDirection: 'row',
 		gap: 12,
@@ -659,20 +761,44 @@ const styles = StyleSheet.create({
 		width: '100%',
 		height: '100%',
 	},
-	premiumProductsGrid: {
-		flexDirection: 'row',
-		flexWrap: 'wrap',
-		justifyContent: 'space-between',
-		gap: 12,
+	listContent: {
+		paddingBottom: 20,
 	},
-	premiumProductCard: {
-		width: (width - 44) / 2, // 2 columns
+	columnWrapper: {
+		paddingHorizontal: 16,
+		justifyContent: 'flex-start',
+		marginBottom: 10,
+	},
+	footer: {
+		marginTop: 20,
+		alignItems: 'center',
+	},
+	paginationContainer: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 20,
 		backgroundColor: '#fff',
-		borderRadius: 20,
-		padding: 8,
+		paddingHorizontal: 20,
+		paddingVertical: 10,
+		borderRadius: 999,
 		...GIFTYY_THEME.shadows.sm,
-		borderWidth: 1,
-		borderColor: '#f0f0f0',
+	},
+	pageButton: {
+		width: 40,
+		height: 40,
+		borderRadius: 20,
+		backgroundColor: GIFTYY_THEME.colors.cream,
+		alignItems: 'center',
+		justifyContent: 'center',
+	},
+	pageButtonDisabled: {
+		opacity: 0.5,
+	},
+	pageInfo: {
+		fontSize: 14,
+		fontWeight: '700',
+		color: '#333',
+		fontFamily: BRAND_FONT,
 	},
 	premiumProductImageContainer: {
 		width: '100%',

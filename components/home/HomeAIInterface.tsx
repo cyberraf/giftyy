@@ -17,8 +17,10 @@ import {
     type RecommendedProduct
 } from '@/lib/api/ai-sessions';
 import { UpcomingOccasion } from '@/lib/hooks/useHome';
+import { useAppStore } from '@/lib/store/useAppStore';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
     Image,
@@ -111,23 +113,29 @@ export default function HomeAIInterface({
     const { bottom, top } = useSafeAreaInsets();
     const router = useRouter();
     const { user, profile } = useAuth();
+    const { t } = useTranslation();
     const firstName = profile?.first_name || user?.email?.split('@')[0] || 'friend';
     const { addRecipient } = useRecipients();
-    const [text, setText] = useState(initialPrompt);
-    const [isExpanded, setIsExpanded] = useState(false);
+    const { homeAiState, setHomeAiState } = useAppStore();
+
+    const [text, setText] = useState(homeAiState?.text ?? initialPrompt);
+    const [isExpanded, setIsExpanded] = useState(homeAiState?.isExpanded ?? false);
     const [loading, setLoading] = useState(false);
     const [mentionQuery, setMentionQuery] = useState('');
     const [selection, setSelection] = useState({ start: 0, end: 0 });
     const [showMentions, setShowMentions] = useState(false);
     const [isHistoryVisible, setIsHistoryVisible] = useState(false);
-    const [sessionId, setSessionId] = useState<string | null>(null);
-    const [messages, setMessages] = useState<Message[]>([
+    const [sessionId, setSessionId] = useState<string | null>(homeAiState?.sessionId ?? null);
+    
+    const defaultMessages: Message[] = [
         {
             id: '1',
-            text: `Hi ${firstName}, I'm Giftyy! Who are we celebrating today? Describe them to me, or tag them with @ if they're already in your circle! ✨`,
+            text: t('home.ai_greeting', { name: firstName }),
             sender: 'ai',
         }
-    ]);
+    ];
+    
+    const [messages, setMessages] = useState<Message[]>(homeAiState?.messages ?? defaultMessages);
     const [feedbackHistory, setFeedbackHistory] = useState<Array<{
         productId: string;
         productName: string;
@@ -163,6 +171,16 @@ export default function HomeAIInterface({
 
     // Positioned at the bottom of the screen
     const bottomSpacing = bottom + 12;
+
+    // Sync local active state to persistent cache
+    useEffect(() => {
+        setHomeAiState({
+            text,
+            isExpanded,
+            sessionId,
+            messages
+        });
+    }, [text, isExpanded, sessionId, messages, setHomeAiState]);
 
     const [showMenu, setShowMenu] = useState(false);
     const menuScale = useSharedValue(0);
@@ -349,7 +367,7 @@ export default function HomeAIInterface({
         if (pastSessions.length >= 3) {
             setMessages([{
                 id: (Date.now() + 99).toString(),
-                text: "You have reached the limit of 3 AI chat sessions. ✨ Please delete an older session from your history to start a new one!",
+                text: t('home.ai_limit_reached'),
                 sender: 'ai',
             }]);
             return;
@@ -358,7 +376,7 @@ export default function HomeAIInterface({
         setSessionId(null);
         setMessages([{
             id: '1',
-            text: "Who are we celebrating today? Let's find some sparks of joy! ✨",
+            text: t('home.ai_greeting', { name: firstName }),
             sender: 'ai',
         }]);
         setContextRecipient(null);
@@ -442,6 +460,7 @@ export default function HomeAIInterface({
 
         return (
             <View style={styles.thinkingDotsContainer}>
+                <Text style={styles.thinkingText}>{t('home.ai_thinking')}</Text>
                 <Animated.View style={[styles.thinkingDot, dotStyle(dot1)]} />
                 <Animated.View style={[styles.thinkingDot, dotStyle(dot2)]} />
                 <Animated.View style={[styles.thinkingDot, dotStyle(dot3)]} />
@@ -933,7 +952,7 @@ export default function HomeAIInterface({
             } else {
                 aiMsg = {
                     id: (Date.now() + 3).toString(),
-                    text: responseText || "I'm sorry, I'm having a little trouble finding perfect matches right now. Let's try refining the interests or budget! ✨",
+                    text: responseText || t('home.ai_refinement_fallback'),
                     sender: 'ai',
                     quickReplies: recommendationsData.quick_replies
                 };
@@ -973,7 +992,7 @@ export default function HomeAIInterface({
             console.error('[FloatingAIInput]', error);
             const errorMsg: Message = {
                 id: (Date.now() + 4).toString(),
-                text: "I'm sorry, I'm having trouble connecting to Giftyy right now. Please try again later.",
+                text: t('home.ai_error_fallback'),
                 sender: 'ai',
             };
             setMessages(prev => [...prev, errorMsg]);
@@ -1056,7 +1075,7 @@ export default function HomeAIInterface({
                             }
                         >
                             {/* Clear header when in chat mode; Dashboard children handle their own padding */}
-                            {messages.length > 1 && <View style={{ height: top + 60 }} />}
+                            {messages.length > 1 && <View style={{ height: top + 80 }} />}
 
                             {/* Safe area spacer for when children are hidden */}
                             {/* messages.length > 1 && <View style={{ height: top + 10 }} /> */}
@@ -1101,7 +1120,7 @@ export default function HomeAIInterface({
                                         }
                                         return null;
                                     })}
-                                    <View style={{ minHeight: SCREEN_HEIGHT * 0.4 }}>
+                                    <View>
                                         {children}
                                     </View>
                                 </View>
@@ -1375,7 +1394,7 @@ export default function HomeAIInterface({
                         </Pressable>
                     )}
 
-                    <View style={[styles.inputWrapper, { paddingBottom: Math.max(bottom, 24) + 32 }]}>
+                    <View style={[styles.inputWrapper, { paddingBottom: Math.max(bottom, 16) + 12 }]}>
                         {/* Mentions Dropdown */}
                         {showMentions && filteredRecipients.length > 0 && (
                             <AnimatedView 
@@ -1432,25 +1451,26 @@ export default function HomeAIInterface({
                                 onSubmitEditing={() => handleSubmit()}
                                 returnKeyType="send"
                             />
+                            <Pressable
+                                onPress={() => handleSubmit()}
+                                disabled={!text.trim() || loading}
+                                style={({ pressed }) => [
+                                    styles.sendButton,
+                                    (!text.trim() || loading) && styles.sendButtonDisabled,
+                                    (pressed && text.trim() && !loading) && styles.sendButtonPressed
+                                ]}
+                            >
+                                {loading ? (
+                                    <ActivityIndicator size="small" color={GIFTYY_THEME.colors.primary} />
+                                ) : (
+                                    <IconSymbol
+                                        name="paperplane.fill"
+                                        size={18}
+                                        color="#FFFFFF"
+                                    />
+                                )}
+                            </Pressable>
                         </TourAnchor>
-                        <Pressable
-                            onPress={() => handleSubmit()}
-                            disabled={!text.trim() || loading}
-                            style={({ pressed }) => [
-                                styles.sendButton,
-                                (!text.trim() || loading || pressed) && styles.sendButtonDisabled
-                            ]}
-                        >
-                            {loading ? (
-                                <ActivityIndicator size="small" color={GIFTYY_THEME.colors.primary} />
-                            ) : (
-                                <IconSymbol
-                                    name="arrow.up"
-                                    size={22}
-                                    color="#FFFFFF"
-                                />
-                            )}
-                        </Pressable>
                     </View>
                 </View>
             </KeyboardAvoidingView>
@@ -1615,7 +1635,7 @@ const styles = StyleSheet.create({
     activeTabButtonText: { color: GIFTYY_THEME.colors.text, fontFamily: 'Outfit-Bold' },
     activeTabIndicator: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, backgroundColor: GIFTYY_THEME.colors.orange, borderRadius: 3 },
     chatArea: { flex: 1 },
-    chatContent: { paddingBottom: 120, paddingHorizontal: 16 },
+    chatContent: { paddingBottom: 80, paddingHorizontal: 16 },
     messageContainer: { marginBottom: 20, maxWidth: '82%', flexShrink: 0, flex: 0 },
     aiMessageContainer: { alignSelf: 'flex-start' },
     userMessageContainer: { alignSelf: 'flex-end' },
@@ -1663,6 +1683,12 @@ const styles = StyleSheet.create({
     },
     typingIndicatorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 6, backgroundColor: '#FFFFFF', borderRadius: 16, alignSelf: 'flex-start', borderWidth: 1, borderColor: GIFTYY_THEME.colors.gray100, ...GIFTYY_THEME.shadows.sm, marginLeft: 16, marginBottom: 16 },
     typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: GIFTYY_THEME.colors.gray400 },
+    thinkingText: {
+        fontSize: 14,
+        fontFamily: 'Outfit-Medium',
+        color: GIFTYY_THEME.colors.primary,
+        marginRight: 8,
+    },
     inputWrapper: {
         flexDirection: 'row',
         alignItems: 'flex-end',
@@ -1686,11 +1712,13 @@ const styles = StyleSheet.create({
         flex: 1,
         backgroundColor: '#F8F9FA',
         borderRadius: 24,
-        paddingHorizontal: 16,
-        paddingVertical: 10,
+        paddingLeft: 16,
+        paddingRight: 6,
+        paddingVertical: 6,
         minHeight: 48,
         maxHeight: 120,
-        justifyContent: 'center',
+        flexDirection: 'row',
+        alignItems: 'flex-end',
         borderWidth: 1,
         borderColor: '#F0F0F0',
     },
@@ -1698,7 +1726,7 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: 20,
-        paddingTop: 100,
+        paddingTop: 140,
         paddingBottom: 24,
     },
     initialGreetingAvatarWrapper: {
@@ -1729,22 +1757,20 @@ const styles = StyleSheet.create({
         fontWeight: '500'
     },
     sendButton: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
+        width: 36,
+        height: 36,
+        borderRadius: 18,
         backgroundColor: GIFTYY_THEME.colors.primary,
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 4,
-        ...GIFTYY_THEME.shadows.md,
-        shadowColor: GIFTYY_THEME.colors.primary,
-        shadowOpacity: 0.35,
+        marginLeft: 8,
+    },
+    sendButtonPressed: {
+        backgroundColor: GIFTYY_THEME.colors.primaryDark,
+        transform: [{ scale: 0.94 }],
     },
     sendButtonDisabled: {
         backgroundColor: '#E2E8F0',
-        shadowOpacity: 0,
-        elevation: 0,
-        borderWidth: 0,
     },
     actionMenu: {
         position: 'absolute',

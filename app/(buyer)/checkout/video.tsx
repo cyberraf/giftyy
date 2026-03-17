@@ -16,11 +16,13 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { InteractionManager, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 const PRIMARY = GIFTYY_THEME.colors.primary;
 const DRAFT_VIDEO_TITLE_KEY = 'draft_video_title';
 
 export default function VideoScreen() {
+	const { t } = useTranslation();
 	useKeepAwake();
 	const router = useRouter();
 	const { recipient, setLocalVideoUri, setVideoDurationMs, setVideoTitle, localVideoUri, videoDurationMs, videoTitle, setCardPrice, setCardType } = useCheckout();
@@ -128,7 +130,7 @@ export default function VideoScreen() {
 	const handleContinue = useCallback(async () => {
 		try {
 			if (!recordedVideoUri || !localVideoTitle.trim()) {
-				setError('Please enter a video title');
+				setError(t('checkout.video.error_missing_title'));
 				return;
 			}
 
@@ -152,7 +154,7 @@ export default function VideoScreen() {
 					router.push('/(buyer)/checkout/shared-memory');
 				} catch (navError) {
 					console.error('Navigation error:', navError);
-					setError('Navigation failed. Please try again.');
+					setError(t('checkout.video.error_nav_failed'));
 					setShowTitleModal(true); // Reopen modal on error
 				}
 			});
@@ -220,9 +222,9 @@ export default function VideoScreen() {
 						onPress={(e) => e.stopPropagation()}
 					>
 						<View style={styles.modalHeader}>
-							<Text style={styles.modalTitle}>Add a Title</Text>
+							<Text style={styles.modalTitle}>{t('checkout.video.title')}</Text>
 							<Text style={styles.modalSubtitle}>
-								Give your video message a meaningful title
+								{t('checkout.video.subtitle')}
 							</Text>
 						</View>
 
@@ -233,7 +235,7 @@ export default function VideoScreen() {
 									setLocalVideoTitle(text);
 									setError(null);
 								}}
-								placeholder="Enter video title..."
+								placeholder={t('checkout.video.placeholder')}
 								placeholderTextColor={GIFTYY_THEME.colors.gray400}
 								style={[
 									styles.titleInput,
@@ -244,7 +246,7 @@ export default function VideoScreen() {
 								autoFocus
 							/>
 							<Text style={styles.characterCount}>
-								{localVideoTitle.length}/100
+								{t('checkout.video.character_count', { count: localVideoTitle.length })}
 							</Text>
 						</View>
 
@@ -266,7 +268,7 @@ export default function VideoScreen() {
 								colors={[PRIMARY, GIFTYY_THEME.colors.primaryLight]}
 								style={styles.continueButtonGradient}
 							>
-								<Text style={styles.continueButtonText}>Continue</Text>
+								<Text style={styles.continueButtonText}>{t('checkout.common.continue')}</Text>
 							</LinearGradient>
 						</Pressable>
 					</Pressable>

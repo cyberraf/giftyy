@@ -6,6 +6,7 @@ import { TourOverlay } from '@/components/tour/TourOverlay';
 export type TourStep =
 	| 'welcome'
 	| 'home_ai_chat'
+	| 'home_tagging'
 	| 'home_burger_menu'
 	| 'global_profile'
 	| 'shop_intro'
@@ -13,12 +14,14 @@ export type TourStep =
 	| 'occasions_tab'
 	| 'preferences_tab'
 	| 'memories_intro'
+	| 'settings_reminders'
 	| 'tour_complete';
 
 // Order of the tour
 const TOUR_SEQUENCE: TourStep[] = [
 	'welcome',
 	'home_ai_chat',
+	'home_tagging',
 	'home_burger_menu',
 	'global_profile',
 	'shop_intro',
@@ -26,6 +29,7 @@ const TOUR_SEQUENCE: TourStep[] = [
 	'occasions_tab',
 	'preferences_tab',
 	'memories_intro',
+	'settings_reminders',
 	'tour_complete',
 ];
 
@@ -33,6 +37,7 @@ const TOUR_SEQUENCE: TourStep[] = [
 const STEP_ROUTES: Partial<Record<TourStep, string>> = {
 	'welcome': '/(buyer)/(tabs)',
 	'home_ai_chat': '/(buyer)/(tabs)',
+	'home_tagging': '/(buyer)/(tabs)',
 	'home_burger_menu': '/(buyer)/(tabs)',
 	'global_profile': '/(buyer)/(tabs)',
 	'shop_intro': '/(buyer)/(tabs)/shop',
@@ -40,6 +45,7 @@ const STEP_ROUTES: Partial<Record<TourStep, string>> = {
 	'occasions_tab': '/(buyer)/(tabs)/recipients?tab=occasions',
 	'preferences_tab': '/(buyer)/(tabs)/recipients?tab=preferences',
 	'memories_intro': '/(buyer)/(tabs)/memory',
+	'settings_reminders': '/(buyer)/settings',
 	'tour_complete': '/(buyer)/(tabs)',
 };
 
@@ -64,9 +70,7 @@ const TourContext = createContext<TourContextType | undefined>(undefined);
 const TOUR_COMPLETED_KEY = 'giftyy_interactive_tour_completed_v1';
 
 export function TourProvider({ children }: { children: React.ReactNode }) {
-    console.log('[TOUR] TourProvider Render init');
     const [isActive, setIsActive] = useState(false);
-    console.log('[TOUR] TourProvider Render, isActive:', isActive);
     const [currentStep, setCurrentStep] = useState<TourStep | null>(null);
     const [elements, setElements] = useState<TourElementMap>({} as TourElementMap);
     const [targetRoute, setTargetRoute] = useState<string | null>(null);
@@ -86,9 +90,7 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
     }, []);
 
     const startTour = useCallback(() => {
-        console.log('[TOUR] startTour() called! Current Sequence:', TOUR_SEQUENCE);
         const firstStep = TOUR_SEQUENCE[0];
-        console.log('[TOUR] setting first step:', firstStep);
         setIsActive(true);
         setCurrentStep(firstStep);
         setTargetRoute(STEP_ROUTES[firstStep] ?? null);

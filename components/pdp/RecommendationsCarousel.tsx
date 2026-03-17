@@ -6,7 +6,7 @@
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { useWishlist } from '@/contexts/WishlistContext';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Dimensions, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, {
@@ -156,6 +156,7 @@ export function RecommendationsCarousel({
 	onProductPress,
 }: RecommendationsCarouselProps) {
 	const router = useRouter();
+	const pathname = usePathname();
 
 	if (!products || products.length === 0) {
 		return null;
@@ -167,7 +168,7 @@ export function RecommendationsCarousel({
 		} else {
 			router.push({
 				pathname: '/(buyer)/(tabs)/product/[id]',
-				params: { id: productId },
+				params: { id: productId, returnTo: pathname },
 			});
 		}
 	};

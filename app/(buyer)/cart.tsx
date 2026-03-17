@@ -5,7 +5,8 @@ import { useCart } from '@/contexts/CartContext';
 import { useProducts } from '@/contexts/ProductsContext';
 import { parsePrice } from '@/lib/utils/currency';
 import { useRouter } from 'expo-router';
-import React, { useCallback, useMemo, useState } from 'react';
+import { useScrollToTop } from '@react-navigation/native';
+import React, { useCallback, useMemo, useRef, useState } from 'react';
 import {
 	FlatList,
 	Image,
@@ -18,6 +19,7 @@ import {
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { FadeInUp, Layout } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 const PRIMARY = '#f75507';
 const PEACH = '#fff1ea';
@@ -32,7 +34,11 @@ export default function CartScreen() {
 	const { refreshProducts, refreshCollections } = useProducts();
 	const { top, bottom } = useSafeAreaInsets();
 	const router = useRouter();
+	const { t } = useTranslation();
 	const [refreshing, setRefreshing] = useState(false);
+	
+	const scrollRef = useRef<FlatList>(null);
+	useScrollToTop(scrollRef);
 
 	const subtotal = useMemo(
 		() => items.reduce((sum, it) => sum + parsePrice(it.price) * it.quantity, 0),
@@ -55,7 +61,7 @@ export default function CartScreen() {
 
 	return (
 		<GestureHandlerRootView style={{ flex: 1 }}>
-			<View style={[styles.container, { paddingTop: top + 64 }]}>
+			<View style={[styles.container, { paddingTop: top + 72 }]}>
 				<Header />
 
 				{items.length === 0 ? (
@@ -63,6 +69,7 @@ export default function CartScreen() {
 				) : (
 					<>
 						<FlatList
+							ref={scrollRef}
 							data={items}
 							keyExtractor={(item) => item.id}
 							renderItem={({ item }) => (
@@ -113,10 +120,11 @@ export default function CartScreen() {
 }
 
 function Header() {
+	const { t } = useTranslation();
 	return (
 		<View style={styles.header}>
-			<Text style={styles.headerTitle}>Your Cart</Text>
-			<Text style={styles.headerSubtitle}>Make someone’s day unforgettable</Text>
+			<Text style={styles.headerTitle}>{t('cart.title')}</Text>
+			<Text style={styles.headerSubtitle}>{t('cart.subtitle')}</Text>
 		</View>
 	);
 }
@@ -131,15 +139,16 @@ function CartItemCard({
 	onRemove: () => void;
 }) {
 	const { alert } = useAlert();
+	const { t } = useTranslation();
 	const onQty = (delta: number) => {
 		const newQty = item.quantity + delta;
 		if (newQty <= 0) {
 			alert(
-				'Remove item',
-				'Are you sure you want to remove this item from your cart?',
+				t('cart.remove_dialog.title'),
+				t('cart.remove_dialog.message'),
 				[
-					{ text: 'Cancel', style: 'cancel' },
-					{ text: 'Remove', style: 'destructive', onPress: onRemove }
+					{ text: t('cart.remove_dialog.cancel'), style: 'cancel' },
+					{ text: t('cart.remove_dialog.remove'), style: 'destructive', onPress: onRemove }
 				]
 			);
 		} else {
@@ -209,19 +218,20 @@ function SummaryCard({
 	itemCount: number;
 	onCheckout: () => void;
 }) {
+	const { t } = useTranslation();
 	return (
 		<View style={styles.summaryCard}>
 			<View style={styles.summaryRow}>
-				<Text style={styles.summaryLabel}>Items ({itemCount})</Text>
+				<Text style={styles.summaryLabel}>{t('cart.summary.items', { count: itemCount })}</Text>
 				<Text style={styles.summaryValue}>${subtotal.toFixed(2)}</Text>
 			</View>
 			<View style={styles.summaryRow}>
-				<Text style={styles.summaryLabel}>Estimated tax</Text>
+				<Text style={styles.summaryLabel}>{t('cart.summary.estimated_tax')}</Text>
 				<Text style={styles.summaryValue}>${estimatedTax.toFixed(2)}</Text>
 			</View>
 			<View style={{ height: 1, backgroundColor: '#f1f5f9', marginVertical: 4 }} />
 			<View style={styles.summaryRow}>
-				<Text style={styles.summaryTotalLabel}>Total</Text>
+				<Text style={styles.summaryTotalLabel}>{t('cart.summary.total')}</Text>
 				<Text style={styles.summaryTotal}>${total.toFixed(2)}</Text>
 			</View>
 		</View>
@@ -229,11 +239,12 @@ function SummaryCard({
 }
 
 function ClearRow({ count, onClear }: { count: number; onClear: () => void }) {
+	const { t } = useTranslation();
 	return (
 		<View style={styles.clearRow}>
-			<Text style={styles.clearInfo}>{count} item(s) in your cart</Text>
+			<Text style={styles.clearInfo}>{t('cart.info.items_count', { count })}</Text>
 			<Pressable onPress={onClear} hitSlop={10}>
-				<Text style={styles.clearBtnText}>Clear cart</Text>
+				<Text style={styles.clearBtnText}>{t('cart.info.clear_cart')}</Text>
 			</Pressable>
 		</View>
 	);
@@ -250,35 +261,37 @@ function CheckoutBar({
 	count: number;
 	onCheckout: () => void;
 }) {
+	const { t } = useTranslation();
 	return (
 		<View style={[styles.stickyBar, { bottom: bottomInset > 0 ? bottomInset + 8 : 24 }]}>
 			<View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
 				<View>
-					<Text style={styles.stickyLabel}>SUBTOTAL</Text>
+					<Text style={styles.stickyLabel}>{t('cart.summary.subtotal_label')}</Text>
 					<Text style={styles.stickyAmount}>${total.toFixed(2)}</Text>
 				</View>
 				<View style={{ flex: 1, marginLeft: 24 }}>
-					<BrandButton title={`Checkout (${count})`} onPress={onCheckout} />
+					<BrandButton title={t('cart.checkout.button', { count })} onPress={onCheckout} />
 				</View>
 			</View>
 			<View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
 				<IconSymbol name="lock.fill" size={10} color="#94a3b8" />
-				<Text style={styles.stickyHint}>Secure payment • Easy returns</Text>
+				<Text style={styles.stickyHint}>{t('cart.checkout.secure_hint')}</Text>
 			</View>
 		</View>
 	);
 }
 
 function EmptyState({ onStart }: { onStart: () => void }) {
+	const { t } = useTranslation();
 	return (
 		<View style={styles.emptyWrap}>
 			<View style={styles.emptyIconCircle}>
 				<IconSymbol name="gift.fill" size={28} color={PRIMARY} />
 			</View>
-			<Text style={styles.emptyTitle}>Your cart is empty… for now 😊</Text>
-			<Text style={styles.emptySubtitle}>Add something thoughtful and make someone’s day.</Text>
+			<Text style={styles.emptyTitle}>{t('cart.empty.title')}</Text>
+			<Text style={styles.emptySubtitle}>{t('cart.empty.subtitle')}</Text>
 			<View style={{ width: '100%', marginTop: 8 }}>
-				<BrandButton title="Start gifting" onPress={onStart} />
+				<BrandButton title={t('cart.empty.start_gifting')} onPress={onStart} />
 			</View>
 		</View>
 	);

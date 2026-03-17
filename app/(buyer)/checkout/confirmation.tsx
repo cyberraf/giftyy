@@ -10,6 +10,7 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, BackHandler, Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 type MemoryVideoItem = {
     id: string;
@@ -22,6 +23,7 @@ type MemoryVideoItem = {
 };
 
 export default function ConfirmationScreen() {
+    const { t } = useTranslation();
     const { bottom } = useSafeAreaInsets();
     const { recipient, cardType, videoUri, videoTitle, reset } = useCheckout();
     const router = useRouter();
@@ -151,15 +153,15 @@ export default function ConfirmationScreen() {
     const orderStatus = order?.status || 'processing';
     const statusDisplay = useMemo(() => {
         switch (orderStatus) {
-            case 'processing': return 'Processing • Label created';
-            case 'confirmed': return 'Confirmed • Preparing shipment';
-            case 'shipped': return 'Shipped • In transit';
-            case 'out_for_delivery': return 'Out for delivery • Arriving soon';
-            case 'delivered': return `Delivered • ${order?.deliveredAt ? new Date(order.deliveredAt).toLocaleDateString() : ''}`;
-            case 'cancelled': return 'Cancelled';
-            default: return 'Processing';
+            case 'processing': return t('checkout.confirmation.statuses.processing');
+            case 'confirmed': return t('checkout.confirmation.statuses.confirmed');
+            case 'shipped': return t('checkout.confirmation.statuses.shipped');
+            case 'out_for_delivery': return t('checkout.confirmation.statuses.out_for_delivery');
+            case 'delivered': return t('checkout.confirmation.statuses.delivered', { date: order?.deliveredAt ? new Date(order.deliveredAt).toLocaleDateString() : '' });
+            case 'cancelled': return t('checkout.confirmation.statuses.cancelled');
+            default: return t('checkout.confirmation.statuses.processing');
         }
-    }, [orderStatus, order]);
+    }, [orderStatus, order, t]);
 
     const handleGoHome = () => {
         reset();
@@ -181,12 +183,12 @@ export default function ConfirmationScreen() {
             <Stack.Screen
                 options={{
                     headerShown: true,
-                    headerTitle: 'Order Confirmed',
+                    headerTitle: t('checkout.confirmation.header_title'),
                     headerLeft: () => null,
                     gestureEnabled: false,
                 }}
             />
-            <StepBar current={7} total={7} label="Confirmation" />
+            <StepBar current={7} total={7} label={t('checkout.confirmation.step_label')} />
             <ScrollView
                 contentContainerStyle={styles.content}
                 refreshControl={
@@ -206,35 +208,35 @@ export default function ConfirmationScreen() {
                             resizeMode="contain"
                         />
                     </Animated.View>
-                    <Animated.Text style={[styles.title, { opacity: fadeIn, transform: [{ scale: pop }] }]}>Gift on its way!</Animated.Text>
+                    <Animated.Text style={[styles.title, { opacity: fadeIn, transform: [{ scale: pop }] }]}>{t('checkout.confirmation.hero_title')}</Animated.Text>
                     <Text style={styles.subtitle}>
-                        We’ve queued up the surprise for <Text style={{ fontWeight: '800', color: '#111827' }}>{fullName}</Text>. A confirmation email is flying to your inbox with tracking updates.
+                        {t('checkout.confirmation.hero_subtitle', { name: fullName })}
                     </Text>
                 </LinearGradient>
 
                 <View style={styles.summaryCard}>
                     <View style={styles.summaryHeader}>
                         <IconSymbol name="list.bullet.clipboard" size={20} color={GIFTYY_THEME.colors.primary} />
-                        <Text style={styles.summaryHeading}>Delivery details</Text>
+                        <Text style={styles.summaryHeading}>{t('checkout.confirmation.delivery_details')}</Text>
                     </View>
-                    <SummaryRow label="Order" value={`#${orderCode}`} icon="number" />
-                    <SummaryRow label="Recipient" value={fullName} icon="person.fill" />
-                    <SummaryRow label="Card style" value={order?.cardType || cardType || 'Premium'} icon="greetingcard.fill" />
-                    <SummaryRow label="Video message" value={hasVideo ? 'Attached successfully' : 'Not added'} valueStyle={{ color: hasVideo ? '#16a34a' : '#64748B' }} icon="video.fill" />
-                    <SummaryRow label="Shared memory" value={hasSharedMemory ? (orderSharedMemory?.mediaType === 'photo' ? 'Photo attached' : 'Video attached') : 'Not added'} valueStyle={{ color: hasSharedMemory ? '#16a34a' : '#64748B' }} icon="photo.fill" />
-                    <SummaryRow label="Estimated arrival" value={order?.estimatedDeliveryDate ? new Date(order.estimatedDeliveryDate).toLocaleDateString() : '2 – 5 business days'} icon="shippingbox.fill" />
+                    <SummaryRow label={t('checkout.confirmation.order_number')} value={`#${orderCode}`} icon="number" />
+                    <SummaryRow label={t('checkout.confirmation.recipient')} value={fullName} icon="person.fill" />
+                    <SummaryRow label={t('checkout.confirmation.card_style')} value={order?.cardType || cardType || 'Premium'} icon="greetingcard.fill" />
+                    <SummaryRow label={t('checkout.confirmation.video_message')} value={hasVideo ? t('checkout.confirmation.attached') : t('checkout.confirmation.not_added')} valueStyle={{ color: hasVideo ? '#16a34a' : '#64748B' }} icon="video.fill" />
+                    <SummaryRow label={t('checkout.confirmation.shared_memory')} value={hasSharedMemory ? (orderSharedMemory?.mediaType === 'photo' ? t('checkout.confirmation.photo_attached') : t('checkout.confirmation.video_attached')) : t('checkout.confirmation.not_added')} valueStyle={{ color: hasSharedMemory ? '#16a34a' : '#64748B' }} icon="photo.fill" />
+                    <SummaryRow label={t('checkout.confirmation.estimated_arrival')} value={order?.estimatedDeliveryDate ? new Date(order.estimatedDeliveryDate).toLocaleDateString() : t('checkout.confirmation.est_days')} icon="shippingbox.fill" />
                 </View>
 
                 {hasVideo && (
                     <Pressable style={styles.tertiaryButton} onPress={() => setVideoVisible(true)}>
-                        <Text style={styles.tertiaryLabel}>Watch recorded message</Text>
+                        <Text style={styles.tertiaryLabel}>{t('checkout.confirmation.watch_message')}</Text>
                     </Pressable>
                 )}
 
                 {hasSharedMemory && sharedMemoryItem && (
                     <Pressable style={styles.tertiaryButton} onPress={() => setSharedMemoryVisible(true)}>
                         <Text style={styles.tertiaryLabel}>
-                            {sharedMemoryItem.mediaType === 'photo' ? 'View shared photo' : 'Watch shared memory'}
+                            {sharedMemoryItem.mediaType === 'photo' ? t('checkout.confirmation.view_photo') : t('checkout.confirmation.watch_memory')}
                         </Text>
                     </Pressable>
                 )}
@@ -243,7 +245,7 @@ export default function ConfirmationScreen() {
                     <Pressable style={styles.orderHeader} onPress={() => setShowOrderDetails((prev) => !prev)}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                             <IconSymbol name="info.circle.fill" size={18} color={GIFTYY_THEME.colors.primary} />
-                            <Text style={styles.orderHeaderLabel}>View order details</Text>
+                            <Text style={styles.orderHeaderLabel}>{t('checkout.confirmation.view_details')}</Text>
                         </View>
                         <IconSymbol
                             name={showOrderDetails ? "minus" : "plus"}
@@ -255,7 +257,7 @@ export default function ConfirmationScreen() {
                         <View style={styles.orderBody}>
 
 
-                            <Text style={styles.orderBodyLabel}>Status</Text>
+                            <Text style={styles.orderBodyLabel}>{t('checkout.confirmation.status')}</Text>
                             <View style={styles.statusBadge}>
                                 <View style={[styles.statusDot, { backgroundColor: orderStatus === 'delivered' ? '#16a34a' : GIFTYY_THEME.colors.primary }]} />
                                 <Text style={styles.statusText}>{statusDisplay}</Text>
@@ -264,7 +266,7 @@ export default function ConfirmationScreen() {
                             {order?.trackingNumber && (
                                 <>
                                     <View style={styles.orderDivider} />
-                                    <Text style={styles.orderBodyLabel}>Tracking Number</Text>
+                                    <Text style={styles.orderBodyLabel}>{t('checkout.confirmation.tracking_number')}</Text>
                                     <Text style={styles.orderBodyValue}>{order.trackingNumber}</Text>
                                 </>
                             )}
@@ -272,7 +274,7 @@ export default function ConfirmationScreen() {
                             <View style={styles.orderDivider} />
 
                             <View style={styles.rowBetween}>
-                                <Text style={styles.orderBodyLabel}>Order total</Text>
+                                <Text style={styles.orderBodyLabel}>{t('checkout.confirmation.order_total')}</Text>
                                 <Text style={styles.orderBodyValue}>
                                     {order?.totalAmount !== undefined
                                         ? `$${Number(order.totalAmount).toFixed(2)}`
@@ -282,16 +284,16 @@ export default function ConfirmationScreen() {
 
                             {order?.shippingCost !== undefined && (
                                 <View style={[styles.rowBetween, { marginTop: 4 }]}>
-                                    <Text style={[styles.muted, { fontSize: 13 }]}>Shipping</Text>
+                                    <Text style={[styles.muted, { fontSize: 13 }]}>{t('checkout.confirmation.shipping')}</Text>
                                     <Text style={[styles.bold, { fontSize: 13 }]}>
-                                        {Number(order.shippingCost) === 0 ? 'Free' : `$${Number(order.shippingCost).toFixed(2)}`}
+                                        {Number(order.shippingCost) === 0 ? t('checkout.common.free') : `$${Number(order.shippingCost).toFixed(2)}`}
                                     </Text>
                                 </View>
                             )}
 
                             {order?.taxAmount !== undefined && (
                                 <View style={[styles.rowBetween, { marginTop: 4 }]}>
-                                    <Text style={[styles.muted, { fontSize: 13 }]}>Tax</Text>
+                                    <Text style={[styles.muted, { fontSize: 13 }]}>{t('checkout.confirmation.tax')}</Text>
                                     <Text style={[styles.bold, { fontSize: 13 }]}>${Number(order.taxAmount).toFixed(2)}</Text>
                                 </View>
                             )}
@@ -299,12 +301,12 @@ export default function ConfirmationScreen() {
                             {order?.items && order.items.length > 0 && (
                                 <>
                                     <View style={styles.orderDivider} />
-                                    <Text style={styles.orderBodyLabel}>Items</Text>
+                                    <Text style={styles.orderBodyLabel}>{t('checkout.confirmation.items')}</Text>
                                     {order.items.map((it, idx) => (
                                         <View key={it.id || idx} style={styles.orderItemRow}>
                                             <View style={{ flex: 1 }}>
                                                 <Text style={styles.orderItemName}>{it.productName || `Item ${idx + 1}`}</Text>
-                                                <Text style={styles.orderItemQty}>Qty: {it.quantity ?? 1}</Text>
+                                                <Text style={styles.orderItemQty}>{t('checkout.confirmation.qty', { count: it.quantity ?? 1 })}</Text>
                                             </View>
                                             <Text style={styles.orderItemPrice}>
                                                 {it.unitPrice !== undefined ? `$${Number(it.unitPrice).toFixed(2)}` : '—'}
@@ -319,10 +321,10 @@ export default function ConfirmationScreen() {
 
                 <View style={styles.actions}>
                     <Pressable style={styles.secondaryButton} onPress={handleSendAnother}>
-                        <Text style={styles.secondaryLabel}>Send another gift</Text>
+                        <Text style={styles.secondaryLabel}>{t('checkout.confirmation.actions.send_another')}</Text>
                     </Pressable>
                     <Pressable style={styles.ordersButton} onPress={handleViewOrders}>
-                        <Text style={styles.ordersLabel}>View my orders</Text>
+                        <Text style={styles.ordersLabel}>{t('checkout.confirmation.actions.view_orders')}</Text>
                     </Pressable>
                 </View>
                 <View style={{ height: bottom + 120 }} />
@@ -334,7 +336,7 @@ export default function ConfirmationScreen() {
                     style={{ width: '100%', backgroundColor: GIFTYY_THEME.colors.primary, paddingVertical: 14, borderRadius: 999, alignItems: 'center' }}
                     onPress={handleGoHome}
                 >
-                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>Return to home</Text>
+                    <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>{t('checkout.confirmation.actions.return_home')}</Text>
                 </Pressable>
             </View>
         </View>

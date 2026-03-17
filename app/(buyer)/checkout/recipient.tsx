@@ -16,8 +16,10 @@ import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 export default function RecipientScreen() {
+    const { t } = useTranslation();
     const router = useRouter();
     const { recipient, setRecipient, notifyRecipient, setNotifyRecipient, cardPrice } = useCheckout();
     const { items } = useCart();
@@ -77,13 +79,13 @@ export default function RecipientScreen() {
                     data?.forEach((vendor: any) => {
                         if (vendor.id) {
                             // Use store_name if available and not empty, otherwise use a fallback
-                            const storeName = vendor.store_name?.trim();
-                            if (storeName) {
-                                namesMap.set(vendor.id, storeName);
-                            } else {
-                                // Still add to map with fallback so we know the vendor exists
-                                namesMap.set(vendor.id, `Vendor ${vendor.id.slice(0, 8)}`);
-                            }
+                                    const storeName = vendor.store_name?.trim();
+                                    if (storeName) {
+                                        namesMap.set(vendor.id, storeName);
+                                    } else {
+                                        // Still add to map with fallback so we know the vendor exists
+                                        namesMap.set(vendor.id, t('app.vendor_fallback', { id: vendor.id.slice(0, 8) }));
+                                    }
                         }
                     });
                     console.log('[RecipientScreen] Refreshed vendor names map:', Array.from(namesMap.entries()));
@@ -136,7 +138,7 @@ export default function RecipientScreen() {
                             namesMap.set(vendor.id, storeName);
                         } else {
                             // Still add to map with fallback so we know the vendor exists
-                            namesMap.set(vendor.id, `Vendor ${vendor.id.slice(0, 8)}`);
+                            namesMap.set(vendor.id, t('app.vendor_fallback', { id: vendor.id.slice(0, 8) }));
                         }
                     }
                 });
@@ -304,12 +306,12 @@ export default function RecipientScreen() {
 
     const onNext = () => {
         if (!selectedRecipient) {
-            alert('Missing info', 'Please select a recipient');
+            alert(t('checkout.recipient.alerts.missing_info'), t('checkout.recipient.alerts.select_recipient'));
             return;
         }
 
         if (shippingBreakdown.hasShippingError) {
-            alert('Shipping error', 'One or more vendors do not ship to this location. Please select a different recipient or remove those items from your cart.');
+            alert(t('checkout.recipient.alerts.shipping_error'), t('checkout.recipient.alerts.shipping_error_message'));
             return;
         }
 
@@ -333,7 +335,7 @@ export default function RecipientScreen() {
 
     return (
         <View style={{ flex: 1, backgroundColor: 'white' }}>
-            <StepBar current={2} total={7} label="Recipient details" />
+            <StepBar current={2} total={7} label={t('checkout.recipient.step_label')} />
             <View style={{ flex: 1 }}>
                 <ScrollView
                     keyboardShouldPersistTaps="handled"
@@ -352,7 +354,7 @@ export default function RecipientScreen() {
                         {recipients.length > 0 ? (
                             <View style={styles.savedRecipientsSection}>
                                 <View style={styles.savedRecipientsHeader}>
-                                    <Text style={styles.sectionTitle}>Select from saved recipients</Text>
+                                    <Text style={styles.sectionTitle}>{t('checkout.recipient.select_saved')}</Text>
                                 </View>
                                 <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recipientsScroll}>
                                     {recipients.map((rec) => {
@@ -376,64 +378,64 @@ export default function RecipientScreen() {
                                                         </Text>
                                                     </View>
                                                 </View>
-                                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, backgroundColor: '#F3F4F6', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-start' }}>
+                                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, backgroundColor: '#F3F4F6', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-start' }}>
                                                     <IconSymbol name="lock.fill" size={12} color="#6B7280" />
-                                                    <Text style={{ fontSize: 12, color: '#4B5563', fontWeight: '600' }}>Address hidden for privacy</Text>
+                                                    <Text style={{ fontSize: 12, color: '#4B5563', fontWeight: '600' }}>{t('checkout.recipient.address_hidden')}</Text>
                                                 </View>
                                             </Pressable>
                                         );
                                     })}
                                 </ScrollView>
-                                {selectedRecipientId && (
+                                 {selectedRecipientId && (
                                     <Pressable onPress={handleClearSelection} style={styles.clearSelectionButton}>
-                                        <Text style={styles.clearSelectionText}>Clear selection</Text>
+                                        <Text style={styles.clearSelectionText}>{t('checkout.recipient.clear_selection')}</Text>
                                     </Pressable>
                                 )}
-                            </View>
+                             </View>
                         ) : (
                             <View style={styles.summaryCard}>
-                                <Text style={styles.muted}>No saved recipients found. Please add them in your Giftyy Circle.</Text>
+                                <Text style={styles.muted}>{t('checkout.recipient.no_saved')}</Text>
                             </View>
                         )}
 
-                        {/* Removed manual address and notify configuration fields */}
+                         {/* Removed manual address and notify configuration fields */}
 
                         <View style={styles.summaryCard}>
-                            <Text style={{ fontWeight: '900', fontSize: 16 }}>Estimated totals</Text>
+                            <Text style={{ fontWeight: '900', fontSize: 16 }}>{t('checkout.recipient.estimated_totals')}</Text>
                             <View style={styles.rowBetween}>
-                                <Text style={styles.muted}>Items subtotal</Text>
+                                <Text style={styles.muted}>{t('checkout.recipient.items_subtotal')}</Text>
                                 <Text style={styles.bold}>${subtotal.toFixed(2)}</Text>
                             </View>
-                            {cardAddOn > 0 && (
+                             {cardAddOn > 0 && (
                                 <View style={styles.rowBetween}>
-                                    <Text style={styles.muted}>Card price</Text>
+                                    <Text style={styles.muted}>{t('checkout.recipient.card_price')}</Text>
                                     <Text style={styles.bold}>${cardAddOn.toFixed(2)}</Text>
                                 </View>
                             )}
 
 
-                            {/* Detailed Shipping Breakdown */}
+                             {/* Detailed Shipping Breakdown */}
                             <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
                                 <View style={[styles.rowBetween, { marginBottom: 6 }]}>
-                                    <Text style={{ fontWeight: '800', fontSize: 14, color: '#374151' }}>Shipping breakdown</Text>
+                                    <Text style={{ fontWeight: '800', fontSize: 14, color: '#374151' }}>{t('checkout.recipient.shipping_breakdown')}</Text>
                                     {isCalculatingShipping && (
-                                        <Text style={{ fontSize: 12, color: '#6b7280' }}>Calculating...</Text>
+                                        <Text style={{ fontSize: 12, color: '#6b7280' }}>{t('checkout.recipient.shipping_calculating')}</Text>
                                     )}
                                 </View>
                                 {shippingBreakdown.breakdown.map((vendor, idx) => {
                                     return (
                                         <View key={vendor.vendorId || idx}>
-                                            <View style={[styles.rowBetween, { marginTop: 4 }]}>
+                                             <View style={[styles.rowBetween, { marginTop: 4 }]}>
                                                 <Text style={[styles.muted, { fontSize: 13 }]}>
-                                                    {vendor.vendorName} ({vendor.itemCount} item{vendor.itemCount !== 1 ? 's' : ''})
+                                                    {vendor.vendorName} ({vendor.itemCount} {t('app.items', { count: vendor.itemCount })})
                                                 </Text>
                                                 <Text style={[styles.bold, { fontSize: 13, color: vendor.doesNotShip ? '#ef4444' : '#111827' }]}>
-                                                    {vendor.doesNotShip ? 'Not supported' : (vendor.shipping === 0 ? 'Free' : `$${vendor.shipping.toFixed(2)}`)}
+                                                    {vendor.doesNotShip ? t('checkout.recipient.shipping_not_supported') : (vendor.shipping === 0 ? t('checkout.common.free') : `$${vendor.shipping.toFixed(2)}`)}
                                                 </Text>
                                             </View>
-                                            {vendor.doesNotShip && (
+                                             {vendor.doesNotShip && (
                                                 <PremiumNotice
-                                                    message={`This vendor does not ship to ${selectedRecipient?.state || 'this location'}`}
+                                                    message={t('checkout.recipient.alerts.vendor_not_ship', { location: selectedRecipient?.state || t('checkout.recipient.this_location') })}
                                                     type="error"
                                                     style={{ marginTop: 6 }}
                                                 />
@@ -441,39 +443,39 @@ export default function RecipientScreen() {
                                         </View>
                                     );
                                 })}
-                                <View style={[styles.rowBetween, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E5E7EB' }]}>
-                                    <Text style={styles.muted}>Total shipping</Text>
-                                    <Text style={styles.bold}>{shippingBreakdown.total === 0 ? 'Free' : `$${shippingBreakdown.total.toFixed(2)}`}</Text>
+                                 <View style={[styles.rowBetween, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E5E7EB' }]}>
+                                    <Text style={styles.muted}>{t('checkout.recipient.total_shipping')}</Text>
+                                    <Text style={styles.bold}>{shippingBreakdown.total === 0 ? t('checkout.common.free') : `$${shippingBreakdown.total.toFixed(2)}`}</Text>
                                 </View>
                             </View>
 
-                            {/* Detailed Tax Breakdown */}
+                             {/* Detailed Tax Breakdown */}
                             <View style={{ marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: '#F3F4F6' }}>
                                 <Text style={{ fontWeight: '800', fontSize: 14, marginBottom: 6, color: '#374151' }}>
-                                    Tax breakdown ({(taxRate * 100).toFixed(1)}%)
+                                    {t('checkout.recipient.tax_breakdown', { percent: (taxRate * 100).toFixed(1) })}
                                 </Text>
-                                <View style={[styles.rowBetween, { marginTop: 4 }]}>
-                                    <Text style={[styles.muted, { fontSize: 13 }]}>Tax on items</Text>
+                                 <View style={[styles.rowBetween, { marginTop: 4 }]}>
+                                    <Text style={[styles.muted, { fontSize: 13 }]}>{t('checkout.recipient.tax_items')}</Text>
                                     <Text style={[styles.bold, { fontSize: 13 }]}>${taxBreakdown.items.toFixed(2)}</Text>
                                 </View>
-                                {cardAddOn > 0 && (
+                                 {cardAddOn > 0 && (
                                     <View style={[styles.rowBetween, { marginTop: 4 }]}>
-                                        <Text style={[styles.muted, { fontSize: 13 }]}>Tax on card</Text>
+                                        <Text style={[styles.muted, { fontSize: 13 }]}>{t('checkout.recipient.tax_card')}</Text>
                                         <Text style={[styles.bold, { fontSize: 13 }]}>${taxBreakdown.card.toFixed(2)}</Text>
                                     </View>
                                 )}
 
-                                <View style={[styles.rowBetween, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E5E7EB' }]}>
-                                    <Text style={styles.muted}>Total tax</Text>
+                                 <View style={[styles.rowBetween, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: '#E5E7EB' }]}>
+                                    <Text style={styles.muted}>{t('checkout.recipient.total_tax')}</Text>
                                     <Text style={styles.bold}>${estimatedTax.toFixed(2)}</Text>
                                 </View>
                             </View>
 
-                            <View style={[styles.rowBetween, { marginTop: 8, paddingTop: 8, borderTopWidth: 2, borderTopColor: '#E5E7EB' }]}>
-                                <Text style={{ fontWeight: '900' }}>Order total</Text>
+                             <View style={[styles.rowBetween, { marginTop: 8, paddingTop: 8, borderTopWidth: 2, borderTopColor: '#E5E7EB' }]}>
+                                <Text style={{ fontWeight: '900' }}>{t('checkout.recipient.order_total')}</Text>
                                 <Text style={{ fontWeight: '900', fontSize: 18 }}>${orderTotal.toFixed(2)}</Text>
                             </View>
-                            <Text style={{ color: '#9ba1a6', marginTop: 4, fontSize: 12 }}>Tax and shipping are estimated. Final amounts calculated at payment.</Text>
+                            <Text style={{ color: '#9ba1a6', marginTop: 4, fontSize: 12 }}>{t('checkout.recipient.disclaimer')}</Text>
                         </View>
 
                         <View style={{ height: bottom + 120 }} />
@@ -482,11 +484,11 @@ export default function RecipientScreen() {
 
                 <View style={[styles.stickyBar, { bottom: bottom > 0 ? bottom + 8 : 24 }]}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Pressable
+                         <Pressable
                             style={{ paddingVertical: 12, paddingRight: 16 }}
                             onPress={() => router.back()}
                         >
-                            <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 13 }}>Back</Text>
+                            <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 13 }}>{t('checkout.common.back')}</Text>
                         </Pressable>
                         <Pressable
                             onPress={onNext}
@@ -500,14 +502,14 @@ export default function RecipientScreen() {
                                 opacity: (!selectedRecipient || isCalculatingShipping || shippingBreakdown.hasShippingError) ? 0.8 : 1
                             }}
                         >
-                            <Text style={{ color: 'white', fontWeight: '800', fontSize: 15 }}>
+                             <Text style={{ color: 'white', fontWeight: '800', fontSize: 15 }}>
                                 {isCalculatingShipping
-                                    ? 'Verifying address...'
+                                    ? t('checkout.recipient.btn_verifying')
                                     : shippingBreakdown.hasShippingError
-                                        ? 'Shipping Unavailable'
+                                        ? t('checkout.recipient.btn_unavailable')
                                         : !selectedRecipient
-                                            ? 'Select a recipient'
-                                            : 'Add Video Message'}
+                                            ? t('checkout.recipient.btn_select')
+                                            : t('checkout.recipient.btn_next')}
                             </Text>
                         </Pressable>
                     </View>

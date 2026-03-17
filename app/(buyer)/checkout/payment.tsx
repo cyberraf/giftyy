@@ -12,13 +12,15 @@ import { calculateVendorShippingByZone } from '@/lib/shipping-utils';
 import { SafeCardField, useSafeStripe } from '@/lib/stripe-safe';
 import { supabase } from '@/lib/supabase';
 import { parsePrice } from '@/lib/utils/currency';
-import * as FileSystem from 'expo-file-system/legacy';
 import { useRouter } from 'expo-router';
+import * as FileSystem from 'expo-file-system/legacy';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 export default function PaymentScreen() {
+    const { t } = useTranslation();
     const router = useRouter();
     const { bottom } = useSafeAreaInsets();
     const { items, clear: clearCart } = useCart();
@@ -242,7 +244,7 @@ export default function PaymentScreen() {
 
     const onPay = async () => {
         if (!cardDetails?.complete) {
-            alert('Incomplete Card', 'Please complete your card details to proceed.');
+            alert(t('checkout.payment.alerts.incomplete_card'), t('checkout.payment.alerts.complete_details'));
             return;
         }
 
@@ -256,7 +258,7 @@ export default function PaymentScreen() {
 
             const amountInCents = Math.round(total * 100);
             if (amountInCents < 50) {
-                alert('Payment Error', 'The minimum amount for this transaction is $0.50.');
+                alert(t('checkout.payment.alerts.payment_error'), t('checkout.payment.alerts.min_amount'));
                 setLoading(false);
                 return;
             }
@@ -274,7 +276,7 @@ export default function PaymentScreen() {
 
             if (intentError || !data?.paymentIntent) {
                 console.error('[Payment] Edge Function Error:', intentError || data);
-                alert('Payment Initialization Failed', 'Could not initialize secure payment session. Please try again.');
+                alert(t('checkout.payment.alerts.init_failed'), t('checkout.payment.alerts.init_failed_msg'));
                 setLoading(false);
                 return;
             }
@@ -289,7 +291,7 @@ export default function PaymentScreen() {
 
             if (stripeError) {
                 console.error('[Payment] Stripe confirmation error:', stripeError);
-                alert('Payment Failed', stripeError.message || 'Your card was declined or another error occurred.');
+                alert(t('checkout.payment.alerts.payment_failed'), stripeError.message || t('checkout.payment.alerts.payment_failed_msg'));
                 setLoading(false);
                 return;
             }
@@ -364,7 +366,7 @@ export default function PaymentScreen() {
 
             if (error || !order) {
                 console.error('Error creating order:', error);
-                alert('Payment failed', 'We could not place your order. Please try again.');
+                alert(t('checkout.payment.alerts.payment_failed'), t('checkout.payment.alerts.order_failed'));
                 return;
             }
 
@@ -388,7 +390,7 @@ export default function PaymentScreen() {
 
     return (
         <View style={{ flex: 1, backgroundColor: '#fff' }}>
-            <StepBar current={6} total={7} label="Payment" />
+            <StepBar current={6} total={7} label={t('checkout.payment.step_label')} />
             <View style={{ flex: 1 }}>
                 <ScrollView
                     contentContainerStyle={styles.content}
@@ -413,21 +415,21 @@ export default function PaymentScreen() {
                             isCalculatingShipping={isCalculatingShipping}
                         />
 
-                        <View style={styles.formCard}>
+                         <View style={styles.formCard}>
                             <View style={styles.secureBadge}>
                                 <Text style={{ fontSize: GIFTYY_THEME.typography.sizes.sm }}>🔒</Text>
-                                <Text style={styles.secureText}>SSL secured • PCI compliant</Text>
+                                <Text style={styles.secureText}>{t('checkout.payment.secure_badge')}</Text>
                             </View>
                             <InputField
-                                label="Name on card"
-                                placeholder="Taylor Jenkins"
+                                label={t('checkout.payment.name_on_card')}
+                                placeholder={t('checkout.payment.name_placeholder')}
                                 value={name}
                                 onChangeText={setName}
                                 autoComplete="name"
                             />
-
+ 
                             <View style={styles.inputGroup}>
-                                <Text style={styles.inputLabel}>Card Details</Text>
+                                <Text style={styles.inputLabel}>{t('checkout.payment.card_details')}</Text>
                                 <SafeCardField
                                     postalCodeEnabled={false}
                                     onCardChange={(details: any) => setCardDetails(details)}
@@ -438,10 +440,10 @@ export default function PaymentScreen() {
                                         placeholderColor: '#9CA3AF',
                                         fontSize: 16,
                                     }}
-                                />
+                                 />
                             </View>
-
-                            <Text style={styles.finePrint}>By tapping pay you authorize Giftyy to charge this card for the total shown. You'll receive an email confirmation immediately.</Text>
+ 
+                            <Text style={styles.finePrint}>{t('checkout.payment.fine_print')}</Text>
                         </View>
                         <View style={{ height: bottom + 120 }} />
                     </View>
@@ -450,11 +452,11 @@ export default function PaymentScreen() {
                 {/* Floating Bottom CTA */}
                 <View style={[styles.stickyBar, { bottom: bottom > 0 ? bottom + 8 : 24 }]}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <Pressable
+                         <Pressable
                             style={{ paddingVertical: 12, paddingRight: 16 }}
                             onPress={() => router.back()}
                         >
-                            <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 13 }}>Back</Text>
+                            <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 13 }}>{t('checkout.common.back')}</Text>
                         </Pressable>
                         <Pressable
                             style={{ flex: 1, backgroundColor: GIFTYY_THEME.colors.primary, paddingVertical: 14, borderRadius: 999, alignItems: 'center', opacity: loading ? 0.7 : 1 }}
@@ -463,9 +465,9 @@ export default function PaymentScreen() {
                         >
                             {loading ? (
                                 <ActivityIndicator color="#fff" />
-                            ) : (
+                             ) : (
                                 <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>
-                                    Pay {formatCurrency(total)}
+                                    {t('checkout.payment.pay_btn', { amount: formatCurrency(total) })}
                                 </Text>
                             )}
                         </Pressable>

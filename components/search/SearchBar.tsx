@@ -6,6 +6,7 @@
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import React, { useEffect, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
 	Dimensions,
 	Modal,
@@ -52,6 +53,7 @@ export function SearchBar({
 	showSuggestions = false,
 	onSuggestionPress,
 }: SearchBarProps) {
+	const { t } = useTranslation();
 	const [isFocused, setIsFocused] = useState(false);
 	const [searchBarLayout, setSearchBarLayout] = useState({ x: 0, y: 0, width: 0, height: 0 });
 	const [showSearchSuggestions, setShowSearchSuggestions] = useState(false);
@@ -114,7 +116,7 @@ export function SearchBar({
 				<TextInput
 					ref={inputRef}
 					style={styles.input}
-					placeholder="Search gifts, vendors, categories..."
+					placeholder={t('search.placeholder')}
 					placeholderTextColor={GIFTYY_THEME.colors.gray400}
 					value={value}
 					onChangeText={onChangeText}
@@ -173,7 +175,7 @@ export function SearchBar({
 							>
 								{value.trim().length === 0 && (
 									<>
-										<Text style={styles.suggestionSectionTitle}>Trending Searches</Text>
+										<Text style={styles.suggestionSectionTitle}>{t('search.trending_searches', { defaultValue: 'Trending Searches' })}</Text>
 										{TRENDING_SEARCHES.map((search, index) => (
 											<Pressable
 												key={index}

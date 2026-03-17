@@ -1,10 +1,11 @@
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import React from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, StyleSheet, Text, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 type ShippingBreakdown = {
 	total: number;
-	breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number }>;
+	breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number; doesNotShip?: boolean }>;
 };
 
 type TaxBreakdown = {
@@ -14,7 +15,6 @@ type TaxBreakdown = {
 };
 
 type Props = {
-	title?: string;
 	itemsSubtotal: number;
 	cardAddOn: number;
 	shippingBreakdown: ShippingBreakdown;
@@ -25,8 +25,22 @@ type Props = {
 	isCalculatingShipping?: boolean;
 };
 
+type SummaryRowProps = {
+	label: string;
+	value: string;
+	emphasize?: boolean;
+};
+
+function SummaryRow({ label, value, emphasize = false }: SummaryRowProps) {
+	return (
+		<View style={styles.summaryRowBetween}>
+			<Text style={[styles.summaryLabel, emphasize && styles.emphasizedLabel]}>{label}</Text>
+			<Text style={[styles.summaryValue, emphasize && styles.emphasizedValue]}>{value}</Text>
+		</View>
+	);
+}
+
 export function EstimatedTotalsCard({
-	title = 'Estimated totals',
 	itemsSubtotal,
 	cardAddOn,
 	shippingBreakdown,
@@ -36,74 +50,49 @@ export function EstimatedTotalsCard({
 	formatCurrency,
 	isCalculatingShipping = false,
 }: Props) {
-	const shipping = shippingBreakdown.total;
+	const { t } = useTranslation();
 
 	return (
 		<View style={styles.summaryCard}>
-			<Text style={styles.summaryTitle}>{title}</Text>
+			<Text style={styles.summaryTitle}>{t('checkout.recipient.estimated_totals')}</Text>
+			<SummaryRow label={t('checkout.recipient.items_subtotal')} value={formatCurrency(itemsSubtotal)} />
+			{cardAddOn > 0 && <SummaryRow label={t('checkout.recipient.card_price')} value={formatCurrency(cardAddOn)} />}
+
+			<View style={styles.divider} />
+
 			<View style={styles.summaryRowBetween}>
-				<Text style={styles.summaryLabel}>Items subtotal</Text>
-				<Text style={styles.summaryValue}>{formatCurrency(itemsSubtotal)}</Text>
-			</View>
-			{cardAddOn > 0 && (
-				<View style={styles.summaryRowBetween}>
-					<Text style={styles.summaryLabel}>Card price</Text>
-					<Text style={styles.summaryValue}>{formatCurrency(cardAddOn)}</Text>
-				</View>
-			)}
-
-			<View style={{ marginTop: GIFTYY_THEME.spacing.sm, paddingTop: GIFTYY_THEME.spacing.sm, borderTopWidth: 1, borderTopColor: GIFTYY_THEME.colors.gray100 }}>
-				<View style={[styles.summaryRowBetween, { marginBottom: 6 }]}>
-					<Text style={[styles.summaryLabel, { fontWeight: GIFTYY_THEME.typography.weights.extrabold }]}>Shipping breakdown</Text>
-					{isCalculatingShipping ? (
-						<Text style={{ fontSize: GIFTYY_THEME.typography.sizes.sm, color: GIFTYY_THEME.colors.gray500 }}>Calculating...</Text>
-					) : (
-						<Text style={[styles.summaryValue, { fontSize: GIFTYY_THEME.typography.sizes.sm, color: GIFTYY_THEME.colors.gray500 }]}>Estimated</Text>
-					)}
-				</View>
-				{shippingBreakdown.breakdown.map((vendor, idx) => (
-					<View key={vendor.vendorId || idx} style={[styles.summaryRowBetween, { marginTop: GIFTYY_THEME.spacing.xs }]}>
-						<Text style={[styles.summaryLabel, { fontSize: GIFTYY_THEME.typography.sizes.sm }]}>
-							{vendor.vendorName} ({vendor.itemCount} item{vendor.itemCount !== 1 ? 's' : ''})
-						</Text>
-						<Text style={[styles.summaryValue, { fontSize: GIFTYY_THEME.typography.sizes.sm }]}>
-							{vendor.shipping === 0 ? 'Free' : formatCurrency(vendor.shipping)}
-						</Text>
-					</View>
-				))}
-				<View style={[styles.summaryRowBetween, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: GIFTYY_THEME.colors.gray200 }]}>
-					<Text style={styles.summaryLabel}>Total shipping</Text>
-					<Text style={styles.summaryValue}>{shipping === 0 ? 'Free' : formatCurrency(shipping)}</Text>
-				</View>
+				<Text style={styles.summaryLabel}>{t('checkout.recipient.shipping_breakdown')}</Text>
+				{isCalculatingShipping && <ActivityIndicator size="small" color={GIFTYY_THEME.colors.primary} />}
 			</View>
 
-			<View style={{ marginTop: GIFTYY_THEME.spacing.sm, paddingTop: GIFTYY_THEME.spacing.sm, borderTopWidth: 1, borderTopColor: GIFTYY_THEME.colors.gray100 }}>
-				<Text style={[styles.summaryLabel, { fontWeight: GIFTYY_THEME.typography.weights.extrabold, marginBottom: 6 }]}>
-					Tax breakdown ({(taxRate * 100).toFixed(1)}%)
-				</Text>
-				<View style={[styles.summaryRowBetween, { marginTop: GIFTYY_THEME.spacing.xs }]}>
-					<Text style={[styles.summaryLabel, { fontSize: GIFTYY_THEME.typography.sizes.sm }]}>Tax on items</Text>
-					<Text style={[styles.summaryValue, { fontSize: GIFTYY_THEME.typography.sizes.sm }]}>{formatCurrency(taxBreakdown.items)}</Text>
+			{shippingBreakdown.breakdown.map((vendor, index) => (
+				<View key={vendor.vendorId || index} style={styles.vendorShippingRow}>
+					<Text style={styles.vendorNameText}>
+						{vendor.vendorName} ({vendor.itemCount} {t('app.items', { count: vendor.itemCount })})
+					</Text>
+					<Text style={styles.vendorShippingValue}>
+						{vendor.doesNotShip
+							? t('checkout.recipient.shipping_not_supported')
+							: (vendor.shipping === 0 ? t('checkout.common.free') : formatCurrency(vendor.shipping))}
+					</Text>
 				</View>
-				{cardAddOn > 0 && (
-					<View style={[styles.summaryRowBetween, { marginTop: GIFTYY_THEME.spacing.xs }]}>
-						<Text style={[styles.summaryLabel, { fontSize: GIFTYY_THEME.typography.sizes.sm }]}>Tax on card</Text>
-						<Text style={[styles.summaryValue, { fontSize: GIFTYY_THEME.typography.sizes.sm }]}>{formatCurrency(taxBreakdown.card)}</Text>
-					</View>
-				)}
-				<View style={[styles.summaryRowBetween, { marginTop: 6, paddingTop: 6, borderTopWidth: 1, borderTopColor: GIFTYY_THEME.colors.gray200 }]}>
-					<Text style={styles.summaryLabel}>Total tax</Text>
-					<Text style={styles.summaryValue}>{formatCurrency(taxBreakdown.total)}</Text>
-				</View>
-			</View>
+			))}
 
-			<View style={[styles.summaryRowBetween, { marginTop: GIFTYY_THEME.spacing.sm, paddingTop: GIFTYY_THEME.spacing.sm, borderTopWidth: 2, borderTopColor: GIFTYY_THEME.colors.gray200 }]}>
-				<Text style={[styles.summaryLabel, { fontWeight: GIFTYY_THEME.typography.weights.black }]}>Order total</Text>
-				<Text style={[styles.summaryValue, { fontWeight: GIFTYY_THEME.typography.weights.black, fontSize: GIFTYY_THEME.typography.sizes.lg }]}>{formatCurrency(total)}</Text>
-			</View>
-			<Text style={{ color: GIFTYY_THEME.colors.gray400, marginTop: 6, fontSize: GIFTYY_THEME.typography.sizes.sm }}>
-				Tax and shipping are estimated. Final amounts calculated at payment.
+			<SummaryRow label={t('checkout.recipient.total_shipping')} value={shippingBreakdown.total === 0 ? t('checkout.common.free') : formatCurrency(shippingBreakdown.total)} />
+
+			<View style={styles.divider} />
+
+			<Text style={styles.summaryLabel}>
+				{t('checkout.recipient.tax_breakdown', { percent: (taxRate * 100).toFixed(1) })}
 			</Text>
+			<SummaryRow label={t('checkout.recipient.tax_items')} value={formatCurrency(taxBreakdown.items)} />
+			{cardAddOn > 0 && <SummaryRow label={t('checkout.recipient.tax_card')} value={formatCurrency(taxBreakdown.card)} />}
+			<SummaryRow label={t('checkout.recipient.total_tax')} value={formatCurrency(taxBreakdown.total)} />
+
+			<View style={styles.divider} />
+
+			<SummaryRow label={t('checkout.recipient.order_total')} value={formatCurrency(total)} emphasize />
+			<Text style={styles.finePrint}>{t('checkout.recipient.disclaimer')}</Text>
 		</View>
 	);
 }
@@ -135,6 +124,39 @@ const styles = StyleSheet.create({
 	summaryValue: {
 		color: GIFTYY_THEME.colors.gray900,
 		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+	},
+	emphasizedLabel: {
+		fontWeight: GIFTYY_THEME.typography.weights.black,
+		color: GIFTYY_THEME.colors.gray900,
+	},
+	emphasizedValue: {
+		color: GIFTYY_THEME.colors.primary,
+		fontSize: GIFTYY_THEME.typography.sizes.lg,
+	},
+	divider: {
+		height: 1,
+		backgroundColor: GIFTYY_THEME.colors.gray100,
+		marginVertical: GIFTYY_THEME.spacing.sm,
+	},
+	vendorShippingRow: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		marginTop: 4,
+	},
+	vendorNameText: {
+		fontSize: GIFTYY_THEME.typography.sizes.sm,
+		color: GIFTYY_THEME.colors.gray500,
+	},
+	vendorShippingValue: {
+		fontSize: GIFTYY_THEME.typography.sizes.sm,
+		color: GIFTYY_THEME.colors.gray900,
+		fontWeight: GIFTYY_THEME.typography.weights.bold,
+	},
+	finePrint: {
+		fontSize: GIFTYY_THEME.typography.sizes.xs,
+		color: GIFTYY_THEME.colors.gray400,
+		marginTop: 8,
+		fontStyle: 'italic',
 	},
 });
 

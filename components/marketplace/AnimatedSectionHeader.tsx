@@ -28,10 +28,7 @@ export function AnimatedSectionHeader({
 	icon,
 }: AnimatedSectionHeaderProps) {
 	return (
-		<Animated.View 
-			entering={FadeInDown.duration(400).delay(100)}
-			style={styles.container}
-		>
+		<View style={styles.container}>
 			<View style={styles.leftSection}>
 				{icon && (
 					<IconSymbol 
@@ -49,7 +46,7 @@ export function AnimatedSectionHeader({
 				</View>
 			</View>
 			{actionText && onActionPress && (
-				<Animated.View entering={FadeInRight.duration(400).delay(200)}>
+				<View>
 					<Pressable 
 						onPress={onActionPress}
 						style={styles.actionButton}
@@ -62,9 +59,9 @@ export function AnimatedSectionHeader({
 							style={{ marginLeft: 4 }}
 						/>
 					</Pressable>
-				</Animated.View>
+				</View>
 			)}
-		</Animated.View>
+		</View>
 	);
 }
 

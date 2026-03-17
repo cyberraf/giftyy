@@ -164,13 +164,13 @@ export default function GlobalHeader() {
                                 if (isConfirmationPage) {
                                     router.replace('/(buyer)/(tabs)');
                                 } else if (params.returnTo) {
-                                    // Use navigate or replace for returnTo to avoid growing the stack
+                                    // Respect external return path if provided (e.g. from shop to product)
                                     router.navigate(params.returnTo as any);
-                                } else if (isSearchPage) {
-                                    // Default fallback for search if no returnTo
-                                    router.navigate('/(buyer)/(tabs)/shop');
                                 } else if (router.canGoBack()) {
                                     router.back();
+                                } else if (isSearchPage) {
+                                    // Specific fallback for search if stack is empty
+                                    router.navigate('/(buyer)/(tabs)/shop');
                                 } else {
                                     // Global fallback
                                     router.navigate('/(buyer)/(tabs)');

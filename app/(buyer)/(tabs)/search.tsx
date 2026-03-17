@@ -3,7 +3,7 @@
  * Marketplace-quality search experience with Giftyy's emotional branding
  */
 
-import { MarketplaceProductCard } from '@/components/marketplace/ProductCard';
+import { MarketplaceProductCard } from '@/components/marketplace/MarketplaceProductCard';
 import { FilterBar } from '@/components/search/FilterBar';
 import { FilterModal } from '@/components/search/FilterModal';
 import { SearchBar } from '@/components/search/SearchBar';
@@ -25,6 +25,7 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const CARD_WIDTH = (SCREEN_WIDTH - 48) / 3; // 3 columns with padding and gap
@@ -49,6 +50,7 @@ export default function SearchResultsScreen() {
 		sortBy?: string;
 	}>();
 	const { top, bottom } = useSafeAreaInsets();
+	const { t } = useTranslation();
 
 	const { products, loading: productsLoading, refreshProducts } = useProducts();
 	const { categories } = useCategories();
@@ -168,14 +170,14 @@ export default function SearchResultsScreen() {
 
 		filters.categories.forEach(catId => {
 			const cat = categories.find(c => c.id === catId);
-			if (cat) chips.push({ id: catId, label: cat.name, type: 'category' });
+			if (cat) chips.push({ id: catId, label: cat.name, type: t('search.chips.category') });
 		});
 
 		if (filters.priceRange.min > 0 || filters.priceRange.max < 1000) {
 			chips.push({
 				id: 'price',
 				label: `$${filters.priceRange.min} - $${filters.priceRange.max}`,
-				type: 'price'
+				type: t('search.chips.price')
 			});
 		}
 
@@ -234,8 +236,7 @@ export default function SearchResultsScreen() {
 		const productPrice = typeof item.price === 'number' ? item.price : parseFloat(String(item.price).replace('$', '')) || 0;
 
 		return (
-			<Animated.View
-				entering={FadeInDown.duration(400).delay(index * 50)}
+			<View
 				style={{ width: CARD_WIDTH }}
 			>
 				<MarketplaceProductCard
@@ -244,7 +245,7 @@ export default function SearchResultsScreen() {
 					price={productPrice}
 					originalPrice={item.originalPrice}
 					discountPercentage={item.discountPercentage || item.discount}
-					image={imageUrl}
+					imageUrl={imageUrl}
 					vendorName={vendor?.storeName}
 					onPress={() => router.push({ 
 						pathname: '/(buyer)/(tabs)/product/[id]', 
@@ -252,7 +253,7 @@ export default function SearchResultsScreen() {
 					})}
 					width={CARD_WIDTH}
 				/>
-			</Animated.View>
+			</View>
 		);
 	};
 
@@ -276,7 +277,7 @@ export default function SearchResultsScreen() {
 			{/* Filter & Sort Bar */}
 			<FilterBar
 				sortBy={filters.sortBy}
-				onSortChange={(sortBy) => setFilters(prev => ({ ...prev, sortBy }))}
+				onSortChange={(sortBy: any) => setFilters(prev => ({ ...prev, sortBy }))}
 				appliedFilters={appliedFilterChips}
 				onRemoveFilter={handleRemoveFilter}
 				onFilterPress={() => setShowFilters(true)}
@@ -285,8 +286,8 @@ export default function SearchResultsScreen() {
 			{/* Results Count */}
 			<View style={styles.resultsHeader}>
 				<Text style={styles.resultsText}>
-					{filteredAndSortedProducts.length} {filteredAndSortedProducts.length === 1 ? 'result' : 'results'}
-					{(params.categories || params.minPrice || params.maxPrice) && ' (filtered)'}
+					{filteredAndSortedProducts.length} {filteredAndSortedProducts.length === 1 ? t('search.results_count') : t('search.results_count_plural')}
+					{(params.categories || params.minPrice || params.maxPrice) && ` ${t('search.filtered')}`}
 				</Text>
 			</View>
 

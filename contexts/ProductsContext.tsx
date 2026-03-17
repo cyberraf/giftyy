@@ -52,9 +52,12 @@ type ProductsContextValue = {
 	products: Product[];
 	collections: Collection[];
 	loading: boolean;
+	hasMore: boolean;
 	refreshProducts: () => Promise<void>;
+	loadMoreProducts: () => Promise<void>;
 	refreshCollections: () => Promise<void>;
 	getProductById: (id: string) => Product | undefined;
+	fetchProductById: (id: string) => Promise<Product | undefined>;
 	getCollectionById: (id: string) => Collection | undefined;
 	getProductsByCollection: (collectionId: string) => Product[];
 };
@@ -118,49 +121,49 @@ function dbRowToCollection(row: any, products: Product[] = []): Collection {
 	};
 }
 
+const PAGE_SIZE = 60;
+
 export function ProductsProvider({ children }: { children: React.ReactNode }) {
 	const [products, setProducts] = useState<Product[]>([]);
 	const [collections, setCollections] = useState<Collection[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [hasMore, setHasMore] = useState(true);
+	const [page, setPage] = useState(0);
 
-	// Fetch products from Supabase
-	const refreshProducts = useCallback(async () => {
+	// Fetch products from Supabase with pagination
+	const fetchProductsBatch = useCallback(async (pageNum: number, isAppend: boolean = false) => {
 		try {
-			// Check if Supabase is configured
 			if (!isSupabaseConfigured()) {
-				console.warn('[ProductsContext] Supabase not configured. Skipping product fetch.');
-				setProducts([]);
+				console.warn('[ProductsContext] Supabase not configured.');
+				if (!isAppend) setProducts([]);
 				setLoading(false);
 				return;
 			}
 
-			const { data, error } = await supabase
+			const start = pageNum * PAGE_SIZE;
+			const end = start + PAGE_SIZE - 1;
+
+			const { data, error, count } = await supabase
 				.from('products')
-				.select('*')
-				.order('created_at', { ascending: false });
+				.select('*', { count: 'exact' })
+				.gt('stock_quantity', 0)
+				.order('created_at', { ascending: false })
+				.range(start, end);
 
 			if (error) {
-				// Check if it's a network error before logging
-				const isNetworkError = error?.message?.includes('Network request failed') ||
-				                      error?.message?.includes('fetch') ||
-				                      error?.code === 'ECONNABORTED' ||
-				                      error?.code === 'ENOTFOUND';
-				
-				if (!isNetworkError) {
-					console.error('[ProductsContext] Error fetching products:', error);
-				} else {
-					console.warn('[ProductsContext] Network error fetching products (may be offline)');
-				}
-				setProducts([]);
+				console.error('[ProductsContext] Error fetching products:', error);
+				if (!isAppend) setProducts([]);
 				return;
 			}
 
-			// Fetch category assignments for all products
-			const productIds = (data || []).map(p => p.id);
+			const fetchedRows = data || [];
+			setHasMore(fetchedRows.length === PAGE_SIZE && (count ? start + fetchedRows.length < count : true));
+
+			// Fetch category assignments for these products
+			const productIds = fetchedRows.map(p => p.id);
 			let categoryAssignments: { product_id: string; category_id: string; subcategory?: string }[] = [];
 
 			if (productIds.length > 0) {
-				// Get product-category assignments
 				const { data: assignmentsData, error: assignmentsError } = await supabase
 					.from('product_category_assignments')
 					.select('product_id, category_id, subcategory')
@@ -182,28 +185,20 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 				}
 				categoriesByProduct.get(assignment.product_id)!.add(assignment.category_id);
 				
-				// Track subcategories if specified
 				if (assignment.subcategory) {
 					subcategoriesByProduct.get(assignment.product_id)!.add(assignment.subcategory);
 				}
 			});
 
-			// Fetch variations for all products to calculate lowest prices
+			// Fetch variations for these products
 			const { data: variationsData, error: variationsError } = await supabase
 				.from('product_variations')
 				.select('*')
 				.in('product_id', productIds);
 			
-			// Filter by is_active if the column exists
 			let activeVariations = variationsData || [];
 			if (variationsData && variationsData.length > 0 && variationsData[0].hasOwnProperty('is_active')) {
 				activeVariations = variationsData.filter((v: any) => v.is_active !== false);
-			}
-			
-			if (variationsError) {
-				console.warn('[ProductsContext] Error fetching variations:', variationsError);
-			} else {
-				console.log(`[ProductsContext] Fetched ${activeVariations.length} variations for ${productIds.length} products`);
 			}
 
 			// Group variations by product ID
@@ -216,168 +211,60 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 				variationsByProduct.get(productId)!.push(variation);
 			});
 
-			// Map products with their category IDs, subcategories, and lowest prices
-			const fetchedProducts = (data || []).map(row => {
+			// Map products with categories and lowest prices
+			const processedProducts = fetchedRows.map(row => {
 				const product = dbRowToProduct(row);
 				const categoryIds = Array.from(categoriesByProduct.get(product.id) || []);
 				const subcategories = Array.from(subcategoriesByProduct.get(product.id) || []);
 				
-				// Calculate lowest price from variations if available
 				const productVariations = variationsByProduct.get(product.id) || [];
-				const originalBasePrice = product.price; // Store original price
+				const originalBasePrice = product.price;
 				let displayPrice = product.price;
-				let lowestOriginalPrice = product.price; // Track lowest original price (before discount)
+				let lowestOriginalPrice = product.price;
 				
 				if (productVariations.length > 0) {
 					const basePrice = originalBasePrice;
-					// When combinations exist, we use the lowest combination price, not basePrice
-					// Initialize with Infinity so we only use combination prices
 					let lowestPrice = Infinity;
-					let lowestOriginal = Infinity; // Track lowest price before discount
-					let hasCombinations = false; // Track if we found any combinations
+					let lowestOriginal = Infinity;
+					let hasCombinations = false;
 
-					console.log(`[ProductsContext] Calculating lowest price for product ${product.id} (${product.name}):`, {
-						basePrice,
-						variationsCount: productVariations.length,
-						variations: productVariations.map(v => ({
-							id: v.id,
-							price: v.price,
-							price_modifier: v.price_modifier,
-							attributes: typeof v.attributes === 'string' ? 'JSON string' : (v.attributes ? 'object' : 'empty'),
-						})),
-					});
-
-					// Check each variation
 					for (const variation of productVariations) {
-						// Parse attributes if it's a JSON string
 						let attrs = variation.attributes || {};
 						if (typeof attrs === 'string') {
-							try {
-								attrs = JSON.parse(attrs);
-							} catch {
-								console.warn('[ProductsContext] Failed to parse variation attributes:', variation.attributes);
-								attrs = {};
-							}
+							try { attrs = JSON.parse(attrs); } catch { attrs = {}; }
 						}
 						
-						// Debug logging for specific products
-						if (product.name?.toLowerCase().includes('halloween') || product.name?.toLowerCase().includes('pink flower') || product.name?.toLowerCase().includes('candle')) {
-							console.log(`[ProductsContext] 🔍 Processing variation ${variation.id}:`, {
-								variationPrice: variation.price,
-								priceModifier: variation.price_modifier,
-								attributesType: typeof attrs,
-								attributesKeys: attrs && typeof attrs === 'object' ? Object.keys(attrs) : [],
-								attributes: JSON.stringify(attrs).substring(0, 500), // First 500 chars
-								hasFormat: attrs && typeof attrs === 'object' && 'format' in attrs,
-								format: attrs && typeof attrs === 'object' && attrs.format,
-								hasCombinations: attrs && typeof attrs === 'object' && 'combinations' in attrs,
-								hasOptions: attrs && typeof attrs === 'object' && 'options' in attrs,
-							});
-						}
-						
-						// Check if this is a combination format
 						if (typeof attrs === 'object' && !Array.isArray(attrs) && attrs.format === 'combination') {
 							const combinations = attrs.combinations || [];
-							hasCombinations = true; // Mark that we have combinations
+							hasCombinations = true;
 							
-							if (product.name?.toLowerCase().includes('halloween') || product.name?.toLowerCase().includes('pink flower') || product.name?.toLowerCase().includes('candle')) {
-								console.log(`[ProductsContext] 🔍 Found combination format with ${combinations.length} combinations`);
-							}
-							
-							// Check each combination
 							for (const combo of combinations) {
-								// Calculate price for this combination
 								const priceModifier = combo.priceModifier ?? combo.price_modifier ?? 0;
 								const comboPrice = basePrice + parseFloat(String(priceModifier));
-								
-								// Track original price (before discount)
-								if (comboPrice < lowestOriginal) {
-									lowestOriginal = comboPrice;
-								}
-								
-								// Apply discount if available
 								const discount = combo.discountPercentage ?? combo.discount_percentage ?? 0;
 								const finalPrice = discount > 0 
 									? comboPrice * (1 - discount / 100)
 									: comboPrice;
 								
-								if (product.name?.toLowerCase().includes('halloween') || product.name?.toLowerCase().includes('pink flower') || product.name?.toLowerCase().includes('candle')) {
-									console.log(`[ProductsContext] 🔍 Combination price:`, {
-										comboPrice,
-										priceModifier,
-										discount,
-										finalPrice,
-										lowestPrice,
-									});
-								}
-								
-								// Check stock availability - show lowest price even if out of stock
-								// (we'll show stock status separately in the UI)
-								const stock = combo.stockQuantity ?? combo.stock_quantity ?? 0;
-								// Update lowest price if this is lower (or if lowestPrice is Infinity)
-								if (finalPrice < lowestPrice || lowestPrice === Infinity) {
-									lowestPrice = finalPrice;
-								}
-								// Update lowest original price if this is lower (or if lowestOriginal is Infinity)
-								if (comboPrice < lowestOriginal || lowestOriginal === Infinity) {
-									lowestOriginal = comboPrice;
-								}
+								if (finalPrice < lowestPrice || lowestPrice === Infinity) lowestPrice = finalPrice;
+								if (comboPrice < lowestOriginal || lowestOriginal === Infinity) lowestOriginal = comboPrice;
 							}
 						} else {
-							// Standard format - check variation price
-							// First check if variation has a direct price
 							if (variation.price !== null && variation.price !== undefined) {
-								const variationPrice = parseFloat(String(variation.price));
-								if (variationPrice < lowestPrice || lowestPrice === Infinity) {
-									lowestPrice = variationPrice;
-								}
-								if (variationPrice < lowestOriginal || lowestOriginal === Infinity) {
-									lowestOriginal = variationPrice;
-								}
+								const vp = parseFloat(String(variation.price));
+								if (vp < lowestPrice || lowestPrice === Infinity) lowestPrice = vp;
+								if (vp < lowestOriginal || lowestOriginal === Infinity) lowestOriginal = vp;
 							} else if (variation.price_modifier !== null && variation.price_modifier !== undefined) {
-								// Check if variation has a price modifier
-								const priceModifier = parseFloat(String(variation.price_modifier));
-								const variationPrice = basePrice + priceModifier;
-								if (variationPrice < lowestPrice || lowestPrice === Infinity) {
-									lowestPrice = variationPrice;
-								}
-								if (variationPrice < lowestOriginal || lowestOriginal === Infinity) {
-									lowestOriginal = variationPrice;
-								}
-							} else {
-								// Check if there's a price modifier in the attributes options
-								if (typeof attrs === 'object' && 'options' in attrs && Array.isArray(attrs.options)) {
-									for (const option of attrs.options) {
-										if (option.priceModifier !== null && option.priceModifier !== undefined) {
-											const optionPrice = basePrice + parseFloat(String(option.priceModifier));
-											if (optionPrice < lowestPrice || lowestPrice === Infinity) {
-												lowestPrice = optionPrice;
-											}
-											if (optionPrice < lowestOriginal || lowestOriginal === Infinity) {
-												lowestOriginal = optionPrice;
-											}
-										} else if (option.price !== null && option.price !== undefined) {
-											const optionPrice = parseFloat(String(option.price));
-											if (optionPrice < lowestPrice || lowestPrice === Infinity) {
-												lowestPrice = optionPrice;
-											}
-											if (optionPrice < lowestOriginal || lowestOriginal === Infinity) {
-												lowestOriginal = optionPrice;
-											}
-										}
-									}
-								}
+								const pm = parseFloat(String(variation.price_modifier));
+								const vp = basePrice + pm;
+								if (vp < lowestPrice || lowestPrice === Infinity) lowestPrice = vp;
+								if (vp < lowestOriginal || lowestOriginal === Infinity) lowestOriginal = vp;
 							}
 						}
 					}
 
-					// Update display price to lowest price found
-					// If we have combinations, use only combination prices (ignore basePrice)
-					// If no combinations, compare with basePrice and variation prices
 					if (hasCombinations) {
-						// When combinations exist, use only the lowest combination price
 						if (lowestPrice === Infinity) {
-							// No valid combination prices found, fallback to basePrice
 							displayPrice = basePrice;
 							lowestOriginalPrice = basePrice;
 						} else {
@@ -385,15 +272,9 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 							lowestOriginalPrice = lowestOriginal === Infinity ? lowestPrice : lowestOriginal;
 						}
 					} else {
-						// No combinations, compare with basePrice to ensure we have the absolute minimum
-						if (basePrice > 0 && basePrice < lowestPrice) {
-							lowestPrice = basePrice;
-						}
-						if (basePrice > 0 && basePrice < lowestOriginal) {
-							lowestOriginal = basePrice;
-						}
+						if (basePrice > 0 && basePrice < lowestPrice) lowestPrice = basePrice;
+						if (basePrice > 0 && basePrice < lowestOriginal) lowestOriginal = basePrice;
 						
-						// If lowestPrice is still Infinity, use basePrice as fallback
 						if (lowestPrice === Infinity) {
 							displayPrice = basePrice;
 							lowestOriginalPrice = basePrice;
@@ -402,47 +283,42 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 							lowestOriginalPrice = lowestOriginal === Infinity ? basePrice : lowestOriginal;
 						}
 					}
-					
-					// Log for debugging specific products
-					if (product.name?.toLowerCase().includes('halloween') || product.name?.toLowerCase().includes('pink flower') || product.name?.toLowerCase().includes('candle')) {
-						console.log(`[ProductsContext] ⚠️ Price calculation result for product ${product.id} (${product.name}):`, {
-							originalPrice: originalBasePrice,
-							lowestOriginalPrice,
-							lowestPrice,
-							displayPrice,
-							hasVariations: true,
-							hasCombinations,
-							variationsProcessed: productVariations.length,
-						});
-					}
-				} else {
-					console.log(`[ProductsContext] No variations for product ${product.id}, using base price:`, product.price);
 				}
 				
 				return {
 					...product,
-					price: displayPrice, // Use lowest price for variable products (after discount if applicable)
-					originalPrice: productVariations.length > 0 ? lowestOriginalPrice : undefined, // Store lowest original price (before discount) for variable products
+					price: displayPrice,
+					originalPrice: productVariations.length > 0 ? lowestOriginalPrice : undefined,
 					categoryIds: categoryIds.length > 0 ? categoryIds : undefined,
 					subcategories: subcategories.length > 0 ? subcategories : undefined,
 				};
 			});
 			
-			setProducts(fetchedProducts);
-		} catch (err: any) {
-			// Suppress repeated network error logs
-			const isNetworkError = err?.message?.includes('Network request failed') || 
-			                      err?.message?.includes('fetch') ||
-			                      err?.name === 'TypeError';
-			
-			if (!isNetworkError) {
-				console.error('[ProductsContext] Unexpected error fetching products:', err);
+			if (isAppend) {
+				setProducts(prev => [...prev, ...processedProducts]);
+			} else {
+				setProducts(processedProducts);
 			}
-			setProducts([]);
-		} finally {
-			setLoading(false);
+		} catch (err: any) {
+			console.error('[ProductsContext] Unexpected error:', err);
 		}
 	}, []);
+
+	const refreshProducts = useCallback(async () => {
+		setLoading(true);
+		setPage(0);
+		await fetchProductsBatch(0, false);
+		setLoading(false);
+	}, [fetchProductsBatch]);
+
+	const loadMoreProducts = useCallback(async () => {
+		if (!hasMore || loading) return;
+		setLoading(true);
+		const nextPage = page + 1;
+		setPage(nextPage);
+		await fetchProductsBatch(nextPage, true);
+		setLoading(false);
+	}, [hasMore, loading, page, fetchProductsBatch]);
 
 	// Fetch collections with their products from Supabase
 	const refreshCollections = useCallback(async () => {
@@ -520,6 +396,7 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 				const { data: productsData, error: productsError } = await supabase
 					.from('products')
 					.select('*')
+					.gt('stock_quantity', 0)
 					.in('id', Array.from(productIds));
 
 				if (productsError) {
@@ -595,6 +472,41 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 		[products]
 	);
 
+	const fetchProductById = useCallback(
+		async (id: string): Promise<Product | undefined> => {
+			// Check local cache first
+			const cached = products.find((p) => p.id === id);
+			if (cached) return cached;
+
+			try {
+				const { data, error } = await supabase
+					.from('products')
+					.select('*')
+					.eq('id', id)
+					.single();
+
+				if (error || !data) {
+					console.error('[ProductsContext] Error fetching product by ID:', error);
+					return undefined;
+				}
+
+				const newProduct = dbRowToProduct(data);
+				
+				// Update products list if it's not already there
+				setProducts(prev => {
+					if (prev.some(p => p.id === id)) return prev;
+					return [...prev, newProduct];
+				});
+
+				return newProduct;
+			} catch (err) {
+				console.error('[ProductsContext] Unexpected error fetching product by ID:', err);
+				return undefined;
+			}
+		},
+		[products]
+	);
+
 	const getCollectionById = useCallback(
 		(id: string): Collection | undefined => {
 			return collections.find((c) => c.id === id);
@@ -615,13 +527,16 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 			products,
 			collections,
 			loading,
+			hasMore,
 			refreshProducts,
+			loadMoreProducts,
 			refreshCollections,
 			getProductById,
+			fetchProductById,
 			getCollectionById,
 			getProductsByCollection,
 		}),
-		[products, collections, loading, refreshProducts, refreshCollections, getProductById, getCollectionById, getProductsByCollection]
+		[products, collections, loading, hasMore, refreshProducts, loadMoreProducts, refreshCollections, getProductById, fetchProductById, getCollectionById, getProductsByCollection]
 	);
 
 	return <ProductsContext.Provider value={value}>{children}</ProductsContext.Provider>;
@@ -636,7 +551,7 @@ export function useProducts() {
 }
 
 // Utility function to convert Product to SimpleProduct format (for backward compatibility)
-export function productToSimpleProduct(product: Product): { id: string; name: string; price: string; image: string; discount?: number; originalPrice?: number } {
+export function productToSimpleProduct(product: Product): { id: string; name: string; price: number; image: string; discount?: number; originalPrice?: number, discountPercentage?: number } {
 	// If originalPrice is provided, it means the price is already the discounted price
 	// Otherwise, apply discountPercentage if available
 	const discountedPrice = product.originalPrice !== undefined && product.originalPrice > product.price

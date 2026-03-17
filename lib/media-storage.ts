@@ -16,7 +16,8 @@ export type MediaType = 'video' | 'photo';
 export async function uploadMediaToStorage(
 	localUri: string,
 	userId: string,
-	mediaType: MediaType
+	mediaType: MediaType,
+	onProgress?: (progress: number) => void
 ): Promise<{ url: string; error: Error | null }> {
 	try {
 		// Generate a unique filename
@@ -29,7 +30,7 @@ export async function uploadMediaToStorage(
 		// Read file as base64 using expo-file-system legacy API
 		const fileUri = localUri.startsWith('file://') ? localUri : `file://${localUri}`;
 		const base64 = await FileSystem.readAsStringAsync(fileUri, {
-			encoding: FileSystem.EncodingType.Base64,
+			encoding: 'base64',
 		});
 
 		// Convert base64 to ArrayBuffer
@@ -49,7 +50,14 @@ export async function uploadMediaToStorage(
 			.upload(filename, byteArray, {
 				contentType,
 				upsert: false,
-			});
+				onUploadProgress: (progress: any) => {
+					if (onProgress) {
+						const percent = (progress.loaded / progress.total) * 100;
+						console.log(`[Storage] Upload progress: ${percent.toFixed(2)}%`);
+						onProgress(percent);
+					}
+				},
+			} as any);
 
 		if (error) {
 			console.error(`Error uploading ${mediaType}:`, error);

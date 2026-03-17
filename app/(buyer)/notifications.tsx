@@ -5,11 +5,13 @@ import { useRouter } from 'expo-router';
 import React from 'react';
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 const BRAND_COLOR = '#f75507';
 const BRAND_LIGHT = '#FFF3E0';
 
 export default function NotificationsScreen() {
+  const { t } = useTranslation();
   const { top, bottom } = useSafeAreaInsets();
   const router = useRouter();
   const { notifications, unreadCount, markRead, markAllRead, loading, loadingMore, hasMore, refresh, loadMore } = useNotifications();
@@ -40,20 +42,20 @@ export default function NotificationsScreen() {
     const hours = Math.floor(diff / 3600000);
     const days = Math.floor(diff / 86400000);
 
-    if (minutes < 1) return 'Just now';
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    if (days < 7) return `${days}d ago`;
+    if (minutes < 1) return t('notifications.time.just_now');
+    if (minutes < 60) return t('notifications.time.minutes_ago', { count: minutes });
+    if (hours < 24) return t('notifications.time.hours_ago', { count: hours });
+    if (days < 7) return t('notifications.time.days_ago', { count: days });
     return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
 
   return (
-    <View style={[styles.container, { paddingTop: top + 60 }]}>
+    <View style={[styles.container, { paddingTop: top + 72 }]}>
       {/* Header */}
       <View style={styles.header}>
         <View style={{ width: 40 }} />
         <View style={styles.headerTitleContainer}>
-          <Text style={styles.headerTitle}>Notifications</Text>
+          <Text style={styles.headerTitle}>{t('notifications.title')}</Text>
           {unreadCount > 0 && (
             <View style={styles.badge}>
               <Text style={styles.badgeText}>{unreadCount}</Text>
@@ -66,7 +68,7 @@ export default function NotificationsScreen() {
             style={styles.markAllButton}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Text style={styles.markAllText}>Mark all read</Text>
+            <Text style={styles.markAllText}>{t('notifications.mark_all_read')}</Text>
           </Pressable>
         )}
       </View>
@@ -83,7 +85,7 @@ export default function NotificationsScreen() {
               style={[styles.filterTab, active && styles.filterTabActive]}
             >
               <Text style={[styles.filterTabText, active && styles.filterTabTextActive]}>
-                {m === 'all' ? 'All' : 'Unread'}
+                {m === 'all' ? t('notifications.tabs.all') : t('notifications.tabs.unread')}
               </Text>
               {count > 0 && (
                 <View style={[styles.filterBadge, active && styles.filterBadgeActive]}>
@@ -100,7 +102,7 @@ export default function NotificationsScreen() {
       {loading && !refreshing && notifications.length === 0 ? (
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color={BRAND_COLOR} />
-          <Text style={styles.loadingText}>Loading notifications…</Text>
+          <Text style={styles.loadingText}>{t('notifications.loading')}</Text>
         </View>
       ) : (
         <FlatList
@@ -123,7 +125,7 @@ export default function NotificationsScreen() {
             loadingMore ? (
               <View style={styles.loadMoreContainer}>
                 <ActivityIndicator size="small" color={BRAND_COLOR} />
-                <Text style={styles.loadMoreText}>Loading more...</Text>
+                <Text style={styles.loadMoreText}>{t('notifications.loading_more')}</Text>
               </View>
             ) : null
           }
@@ -132,11 +134,11 @@ export default function NotificationsScreen() {
               <View style={styles.emptyIconContainer}>
                 <IconSymbol name="bell.slash" size={48} color="#d1d5db" weight="light" />
               </View>
-              <Text style={styles.emptyTitle}>All caught up!</Text>
+              <Text style={styles.emptyTitle}>{t('notifications.empty.title')}</Text>
               <Text style={styles.emptySubtitle}>
                 {mode === 'unread'
-                  ? "You don't have any unread notifications"
-                  : "You don't have any notifications yet"}
+                  ? t('notifications.empty.no_unread')
+                  : t('notifications.empty.no_notifications')}
               </Text>
             </View>
           }
@@ -197,7 +199,7 @@ export default function NotificationsScreen() {
                       style={styles.expandButton}
                     >
                       <Text style={styles.expandButtonText}>
-                        {isExpanded ? 'Show less' : 'Read more'}
+                        {isExpanded ? t('notifications.actions.show_less') : t('notifications.actions.read_more')}
                       </Text>
                     </Pressable>
                   )}
@@ -211,7 +213,7 @@ export default function NotificationsScreen() {
                       style={styles.actionButton}
                     >
                       <Text style={styles.actionButtonText}>
-                        {item.actionLabel ?? 'View'}
+                        {item.actionLabel ? t(`notifications.actions.${item.actionLabel.toLowerCase()}`, { defaultValue: item.actionLabel }) : t('notifications.actions.view')}
                       </Text>
                       <IconSymbol name="arrow.right" size={16} color="white" weight="semibold" />
                     </Pressable>

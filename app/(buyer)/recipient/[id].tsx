@@ -10,7 +10,9 @@ import { useHome } from '@/lib/hooks/useHome';
 import { supabase } from '@/lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useScrollToTop } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
     Animated,
@@ -54,29 +56,30 @@ const getOccasionEmoji = (label: string) => {
     return OCCASION_EMOJI.default;
 };
 
-const getGiftyyThought = (recipientName: string, relationship?: string, occasionLabel?: string) => {
+const getGiftyyThought = (t: any, recipientName: string, relationship?: string, occasionLabel?: string) => {
     const rel = (relationship || '').toLowerCase();
     const name = recipientName;
 
     if (rel.includes('mother') || rel.includes('mom'))
-        return `"Moms deserve the world, don't they? I've found some things that speak to her heart and celebrate everything she does for you."`;
+        return t('recipient.insights.thought.mother', { name });
     if (rel.includes('father') || rel.includes('dad'))
-        return `"Dads can be tricky to shop for, but I think we've found some real winners here. Ready to make his day special?"`;
+        return t('recipient.insights.thought.father', { name });
     if (['partner', 'spouse', 'wife', 'husband', 'girlfriend', 'boyfriend'].some(w => rel.includes(w)))
-        return `"Celebrating your better half is so special. I've picked out a few things that celebrate your unique bond and the love you share."`;
+        return t('recipient.insights.thought.partner', { name });
     if (rel.includes('friend') || rel.includes('bestie'))
-        return `"Friendship is the greatest gift! I've curated some fun and thoughtful ideas to show ${name} exactly how much their friendship means to you."`;
+        return t('recipient.insights.thought.friend', { name });
     if (['sibling', 'brother', 'sister'].some(w => rel.includes(w)))
-        return `"Sibling bonds are forever! Whether you're teasing or cheering them on, these gifts are perfect for celebrating ${name}."`;
+        return t('recipient.insights.thought.sibling', { name });
     if (['child', 'son', 'daughter'].some(w => rel.includes(w)))
-        return `"Watching them grow is the best part! I've found some treasures that ${name} will absolutely love for this special occasion."`;
+        return t('recipient.insights.thought.child', { name });
     if (['colleague', 'boss', 'work', 'professional'].some(w => rel.includes(w)))
-        return `"Professional yet personal—it's a fine line! I've selected some tasteful gifts that show appreciation for ${name}'s hard work."`;
+        return t('recipient.insights.thought.colleague', { name });
 
-    return `"It's almost time to celebrate ${name}! I've curated some thoughtful gifts that match their unique personality. Ready to make them smile?"`;
+    return t('recipient.insights.thought.default', { name });
 };
 
 const GiftyyThinking = ({ recipientName }: { recipientName: string }) => {
+    const { t } = useTranslation();
     const pulseAnim = React.useRef(new Animated.Value(1)).current;
 
     useEffect(() => {
@@ -121,12 +124,19 @@ const GiftyyThinking = ({ recipientName }: { recipientName: string }) => {
                 </Animated.View>
             </View>
             <View style={styles.thinkingTextGroup}>
-                <Text style={styles.thinkingTitle}>Giftyy is thinking...</Text>
-                <Text style={styles.thinkingSubtitle}>Finding the perfect gifts for {recipientName}</Text>
+                <Text style={styles.thinkingTitle}>{t('home.ai_thinking')}</Text>
+                <Text style={styles.thinkingSubtitle}>{t('home.ai_finding_gifts', { name: recipientName })}</Text>
             </View>
         </View>
     );
 };
+
+// ── Session Cache for AI Recommendations ─────────────────────────────────────
+const profileRecsCache: Record<string, {
+    categories: { occasion: any; products: Product[]; reasons: Record<string, any> }[];
+    insights: Record<string, string>;
+    seenProductIds: string[];
+}> = {};
 
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -136,6 +146,7 @@ export default function RecipientDetailScreen() {
     const router = useRouter();
     const navigation = useNavigation();
     const { session } = useAuth();
+    const { t, i18n } = useTranslation();
     const { alert } = useAlert();
     const { recipients, loading: recipientsLoading, deleteRecipient, updateRecipient } = useRecipients();
     const { upcomingOccasions } = useHome();
@@ -270,19 +281,47 @@ export default function RecipientDetailScreen() {
     const [categorizedRecommendations, setCategorizedRecommendations] = useState<{ occasion: any; products: Product[]; reasons: Record<string, AIRecommendation> }[]>([]);
     const [aiInsights, setAiInsights] = useState<Record<string, string>>({});
     const [aiLoading, setAiLoading] = useState(false);
+    const [seenProductIds, setSeenProductIds] = useState<string[]>([]);
     const scrollRef = React.useRef<ScrollView>(null);
+    useScrollToTop(scrollRef);
     const [sectionLayouts, setSectionLayouts] = useState<Record<string, number>>({});
     const [hasScrolled, setHasScrolled] = useState(false);
+
+
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     // Fetch AI Recommendations
     useEffect(() => {
         const fetchAIRecommendations = async () => {
             if (recipientOccasions.length === 0 || !recipient?.profileId) return;
 
-            // Limit to 3 occasions for performance/UI
-            const sortedOccasions = [...recipientOccasions].sort(
-                (a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()
-            ).slice(0, 3);
+            // Limit to ONLY the most upcoming occasion (Next Up) as requested
+            const nextOcc = [...recipientOccasions].sort(
+                (a, b) => {
+                    const diffA = Math.abs(new Date(a.date).getTime() - new Date().getTime());
+                    const diffB = Math.abs(new Date(b.date).getTime() - new Date().getTime());
+                    return diffA - diffB;
+                }
+            )[0];
+
+            if (!nextOcc) return;
+
+            const cacheKey = `${recipient.profileId}-${nextOcc.id}`;
+            const isRefresh = refreshTrigger > 0;
+
+            // Check Cache (if not explicitly refreshing)
+            if (!isRefresh && profileRecsCache[cacheKey]) {
+                setCategorizedRecommendations(profileRecsCache[cacheKey].categories);
+                setAiInsights(profileRecsCache[cacheKey].insights);
+                setSeenProductIds(profileRecsCache[cacheKey].seenProductIds);
+                return;
+            }
+
+            // CLEAR PREVIOUS RESULTS TO SHOW LOADING AVATAR
+            setCategorizedRecommendations([]);
+            setAiInsights({});
+
+            const sortedOccasions = [nextOcc];
 
             try {
                 setAiLoading(true);
@@ -290,8 +329,9 @@ export default function RecipientDetailScreen() {
 
                 const newCategories: { occasion: any; products: Product[]; reasons: Record<string, AIRecommendation> }[] = [];
                 const newInsights: Record<string, string> = {};
+                const newlySeenIds: string[] = [...seenProductIds];
 
-                // Fetch recommendations for each occasion
+                // Fetch recommendations for the next occasion
                 for (const occ of sortedOccasions) {
                     try {
                         const response = await fetch(`${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/ai-profile-recommend`, {
@@ -305,25 +345,59 @@ export default function RecipientDetailScreen() {
                                 recipientName: recipient.firstName,
                                 recipientRelationship: recipient.relationship,
                                 occasion: occ.label,
+                                excludeProductIds: seenProductIds
                             })
                         });
 
-                        const result = await response.json();
-                        console.log(`[AI Profile Recs] Occasion: ${occ.label}, Recs:`, result.recommendations);
+                        if (!response.ok) {
+                            if (response.status === 429) {
+                                newInsights[occ.id] = "Giftyy is taking a short breather (rate limit). Please try again in a few seconds!";
+                            } else {
+                                console.error(`[AI Profile Recs] Error ${response.status}:`, await response.text());
+                            }
+                            continue;
+                        }
+
+                        let result;
+                        try {
+                            result = await response.json();
+                        } catch (parseErr) {
+                            console.error(`[AI Profile Recs] JSON Parse Error:`, parseErr);
+                            continue;
+                        }
+
+                        console.log(`[AI Profile Recs] Occasion: ${occ.label}, Recs count:`, result.recommendations?.length);
 
                         if (result.insight) {
                             newInsights[occ.id] = result.insight;
                         }
 
                         if (result.recommendations && result.recommendations.length > 0) {
-                            // Link recommendations against the fully populated products context
                             const reasonsMap: Record<string, AIRecommendation> = {};
                             const matchedProducts: Product[] = [];
 
-                            result.recommendations.forEach((r: AIRecommendation) => {
+                            result.recommendations.forEach((r: any) => {
                                 reasonsMap[r.product_id] = r;
+                                newlySeenIds.push(r.product_id);
+                                
+                                // Try to find in local context first
                                 const p = products.find(prod => prod.id === r.product_id);
-                                if (p) matchedProducts.push(p);
+                                if (p) {
+                                    matchedProducts.push(p);
+                                } else if (r.name && r.price) {
+                                    // Fallback: build a partial product object from the AI enriched data
+                                    matchedProducts.push({
+                                        id: r.product_id,
+                                        name: r.name,
+                                        price: r.price,
+                                        imageUrl: r.image_url,
+                                        category: r.category,
+                                        isActive: true,
+                                        tags: [],
+                                        createdAt: new Date().toISOString(),
+                                        updatedAt: new Date().toISOString()
+                                    } as any);
+                                }
                             });
 
                             if (matchedProducts.length > 0) {
@@ -332,6 +406,8 @@ export default function RecipientDetailScreen() {
                                     products: matchedProducts,
                                     reasons: reasonsMap
                                 });
+                            } else {
+                                console.warn(`[AI Profile Recs] Found ${result.recommendations.length} recs but 0 could be matched locally or fallback.`);
                             }
                         }
                     } catch (err) {
@@ -341,6 +417,14 @@ export default function RecipientDetailScreen() {
 
                 setCategorizedRecommendations(newCategories);
                 setAiInsights(newInsights);
+                setSeenProductIds(newlySeenIds);
+                
+                // Write to Cache
+                profileRecsCache[cacheKey] = {
+                    categories: newCategories,
+                    insights: newInsights,
+                    seenProductIds: newlySeenIds
+                };
             } catch (err) {
                 console.error('Failed to fetch AI recommendations', err);
             } finally {
@@ -349,7 +433,7 @@ export default function RecipientDetailScreen() {
         };
 
         fetchAIRecommendations();
-    }, [recipientOccasions, recipient?.profileId]);
+    }, [recipientOccasions, recipient?.profileId, refreshTrigger]);
 
     // Automatic scroll to specific occasion
     useEffect(() => {
@@ -366,8 +450,8 @@ export default function RecipientDetailScreen() {
     const giftyyThought = useMemo(() => {
         if (!recipient || !displayName) return '';
         const firstNameForInsight = displayName.split(' ')[0] || '';
-        return getGiftyyThought(firstNameForInsight, recipient.relationship, nextOccasion?.label);
-    }, [recipient, displayName, nextOccasion]);
+        return getGiftyyThought(t, firstNameForInsight, recipient.relationship, nextOccasion?.label);
+    }, [recipient, displayName, nextOccasion, t]);
 
     const handleAISearch = (text: string) => {
         router.replace({ pathname: '/(buyer)/(tabs)/shop', params: { ai: text } });
@@ -378,7 +462,8 @@ export default function RecipientDetailScreen() {
         if (parts.length !== 3) return dateStr;
         const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
         if (isNaN(d.getTime())) return dateStr;
-        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+        const locale = i18n.language === 'fr' ? 'fr-FR' : 'en-US';
+        return d.toLocaleDateString(locale, { month: 'short', day: 'numeric' });
     };
 
     const getDaysUntil = (dateStr: string): string | null => {
@@ -394,8 +479,8 @@ export default function RecipientDetailScreen() {
 
         const diff = Math.round((d.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
         if (diff < 0) return null;
-        if (diff === 0) return 'Today!';
-        if (diff === 1) return 'Tomorrow';
+        if (diff === 0) return t('recipient.ui.today');
+        if (diff === 1) return t('recipient.ui.tomorrow');
 
         const months = Math.floor(diff / 30);
         const remDays = diff % 30;
@@ -411,15 +496,15 @@ export default function RecipientDetailScreen() {
     };
 
     const handleDelete = () => {
-        alert('Remove recipient', 'Are you sure you want to remove this recipient?', [
-            { text: 'Cancel', style: 'cancel' },
+        alert(t('recipient.errors.remove_title'), t('recipient.errors.remove_confirm'), [
+            { text: t('settings.cancel'), style: 'cancel' },
             {
-                text: 'Remove',
+                text: t('recipient.errors.remove_btn'),
                 style: 'destructive',
                 onPress: async () => {
                     const { error } = await deleteRecipient(id);
                     if (error) {
-                        alert('Error', `Failed to delete recipient: ${error.message}`);
+                        alert(t('settings.error'), `${t('recipient.errors.failed_delete')}: ${error.message}`);
                     } else {
                         router.back();
                     }
@@ -482,9 +567,9 @@ export default function RecipientDetailScreen() {
         return (
             <View style={[styles.centered, { paddingTop: top }]}>
                 <IconSymbol name="person.fill" size={64} color={GIFTYY_THEME.colors.gray300} />
-                <Text style={styles.errorText}>Recipient not found</Text>
+                <Text style={styles.errorText}>{t('recipient.errors.not_found')}</Text>
                 <Pressable onPress={() => router.back()} style={styles.backButton}>
-                    <Text style={styles.backButtonText}>Go Back</Text>
+                    <Text style={styles.backButtonText}>{t('settings.go_back')}</Text>
                 </Pressable>
             </View>
         );
@@ -510,7 +595,7 @@ export default function RecipientDetailScreen() {
                 {/* ── Hero ── */}
                 <LinearGradient
                     colors={['#FFF0E6', '#FFF7F2', '#FAFAFA']}
-                    style={[styles.hero, { paddingTop: top + 100 }]}
+                    style={[styles.hero, { paddingTop: top + 72 }]}
                 >
 
 
@@ -556,13 +641,13 @@ export default function RecipientDetailScreen() {
                         </View>
                         {recipient.status === 'approved' && (
                             <View style={styles.approvedBadge}>
-                                <Text style={styles.approvedBadgeText}>🎁 Gift Ready</Text>
+                                <Text style={styles.approvedBadgeText}>{t('recipient.ui.gift_ready')}</Text>
                             </View>
                         )}
                         {recipient.status === 'pending' && (
                             <View style={styles.unclaimedBadge}>
                                 <View style={styles.unclaimedDot} />
-                                <Text style={styles.unclaimedText}>Invite Pending</Text>
+                                <Text style={styles.unclaimedText}>{t('recipient.ui.invite_pending')}</Text>
                             </View>
                         )}
                     </View>
@@ -576,7 +661,7 @@ export default function RecipientDetailScreen() {
                     >
                         <Text style={styles.statEmoji}>🗓️</Text>
                         <Text style={styles.statNumber}>{recipientOccasions.length}</Text>
-                        <Text style={styles.statLabel}>Occasions</Text>
+                        <Text style={styles.statLabel}>{t('recipient.stats.occasions')}</Text>
                     </Pressable>
 
                     <View style={styles.statDivider} />
@@ -587,7 +672,7 @@ export default function RecipientDetailScreen() {
                     >
                         <Text style={styles.statEmoji}>🎁</Text>
                         <Text style={styles.statNumber}>{pastGifts.length}</Text>
-                        <Text style={styles.statLabel}>Gifts Sent</Text>
+                        <Text style={styles.statLabel}>{t('recipient.stats.gifts_sent')}</Text>
                     </Pressable>
 
                     <View style={styles.statDivider} />
@@ -597,7 +682,7 @@ export default function RecipientDetailScreen() {
                         <Text style={[styles.statNumber, { fontSize: nextOccasion ? 15 : 22 }]}>
                             {nextOccasion ? formatOccasionDate(nextOccasion.date) : '—'}
                         </Text>
-                        <Text style={styles.statLabel}>Next Up</Text>
+                        <Text style={styles.statLabel}>{t('recipient.stats.next_up')}</Text>
                     </View>
                 </View>
 
@@ -606,18 +691,81 @@ export default function RecipientDetailScreen() {
                     <View style={styles.insightCard}>
                         <View style={styles.insightHeader}>
                             <IconSymbol name="sparkles" size={15} color={GIFTYY_THEME.colors.accent ?? '#FF6B00'} />
-                            <Text style={styles.insightTitle}>Giftyy's Insight</Text>
+                            <Text style={styles.insightTitle}>{t('recipient.insights.giftyy_insight')}</Text>
                         </View>
                         <Text style={styles.insightText}>{giftyyThought}</Text>
                     </View>
                 </View>
 
+                {/* ── Personalised AI Recommendations per Occasion ── */}
+                {categorizedRecommendations.length > 0 ? (
+                    categorizedRecommendations.map(({ occasion, products: groupProducts, reasons }) => (
+                        <View
+                            key={occasion.id}
+                            style={styles.section}
+                            onLayout={(event) => {
+                                const { y } = event.nativeEvent.layout;
+                                setSectionLayouts(prev => ({ ...prev, [occasion.id]: y }));
+                            }}
+                        >
+                            <View style={styles.recHeaderContainer}>
+                                <View style={styles.recTitleWrapper}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                                        <Text style={styles.recOccasionLabel}>{occasion.label}</Text>
+                                    </View>
+                                    <Text style={styles.recSubtitle}>{t('recipient.ui.handpicked_for', { name: recipient?.firstName || '' })}</Text>
+                                </View>
+
+                                <View style={styles.recActionsGroup}>
+                                    <Pressable
+                                        onPress={() => setRefreshTrigger(prev => prev + 1)}
+                                        disabled={aiLoading}
+                                        style={({ pressed }) => [
+                                            styles.refreshRecBtn,
+                                            { opacity: (pressed || aiLoading) ? 0.6 : 1 }
+                                        ]}
+                                    >
+                                        <IconSymbol name="arrow.clockwise" size={14} color="#718096" />
+                                        <Text style={styles.refreshRecText}>{t('recipient.actions.different')}</Text>
+                                    </Pressable>
+
+                                    <Pressable
+                                        style={styles.shopMyselfBtn}
+                                        onPress={() => router.push({ pathname: '/(buyer)/(tabs)/shop', params: { ai: `@${recipient?.firstName || ''} for ${occasion.label}` } })}
+                                    >
+                                        <Text style={styles.shopMyselfText}>{t('recipient.actions.shop')}</Text>
+                                        <IconSymbol name="chevron.right" size={12} color="#FF6B00" />
+                                    </Pressable>
+                                </View>
+                            </View>
+                            {aiInsights[occasion.id] && (
+                                <View style={styles.aiInsightContainer}>
+                                    <View style={styles.aiInsightIconWrapper}>
+                                        <IconSymbol name="sparkles" size={14} color="#FF6B00" />
+                                    </View>
+                                    <Text style={styles.aiInsightText}>{aiInsights[occasion.id]}</Text>
+                                </View>
+                            )}
+                            <ScrollView
+                                horizontal
+                                showsHorizontalScrollIndicator={false}
+                                style={styles.hScroll}
+                                contentContainerStyle={styles.productScrollContent}
+                            >
+                                {groupProducts.map(renderProductCard)}
+                            </ScrollView>
+                        </View>
+                    ))
+                ) : aiLoading ? (
+                    <GiftyyThinking recipientName={recipient.firstName} />
+                ) : null}
+
                 {/* ── Upcoming Occasions ── */}
                 <View style={styles.section}>
                     <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Upcoming Occasions</Text>
+                        <Text style={styles.sectionTitle}>{t('recipient.ui.upcoming_occasions')}</Text>
                         <Pressable onPress={() => router.push({ pathname: '/(buyer)/occasions', params: { recipientId: recipient.id } })}>
-                            <Text style={styles.seeAllLink}>See All</Text>
+                            <Text style={styles.seeAllLink}>{t('recipient.ui.see_all')}</Text>
                         </Pressable>
                     </View>
 
@@ -676,51 +824,7 @@ export default function RecipientDetailScreen() {
                     </View>
                 )}
 
-                {/* ── Personalised AI Recommendations per Occasion ── */}
-                {categorizedRecommendations.length > 0 ? (
-                    categorizedRecommendations.map(({ occasion, products: groupProducts, reasons }) => (
-                        <View
-                            key={occasion.id}
-                            style={styles.section}
-                            onLayout={(event) => {
-                                const { y } = event.nativeEvent.layout;
-                                setSectionLayouts(prev => ({ ...prev, [occasion.id]: y }));
-                            }}
-                        >
-                            <View style={styles.recHeaderContainer}>
-                                <View style={styles.recTitleWrapper}>
-                                    <Text style={styles.recOccasionLabel} numberOfLines={1}>{occasion.label}</Text>
-                                    <Text style={styles.recSubtitle}>Handpicked for {recipient?.firstName || ''}</Text>
-                                </View>
-                                <Pressable
-                                    style={styles.shopMyselfBtn}
-                                    onPress={() => router.push({ pathname: '/(buyer)/(tabs)/shop', params: { ai: `@${recipient?.firstName || ''} for ${occasion.label}` } })}
-                                >
-                                    <Text style={styles.shopMyselfText}>Shop Myself</Text>
-                                    <IconSymbol name="chevron.right" size={12} color="#FF6B00" />
-                                </Pressable>
-                            </View>
-                            {aiInsights[occasion.id] && (
-                                <View style={styles.aiInsightContainer}>
-                                    <View style={styles.aiInsightIconWrapper}>
-                                        <IconSymbol name="sparkles" size={14} color="#FF6B00" />
-                                    </View>
-                                    <Text style={styles.aiInsightText}>{aiInsights[occasion.id]}</Text>
-                                </View>
-                            )}
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                style={styles.hScroll}
-                                contentContainerStyle={styles.productScrollContent}
-                            >
-                                {groupProducts.map(renderProductCard)}
-                            </ScrollView>
-                        </View>
-                    ))
-                ) : aiLoading ? (
-                    <GiftyyThinking recipientName={recipient.firstName} />
-                ) : null}
+
 
                 {/* ── Contact Info ── */}
                 <View style={styles.section}>
@@ -842,14 +946,14 @@ const styles = StyleSheet.create({
 
     /* ── Hero ── */
     hero: {
-        paddingBottom: 40,
+        paddingBottom: 28,
         alignItems: 'center',
     },
 
 
 
     /* Avatar */
-    avatarWrapper: { position: 'relative', marginBottom: 24 },
+    avatarWrapper: { position: 'relative', marginBottom: 16 },
     avatarRing1: {
         width: 140,
         height: 140,
@@ -904,7 +1008,7 @@ const styles = StyleSheet.create({
         fontWeight: '900',
         color: '#1A202C',
         letterSpacing: -0.5,
-        marginBottom: 12,
+        marginBottom: 6,
         textAlign: 'center',
         paddingHorizontal: 20,
     },
@@ -912,7 +1016,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        marginBottom: 20,
+        marginBottom: 12,
     },
     relBadge: {
         backgroundColor: 'rgba(255,107,0,0.1)',
@@ -972,19 +1076,21 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         backgroundColor: '#FFF',
         marginHorizontal: 16,
-        marginTop: -26,
-        borderRadius: 24,
+        marginTop: -20,
+        borderRadius: 20,
         paddingVertical: 8,
+        borderWidth: 1,
+        borderColor: '#F8FAFC',
         shadowColor: '#000',
-        shadowOpacity: 0.08,
-        shadowRadius: 20,
-        shadowOffset: { width: 0, height: 6 },
-        elevation: 8,
+        shadowOpacity: 0.04,
+        shadowRadius: 12,
+        shadowOffset: { width: 0, height: 4 },
+        elevation: 4,
     },
     statCard: {
         flex: 1,
         alignItems: 'center',
-        paddingVertical: 14,
+        paddingVertical: 10,
         gap: 2,
     },
     statEmoji: { fontSize: 20, marginBottom: 4 },
@@ -1010,8 +1116,8 @@ const styles = StyleSheet.create({
 
     /* ── Section layout ── */
     section: {
-        marginTop: 28,
-        paddingHorizontal: 20,
+        marginTop: 12,
+        paddingHorizontal: 16,
     },
     sectionHeader: {
         flexDirection: 'row',
@@ -1024,7 +1130,7 @@ const styles = StyleSheet.create({
         fontWeight: '800',
         color: '#1A202C',
         letterSpacing: -0.3,
-        marginBottom: 14,
+        marginBottom: 8,
     },
     seeAllLink: {
         fontSize: 13,
@@ -1037,8 +1143,8 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'center',
-        marginBottom: 16,
-        paddingHorizontal: 20,
+        marginBottom: 10,
+        paddingHorizontal: 16,
     },
     recTitleWrapper: {
         flex: 1,
@@ -1074,16 +1180,18 @@ const styles = StyleSheet.create({
 
     /* ── Occasion cards ── */
     hScroll: { marginHorizontal: -20 },
-    occasionScrollContent: { paddingHorizontal: 20, paddingVertical: 10 },
+    occasionScrollContent: { paddingHorizontal: 16, paddingVertical: 8 },
     occasionCard: {
-        width: 128,
+        width: 110,
         backgroundColor: '#FFF',
         borderRadius: 20,
-        padding: 16,
-        marginRight: 12,
+        padding: 12,
+        marginRight: 8,
+        borderWidth: 1,
+        borderColor: '#F8FAFC',
         shadowColor: '#000',
-        shadowOpacity: 0.05,
-        shadowRadius: 10,
+        shadowOpacity: 0.03,
+        shadowRadius: 8,
         shadowOffset: { width: 0, height: 2 },
         elevation: 2,
     },
@@ -1140,17 +1248,19 @@ const styles = StyleSheet.create({
     insightCard: {
         backgroundColor: '#FFF',
         borderRadius: 20,
-        padding: 20,
+        padding: 14,
+        borderWidth: 1,
+        borderColor: '#F8FAFC',
         shadowColor: '#000',
-        shadowOpacity: 0.04,
-        shadowRadius: 10,
+        shadowOpacity: 0.03,
+        shadowRadius: 8,
         elevation: 2,
     },
     insightHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         gap: 6,
-        marginBottom: 10,
+        marginBottom: 6,
     },
     bottomSheetTitle: {
         fontSize: 18,
@@ -1243,13 +1353,13 @@ const styles = StyleSheet.create({
     },
     aiInsightContainer: {
         backgroundColor: '#FFF8F4',
-        marginHorizontal: 20,
-        borderRadius: 18,
-        padding: 14,
-        marginBottom: 18,
+        marginHorizontal: 16,
+        borderRadius: 16,
+        padding: 12,
+        marginBottom: 12,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
+        gap: 10,
         borderWidth: 1,
         borderColor: 'rgba(255, 107, 0, 0.08)',
     },
@@ -1274,21 +1384,23 @@ const styles = StyleSheet.create({
     },
 
     /* ── Product cards ── */
-    productScrollContent: { paddingHorizontal: 20, paddingVertical: 10 },
+    productScrollContent: { paddingHorizontal: 16, paddingVertical: 8 },
     productCard: {
-        width: 148,
+        width: 130,
         backgroundColor: '#FFF',
-        borderRadius: 20,
-        marginRight: 14,
+        borderRadius: 16,
+        marginRight: 10,
+        borderWidth: 1,
+        borderColor: '#F8FAFC',
         shadowColor: '#000',
-        shadowOpacity: 0.06,
-        shadowRadius: 10,
-        elevation: 3,
+        shadowOpacity: 0.04,
+        shadowRadius: 8,
+        elevation: 2,
         overflow: 'hidden',
     },
     productImageBox: {
         width: '100%',
-        height: 148,
+        height: 130,
         backgroundColor: '#F7F8FA',
         justifyContent: 'center',
         alignItems: 'center',
@@ -1302,13 +1414,13 @@ const styles = StyleSheet.create({
     thinkingContainer: {
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 40,
+        paddingVertical: 16,
         backgroundColor: '#FFF',
-        marginHorizontal: 20,
-        borderRadius: 24,
-        marginTop: 10,
+        marginHorizontal: 16,
+        borderRadius: 20,
+        marginTop: 4,
         borderWidth: 1,
-        borderColor: '#F1F5F9',
+        borderColor: '#F8FAFC',
     },
     thinkingPulseWrapper: {
         width: 100,
@@ -1358,20 +1470,22 @@ const styles = StyleSheet.create({
     /* ── Contact card ── */
     contactCard: {
         backgroundColor: '#FFF',
-        borderRadius: 22,
+        borderRadius: 20,
         overflow: 'hidden',
+        borderWidth: 1,
+        borderColor: '#F8FAFC',
         shadowColor: '#000',
-        shadowOpacity: 0.04,
-        shadowRadius: 10,
+        shadowOpacity: 0.03,
+        shadowRadius: 8,
         elevation: 2,
-        marginTop: 14,
+        marginTop: 6,
     },
     contactRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 14,
-        paddingHorizontal: 18,
-        paddingVertical: 16,
+        gap: 10,
+        paddingHorizontal: 14,
+        paddingVertical: 12,
     },
     contactRowBorder: { borderTopWidth: 1, borderTopColor: '#F1F5F9' },
     contactIconBg: {
@@ -1413,4 +1527,25 @@ const styles = StyleSheet.create({
         borderRadius: 12,
     },
     backButtonText: { color: '#FFF', fontWeight: '800' },
+    refreshRecBtn: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        paddingVertical: 7,
+        paddingHorizontal: 10,
+        backgroundColor: '#F7FAFC',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#EDF2F7',
+    },
+    refreshRecText: {
+        fontSize: 12,
+        fontWeight: '700',
+        color: '#718096',
+    },
+    recActionsGroup: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
 });

@@ -18,12 +18,11 @@ let StripeLib: any = null;
 const isExpoGo = Constants.appOwnership === 'expo';
 
 try {
-    // Only attempt to require on native platforms and NOT in Expo Go
-    if (Platform.OS !== 'web' && !isExpoGo) {
+    // Attempt to require on native platforms (we rely on the try-catch to detect if native module exists)
+    if (Platform.OS !== 'web') {
         StripeLib = require('@stripe/stripe-react-native');
     } else {
-        const reason = Platform.OS === 'web' ? 'Web' : 'Expo Go';
-        console.log(`[StripeSafe] Running in ${reason}. Using fallbacks (Mock Mode). Real payments will NOT work.`);
+        console.log(`[StripeSafe] Running in Web. Using fallbacks (Mock Mode).`);
     }
 } catch (e) {
     console.warn('[StripeSafe] Failed to require @stripe/stripe-react-native. Native module missing? Using fallbacks (Mock Mode).');
@@ -33,7 +32,7 @@ try {
  * Safe version of StripeProvider
  */
 export const SafeStripeProvider = ({ children, publishableKey }: { children: React.ReactNode; publishableKey?: string }) => {
-    if (StripeLib?.StripeProvider && Platform.OS !== 'web' && !isExpoGo && publishableKey) {
+    if (StripeLib?.StripeProvider && Platform.OS !== 'web' && publishableKey) {
         return (
             <StripeLib.StripeProvider publishableKey={publishableKey}>
                 {children}
@@ -47,7 +46,7 @@ export const SafeStripeProvider = ({ children, publishableKey }: { children: Rea
  * Safe version of CardField
  */
 export const SafeCardField = (props: any) => {
-    if (StripeLib?.CardField && Platform.OS !== 'web' && !isExpoGo) {
+    if (StripeLib?.CardField && Platform.OS !== 'web') {
         return <StripeLib.CardField {...props} />;
     }
     return (

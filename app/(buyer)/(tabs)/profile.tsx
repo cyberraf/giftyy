@@ -3,32 +3,38 @@ import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRouter } from 'expo-router';
-import React, { useMemo } from 'react';
+import { useScrollToTop } from '@react-navigation/native';
+import React, { useMemo, useRef } from 'react';
 import { Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 export default function ProfileScreen() {
     const { top, bottom } = useSafeAreaInsets();
     const router = useRouter();
     const { profile: authProfile, user } = useAuth();
+    const { t } = useTranslation();
+    
+    const scrollRef = useRef<ScrollView>(null);
+    useScrollToTop(scrollRef);
 
     const displayName = useMemo(() => {
         if (authProfile?.first_name) {
             return authProfile.first_name + (authProfile.last_name ? ` ${authProfile.last_name}` : '');
         }
-        return user?.email?.split('@')[0] || 'User';
-    }, [authProfile, user]);
+        return user?.email?.split('@')[0] || t('profile.fallback_name');
+    }, [authProfile, user, t]);
 
     const menuItems: { label: string; icon: IconSymbolName; route: any }[] = [
-        { label: 'My Orders', icon: 'doc.plaintext', route: '/(buyer)/orders/index' },
-        { label: 'My Recipients', icon: 'person.2.fill', route: '/(buyer)/(tabs)/recipients' },
-        { label: 'Wishlist', icon: 'heart.fill', route: '/(buyer)/wishlist/index' },
-        { label: 'Reminders & Settings', icon: 'gearshape.fill', route: '/(buyer)/settings/index' },
+        { label: t('profile.menu.orders'), icon: 'doc.plaintext', route: '/(buyer)/orders/index' },
+        { label: t('profile.menu.recipients'), icon: 'person.2.fill', route: '/(buyer)/(tabs)/recipients' },
+        { label: t('profile.menu.wishlist'), icon: 'heart.fill', route: '/(buyer)/wishlist/index' },
+        { label: t('profile.menu.settings'), icon: 'gearshape.fill', route: '/(buyer)/settings/index' },
     ];
 
     return (
-        <View style={[styles.screen, { paddingTop: top + 64 }]}>
-            <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20 }]}>
+        <View style={[styles.screen, { paddingTop: top + 72 }]}>
+            <ScrollView ref={scrollRef} contentContainerStyle={[styles.content, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20 }]}>
                 {/* Profile Header */}
                 <View style={styles.header}>
                     <View style={styles.avatarContainer}>

@@ -14,7 +14,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { useCart } from '@/contexts/CartContext';
 import { useCategories } from '@/contexts/CategoriesContext';
-import { useProducts } from '@/contexts/ProductsContext';
+import { useProducts, Product } from '@/contexts/ProductsContext';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { useCheckout } from '@/lib/CheckoutContext';
 import { logProductAnalyticsEvent } from '@/lib/product-analytics';
@@ -54,12 +54,13 @@ type ProductVariation = {
 	stockQuantity: number;
 	imageUrl?: string;
 	images?: string[]; // Images array from database
-	attributes: Record<string, string> | { options?: any[] }; // JSONB: {"options": [{"value": "Red", ...}]}
+	attributes: any; // JSONB: {"options": [{"value": "Red", ...}]}
 	parsedOptions?: {
 		attributeName: string;
 		options: any[];
 	};
 	attrMap?: Record<string, string>; // Normalized attribute map
+	discountPercentage?: number;
 };
 
 type VariationOption = {
@@ -78,14 +79,39 @@ export default function ProductDetailsScreen() {
 	const { top, bottom } = useSafeAreaInsets();
 	const { videoUri, setVideoUri } = useCheckout();
 
-	const { getProductById, products, loading: productsLoading, refreshProducts } = useProducts();
+	const { getProductById, fetchProductById, products, loading: productsLoading, refreshProducts } = useProducts();
 	const { categories, refreshCategories } = useCategories();
-	const product = productId ? getProductById(productId) : undefined;
+	const contextProduct = productId ? getProductById(productId) : undefined;
+	const [localProduct, setLocalProduct] = useState<Product | undefined>(undefined);
+	const [isFetchingLocal, setIsFetchingLocal] = useState(false);
+	
+	const product = contextProduct || localProduct;
+	
 	const { isWishlisted, toggleWishlist } = useWishlist();
 	const { addItem } = useCart();
 	const viewLoggedRef = useRef<string | null>(null);
 	const [refreshing, setRefreshing] = useState(false);
 	const [showAdded, setShowAdded] = useState(false);
+
+	// Fetch specific product if not in context
+	useEffect(() => {
+		if (productId && !contextProduct && !localProduct && !isFetchingLocal) {
+			const loadMissingProduct = async () => {
+				setIsFetchingLocal(true);
+				try {
+					const fetched = await fetchProductById(productId);
+					if (fetched) {
+						setLocalProduct(fetched);
+					}
+				} catch (err) {
+					console.error('[ProductDetails] Error fetching missing product:', err);
+				} finally {
+					setIsFetchingLocal(false);
+				}
+			};
+			loadMissingProduct();
+		}
+	}, [productId, contextProduct, localProduct, isFetchingLocal, fetchProductById]);
 
 	// Vendor state
 	const [vendor, setVendor] = useState<{ id: string; storeName?: string; profileImageUrl?: string } | null>(null);
@@ -469,13 +495,13 @@ export default function ProductDetailsScreen() {
 						name: attributeName,
 						options,
 					};
-				}).filter(attr => attr.options.length > 0);
+				}).filter((attr: any) => attr.options.length > 0);
 
 				console.log('[Product] Processed combination format:', {
 					variationId: combinationVariation.id,
 					attributesCount: result.length,
 					combinationsCount: combinations.length,
-					attributes: result.map(a => ({ name: a.name, optionsCount: a.options.length })),
+					attributes: result.map((a: any) => ({ name: a.name, optionsCount: a.options.length })),
 				});
 
 				return result;
@@ -532,7 +558,7 @@ export default function ProductDetailsScreen() {
 				name: attributeName,
 				options,
 			};
-		}).filter(attr => attr.options.length > 0); // Only include attributes with options
+		}).filter((attr: any) => attr.options.length > 0); // Only include attributes with options
 
 		console.log('[Product] Final variantAttributes:', result.length, 'attributes');
 		result.forEach(attr => {
@@ -709,46 +735,38 @@ export default function ProductDetailsScreen() {
 	const imageUris: string[] = useMemo(() => {
 		if (!product) return [];
 
-		let images: string[] = [];
+		const uris = new Set<string>();
 
-		// If a variation option is selected, use its images
-		if (selectedVariation?.images && Array.isArray(selectedVariation.images) && selectedVariation.images.length > 0) {
-			images = selectedVariation.images.filter(Boolean);
+		// 1. Add variation images first if selected
+		if (selectedVariation?.images && Array.isArray(selectedVariation.images)) {
+			selectedVariation.images.forEach((img: string) => { if (img) uris.add(img); });
 		} else if (selectedVariation?.imageUrl) {
-			// Fallback to imageUrl if images array is not available
 			try {
 				const parsed = JSON.parse(selectedVariation.imageUrl);
-				if (Array.isArray(parsed)) {
-					images = parsed.filter(Boolean);
-				} else if (typeof parsed === 'string') {
-					images = [parsed];
-				}
+				if (Array.isArray(parsed)) parsed.forEach((img: string) => { if (img) uris.add(img); });
+				else if (typeof parsed === 'string') uris.add(parsed);
 			} catch {
-				// Not JSON, treat as single image URL
-				if (selectedVariation.imageUrl) {
-					images = [selectedVariation.imageUrl];
-				}
+				uris.add(selectedVariation.imageUrl);
 			}
 		}
 
-		// If no variation images, use product images
-		if (images.length === 0 && product.imageUrl) {
+		// 2. Add base product images from imageUrl (which may be a stringified array)
+		if (product.imageUrl) {
 			try {
 				const parsed = JSON.parse(product.imageUrl);
-				const productImages = Array.isArray(parsed) ? parsed.filter(Boolean) : [product.imageUrl];
-				images = productImages;
+				if (Array.isArray(parsed)) parsed.forEach((img: string) => { if (img) uris.add(img); });
+				else if (typeof parsed === 'string') uris.add(parsed);
 			} catch {
-				// Not JSON, treat as single image URL
-				images = [product.imageUrl];
+				uris.add(product.imageUrl);
 			}
 		}
 
-		// Ensure we have at least one image
-		if (images.length === 0 && product.imageUrl) {
-			images = [product.imageUrl];
+		// 3. Fallback to placeholder if nothing found
+		if (uris.size === 0) {
+			return ['https://via.placeholder.com/600'];
 		}
 
-		return Array.from(new Set(images.filter(Boolean)));
+		return Array.from(uris).filter(Boolean);
 	}, [product, selectedVariation]);
 
 	// Calculate lowest price from all variations (for display when no variation is selected)
@@ -872,7 +890,7 @@ export default function ProductDetailsScreen() {
 			if (!p.isActive || p.id === product.id || seenProductIds.has(p.id)) continue;
 			if (!p.categoryIds || p.categoryIds.length === 0) continue;
 
-			const sharedCategories = productCategoryIds.filter((catId) => p.categoryIds?.includes(catId));
+			const sharedCategories = productCategoryIds.filter((catId: string) => p.categoryIds?.includes(catId));
 			if (sharedCategories.length > 0) {
 				related.push(p);
 				seenProductIds.add(p.id);
@@ -936,7 +954,7 @@ export default function ProductDetailsScreen() {
 	// If variations exist, allow adding even without selection (user can add base product)
 	const allAttributesSelected = useMemo(() => {
 		if (variantAttributes.length === 0) return true; // No variations, no selection needed
-		return variantAttributes.every(attr => selected[attr.name]);
+		return variantAttributes.every((attr: any) => selected[attr.name]);
 	}, [variantAttributes, selected]);
 
 	// Check if we can add to cart
@@ -1028,7 +1046,10 @@ export default function ProductDetailsScreen() {
 			{/* Scrollable Content */}
 			<ScrollView
 				style={styles.scrollView}
-				contentContainerStyle={{ paddingBottom: TOTAL_BOTTOM_HEIGHT + bottom + 32 }}
+				contentContainerStyle={{ 
+					paddingTop: top + 72, // Clear GlobalHeader
+					paddingBottom: TOTAL_BOTTOM_HEIGHT + bottom + 32 
+				}}
 				showsVerticalScrollIndicator={false}
 				refreshControl={
 					<RefreshControl
@@ -1275,34 +1296,6 @@ const styles = StyleSheet.create({
 		position: 'relative',
 		width: SCREEN_WIDTH,
 		overflow: 'hidden',
-	},
-	headerOverlay: {
-		position: 'absolute',
-		top: 0,
-		left: 0,
-		right: 0,
-		zIndex: 100,
-		flexDirection: 'row',
-		justifyContent: 'space-between',
-		alignItems: 'center',
-		paddingHorizontal: GIFTYY_THEME.spacing.lg,
-		paddingBottom: 12,
-	},
-	headerButton: {
-		width: 40,
-		height: 40,
-		borderRadius: 20,
-		backgroundColor: 'rgba(0, 0, 0, 0.4)',
-		justifyContent: 'center',
-		alignItems: 'center',
-		...GIFTYY_THEME.shadows.md,
-	},
-	headerButtonActive: {
-		backgroundColor: 'rgba(247, 85, 7, 0.9)',
-	},
-	headerRight: {
-		flexDirection: 'row',
-		gap: 8,
 	},
 	scrollView: {
 		flex: 1,

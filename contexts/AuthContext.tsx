@@ -991,25 +991,44 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			return { error: new Error('No user logged in') };
 		}
 
-		// 1. Update the public.profiles table
-		const { error } = await supabase
-			.from('profiles')
-			.update(updates)
-			.eq('id', user.id);
+		console.log('[AuthContext] Starting updateProfile for user:', user.id);
+		const startTime = Date.now();
 
-		if (!error) {
-			// 2. Synchronize metadata back to auth.users
-			// This prevents the sync trigger from ever having stale data
-			// and provides a backup of the profile in the auth system.
-			await supabase.auth.updateUser({
-				data: updates
+		try {
+			// 1. Update the public.profiles table
+			console.log('[AuthContext] Executing profiles table update...');
+			const { error } = await supabase
+				.from('profiles')
+				.update(updates)
+				.eq('id', user.id);
+
+			console.log('[AuthContext] DB update finished. Error:', error?.message || 'none');
+
+			if (error) {
+				return { error };
+			}
+
+			// 2. Performance Optimization: Update local state IMMEDIATELY
+			setProfile(prev => {
+				console.log('[AuthContext] Syncing local profile state...');
+				return prev ? { ...prev, ...updates } : null;
 			});
 
-			await fetchProfileForUser(user);
-		}
+			/* 
+			   3. BACKGROUND SYNC REMOVED 
+			   Removing the auth.updateUser call temporarily to ensure it's not causing 
+			   contention or blocking subsequent requests.
+			*/
 
-		return { error };
-	}, [user, fetchProfileForUser]);
+			const duration = Date.now() - startTime;
+			console.log(`[AuthContext] updateProfile completed successfully in ${duration}ms`);
+			
+			return { error: null };
+		} catch (err: any) {
+			console.error('[AuthContext] CRITICAL Exception in updateProfile:', err);
+			return { error: err instanceof Error ? err : new Error(String(err)) };
+		}
+	}, [user]);
 
 	const refreshProfile = useCallback(async () => {
 		if (user) {

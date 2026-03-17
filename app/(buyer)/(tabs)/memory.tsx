@@ -13,13 +13,14 @@ import { useVaults } from '@/contexts/VaultsContext';
 import { useVideoMessages, VideoMessage } from '@/contexts/VideoMessagesContext';
 import { useSignedVideoUrl } from '@/hooks/useSignedVideoUrl';
 import { supabase } from '@/lib/supabase';
-import { ResizeMode, Video } from 'expo-av';
+import { SimpleVideo } from '@/components/SimpleVideo';
 import * as ImagePicker from 'expo-image-picker';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Dimensions, FlatList, Image, InteractionManager, Modal, NativeScrollEvent, NativeSyntheticEvent, Platform, Pressable, RefreshControl, ScrollView, Share, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 const baseTabs = ['Overview', 'Messages', 'Reactions', 'Shared memories'] as const;
 type TabKey = (typeof baseTabs)[number] | 'Vaults';
@@ -98,7 +99,7 @@ type RememberMemoryItem = MemoryVideoItem & { label: string };
 type MessageVideoItem = MemoryVideoItem;
 
 // Helper function to get older memories for "Remember this?" section
-function getRememberMemories(videos: MemoryVideoItem[], videoMessages: VideoMessage[]): RememberMemoryItem[] {
+function getRememberMemories(videos: MemoryVideoItem[], videoMessages: VideoMessage[], t: any): RememberMemoryItem[] {
     const now = new Date();
     const threeMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 3, now.getDate());
     const oneYearAgo = new Date(now.getFullYear() - 1, now.getMonth(), now.getDate());
@@ -117,15 +118,15 @@ function getRememberMemories(videos: MemoryVideoItem[], videoMessages: VideoMess
 
     return older.slice(0, 8).map((video) => {
         const videoDate = videoDateMap.get(video.id) || new Date(video.date);
-        let label = 'Older';
+        let label = t('memories.remember_this.labels.older');
 
         if (videoDate >= oneYearAgo) {
-            label = 'Last year';
+            label = t('memories.remember_this.labels.last_year');
         } else if (videoDate >= twoYearsAgo) {
-            label = 'Two years ago';
+            label = t('memories.remember_this.labels.two_years_ago');
         } else {
             const yearsAgo = now.getFullYear() - videoDate.getFullYear();
-            label = `${yearsAgo} ${yearsAgo === 1 ? 'year' : 'years'} ago`;
+            label = t('memories.remember_this.labels.years_ago', { count: yearsAgo });
         }
 
         return { ...video, label };
@@ -144,7 +145,10 @@ export default function MemoryTabScreen() {
     const [viewerIndex, setViewerIndex] = useState(0);
     const [viewerData, setViewerData] = useState<MemoryVideoItem[]>([]);
     const [refreshing, setRefreshing] = useState(false);
-    const { alert } = useAlert();
+    const [uploading, setUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState(0);
+    const { alert: showAlert } = useAlert();
+    const { t } = useTranslation();
 
     // Convert video messages to memory items
     const messageVideos = useMemo(() => {
@@ -204,23 +208,23 @@ export default function MemoryTabScreen() {
             const createdAt = Date.now();
 
             // In-app alert
-            alert(
-                'Vaults unlocked',
-                'You just unlocked Vaults. Organize and replay all your memories in one place.',
+            showAlert(
+                t('memories.alerts.vaults_unlocked.title'),
+                t('memories.alerts.vaults_unlocked.message'),
                 [
-                    { text: 'Maybe later', style: 'cancel' },
-                    { text: 'View vaults', onPress: () => setActiveTab('Vaults') },
+                    { text: t('memories.alerts.vaults_unlocked.later'), style: 'cancel' },
+                    { text: t('memories.alerts.vaults_unlocked.view'), onPress: () => setActiveTab('Vaults') },
                 ]
             );
 
             // Persistent in-app notification
             addNotification({
                 id: `vaults-unlocked-${createdAt}`,
-                title: 'Vaults unlocked',
-                body: 'Your memories are now organized into Vaults. Tap to view them.',
+                title: t('memories.alerts.vaults_unlocked.title'),
+                body: t('memories.alerts.vaults_unlocked.message'),
                 createdAt,
                 read: false,
-                actionLabel: 'View vaults',
+                actionLabel: t('memories.alerts.vaults_unlocked.view'),
                 actionHref: '/(buyer)/(tabs)/memory?vaults=1',
             });
         }
@@ -228,8 +232,8 @@ export default function MemoryTabScreen() {
 
     // Generate "Remember this?" memories from older videos
     const rememberMemories = useMemo(() => {
-        return getRememberMemories(messageVideos, videoMessages);
-    }, [messageVideos, videoMessages]);
+        return getRememberMemories(messageVideos, videoMessages, t);
+    }, [messageVideos, videoMessages, t]);
 
     // Calculate real stats
     const stats = useMemo(() => {
@@ -253,17 +257,17 @@ export default function MemoryTabScreen() {
     const description = useMemo(() => {
         switch (activeTab) {
             case 'Messages':
-                return 'Catch up on replies, share reactions, or download a clip for later.';
+                return t('memories.descriptions.messages');
             case 'Reactions':
-                return 'Watch reactions to your gifts and revisit the reactions you recorded.';
+                return t('memories.descriptions.reactions');
             case 'Vaults':
-                return 'Organize memories in themed vaults to keep big moments easy to revisit.';
+                return t('memories.descriptions.vaults');
             case 'Shared memories':
-                return 'View and manage your uploaded shared memories, including videos and photos.';
+                return t('memories.descriptions.shared_memories');
             default:
-                return 'Relive heartfelt reactions, manage your greetings, and curate vaults.';
+                return t('memories.descriptions.overview');
         }
-    }, [activeTab]);
+    }, [activeTab, t]);
 
     const handleOpenViewer = useCallback((index: number, data: MemoryVideoItem[]) => {
         setViewerData(data);
@@ -324,7 +328,7 @@ export default function MemoryTabScreen() {
                 try {
                     const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
                     if (!permission.granted) {
-                        alert('Permission required', 'Please allow media library access to upload a memory.');
+                        showAlert(t('memories.alerts.upload.permission_required'), t('memories.alerts.upload.permission_message'));
                         return;
                     }
 
@@ -351,7 +355,7 @@ export default function MemoryTabScreen() {
 
                     const asset = result.assets?.[0];
                     if (!asset?.uri) {
-                        alert('No media selected', 'Please try selecting a photo or video again.');
+                        showAlert(t('memories.alerts.upload.no_media'), t('memories.alerts.upload.no_media_message'));
                         return;
                     }
 
@@ -360,7 +364,7 @@ export default function MemoryTabScreen() {
                     setTitleModalVisible(true);
                 } catch (err: any) {
                     console.error('[Shared memories] Image picker failed:', err);
-                    alert('Could not open gallery', err?.message || 'Please try again.');
+                    showAlert(t('memories.alerts.upload.gallery_failed'), err?.message || t('common.try_again') || 'Please try again.');
                 } finally {
                     !cancelled && setPendingPickerType(null);
                 }
@@ -380,28 +384,34 @@ export default function MemoryTabScreen() {
 
     const handleUploadWithTitle = useCallback(async () => {
         if (!selectedAsset || !memoryTitle.trim()) {
-            alert('Title required', 'Please enter a title for your memory.');
+            showAlert(t('memories.alerts.upload.title_required'), t('memories.alerts.upload.title_message'));
             return;
         }
 
         setTitleModalVisible(false);
+        setUploading(true);
+        setUploadProgress(0);
 
         try {
             const { memory, error } = await addSharedMemory(
                 selectedAsset.uri,
                 memoryTitle.trim(),
-                selectedAsset.mediaType
+                selectedAsset.mediaType,
+                (progress) => setUploadProgress(Math.round(progress))
             );
 
             if (error) {
-                alert('Upload failed', error.message);
+                showAlert(t('memories.alerts.upload.failed'), error.message);
             } else {
-                alert('Success', 'Your memory has been uploaded!');
+                showAlert(t('memories.alerts.upload.success'), t('memories.alerts.upload.success_message'));
                 setMemoryTitle('');
                 setSelectedAsset(null);
             }
         } catch (err: any) {
-            alert('Upload failed', err.message || 'An error occurred while uploading.');
+            showAlert('Upload failed', err.message || 'An error occurred while uploading.');
+        } finally {
+            setUploading(false);
+            setUploadProgress(0);
         }
     }, [selectedAsset, memoryTitle, addSharedMemory]);
 
@@ -411,10 +421,10 @@ export default function MemoryTabScreen() {
 
     const { bottom } = useSafeAreaInsets();
     return (
-        <View style={[styles.screen, { paddingTop: top + 64 }]}>
+        <View style={[styles.screen, { paddingTop: top + 72 }]}>
             <TourAnchor step="memories_intro">
                 <View style={styles.fixedTabContainer}>
-                    <Text style={styles.fixedTabTitle}>Memories</Text>
+                    <Text style={styles.fixedTabTitle}>{t('memories.title')}</Text>
                     <ScrollView
                         horizontal
                         showsHorizontalScrollIndicator={false}
@@ -425,7 +435,9 @@ export default function MemoryTabScreen() {
                             const isActive = tab === activeTab;
                             return (
                                 <Pressable key={tab} style={[styles.tabPill, isActive && styles.tabPillActive]} onPress={() => setActiveTab(tab)}>
-                                    <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]} numberOfLines={1}>{tab}</Text>
+                                    <Text style={[styles.tabLabel, isActive && styles.tabLabelActive]} numberOfLines={1}>
+                                        {t(`memories.tabs.${tab.toLowerCase().replace(' ', '_')}`)}
+                                    </Text>
                                 </Pressable>
                             );
                         })}
@@ -487,37 +499,29 @@ export default function MemoryTabScreen() {
                             <View style={styles.heroCard}>
                                     <View style={styles.heroHeaderSection}>
                                         <View style={styles.heroTitleRow}>
-                                            <Text style={styles.heroHeading}>Memories</Text>
+                                            <Text style={styles.heroHeading}>{t('memories.title')}</Text>
                                             {stats.new > 0 && (
                                                 <View style={styles.heroNewBadge}>
-                                                    <Text style={styles.heroNewBadgeText}>{stats.new} new</Text>
+                                                    <Text style={styles.heroNewBadgeText}>{t('memories.stats.new_badge', { count: stats.new })}</Text>
                                                 </View>
                                             )}
                                         </View>
-                                        <Text style={styles.heroSubtitle}>{description}</Text>
-                                    </View>
-
-                                <View style={styles.heroStatsGrid}>
-                                    <View style={styles.heroStatItem}>
-                                        <Text style={styles.heroStatNumber}>{stats.total}</Text>
-                                        <Text style={styles.heroStatLabel}>Total clips</Text>
-                                    </View>
-                                    <View style={styles.heroStatDivider} />
-                                    <View style={styles.heroStatItem}>
-                                        <Text style={styles.heroStatNumber}>{stats.vaults}</Text>
-                                        <Text style={styles.heroStatLabel}>Vaults</Text>
-                                    </View>
-                                    <View style={styles.heroStatDivider} />
-                                    <View style={styles.heroStatItem}>
-                                        <Text style={styles.heroStatNumber}>{stats.received}</Text>
-                                        <Text style={styles.heroStatLabel}>Received</Text>
+                                        <Text style={styles.heroSubtitle}>{t(`memories.descriptions.${activeTab.toLowerCase().replace(' ', '_')}`)}</Text>
+                                    <View style={styles.heroStatsGrid}>
+                                        <View style={styles.heroStatItem}>
+                                            <Text style={styles.heroStatNumber}>{stats.total}</Text>
+                                            <Text style={styles.heroStatLabel}>{t('memories.stats.total_clips')}</Text>
+                                        </View>
+                                        <View style={styles.heroStatItem}>
+                                            <Text style={styles.heroStatNumber}>{stats.vaults}</Text>
+                                            <Text style={styles.heroStatLabel}>{t('memories.stats.vaults')}</Text>
+                                        </View>
+                                        <View style={styles.heroStatItem}>
+                                            <Text style={styles.heroStatNumber}>{stats.received}</Text>
+                                            <Text style={styles.heroStatLabel}>{t('memories.stats.received')}</Text>
+                                        </View>
                                     </View>
                                 </View>
-
-                                <Pressable style={styles.heroActionButton} onPress={handleUploadMemory}>
-                                    <IconSymbol name="plus.circle.fill" size={18} color={BRAND_COLOR} />
-                                    <Text style={styles.heroActionLabel}>Upload shared memory</Text>
-                                </Pressable>
                             </View>
                         </View>
                     )}
@@ -554,8 +558,8 @@ export default function MemoryTabScreen() {
             >
                 <Pressable style={styles.modalBackdrop} onPress={handleCancelMediaType}>
                     <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
-                        <Text style={styles.modalTitle}>Select Media Type</Text>
-                        <Text style={styles.modalSubtitle}>Choose what you'd like to upload</Text>
+                        <Text style={styles.modalTitle}>{t('memories.modals.media_type.title')}</Text>
+                        <Text style={styles.modalSubtitle}>{t('memories.modals.media_type.subtitle')}</Text>
 
                         <Pressable
                             style={styles.modalOption}
@@ -565,8 +569,8 @@ export default function MemoryTabScreen() {
                                 <IconSymbol name="video.fill" size={24} color={BRAND_COLOR} />
                             </View>
                             <View style={styles.modalOptionContent}>
-                                <Text style={styles.modalOptionTitle}>Video</Text>
-                                <Text style={styles.modalOptionSubtitle}>Upload a video memory</Text>
+                                <Text style={styles.modalOptionTitle}>{t('memories.modals.media_type.video_title')}</Text>
+                                <Text style={styles.modalOptionSubtitle}>{t('memories.modals.media_type.video_subtitle')}</Text>
                             </View>
                             <IconSymbol name="chevron.right" size={20} color={palette.textSecondary} />
                         </Pressable>
@@ -579,14 +583,14 @@ export default function MemoryTabScreen() {
                                 <IconSymbol name="photo.fill" size={24} color={BRAND_COLOR} />
                             </View>
                             <View style={styles.modalOptionContent}>
-                                <Text style={styles.modalOptionTitle}>Photo</Text>
-                                <Text style={styles.modalOptionSubtitle}>Upload a photo memory</Text>
+                                <Text style={styles.modalOptionTitle}>{t('memories.modals.media_type.photo_title')}</Text>
+                                <Text style={styles.modalOptionSubtitle}>{t('memories.modals.media_type.photo_subtitle')}</Text>
                             </View>
                             <IconSymbol name="chevron.right" size={20} color={palette.textSecondary} />
                         </Pressable>
 
                         <Pressable style={styles.modalCancelButton} onPress={handleCancelMediaType}>
-                            <Text style={styles.modalCancelText}>Cancel</Text>
+                            <Text style={styles.modalCancelText}>{t('memories.modals.media_type.cancel')}</Text>
                         </Pressable>
                     </View>
                 </Pressable>
@@ -601,13 +605,13 @@ export default function MemoryTabScreen() {
             >
                 <Pressable style={styles.modalBackdrop} onPress={() => setTitleModalVisible(false)}>
                     <View style={styles.modalContent} onStartShouldSetResponder={() => true}>
-                        <Text style={styles.modalTitle}>Memory Title</Text>
-                        <Text style={styles.modalSubtitle}>Give your memory a title</Text>
+                        <Text style={styles.modalTitle}>{t('memories.modals.title_input.title')}</Text>
+                        <Text style={styles.modalSubtitle}>{t('memories.modals.title_input.subtitle')}</Text>
 
                         <View style={styles.titleInputContainer}>
                             <TextInput
                                 style={styles.titleInput}
-                                placeholder="Enter memory title..."
+                                placeholder={t('memories.modals.title_input.placeholder')}
                                 placeholderTextColor={palette.textSecondary}
                                 value={memoryTitle}
                                 onChangeText={setMemoryTitle}
@@ -625,18 +629,32 @@ export default function MemoryTabScreen() {
                                     setSelectedAsset(null);
                                 }}
                             >
-                                <Text style={styles.titleModalButtonTextSecondary}>Cancel</Text>
+                                <Text style={styles.titleModalButtonTextSecondary}>{t('memories.modals.title_input.cancel')}</Text>
                             </Pressable>
                             <Pressable
                                 style={[styles.titleModalButton, styles.titleModalButtonPrimary]}
                                 onPress={handleUploadWithTitle}
                             >
-                                <Text style={styles.titleModalButtonTextPrimary}>Upload</Text>
+                                <Text style={styles.titleModalButtonTextPrimary}>{t('memories.modals.title_input.upload')}</Text>
                             </Pressable>
                         </View>
                     </View>
                 </Pressable>
             </Modal>
+
+            {/* Upload Progress Overlay */}
+            {uploading && (
+                <View style={[StyleSheet.absoluteFill, styles.uploadProgressOverlay]}>
+                    <View style={styles.uploadProgressContent}>
+                        <ActivityIndicator size="large" color={BRAND_COLOR} />
+                        <Text style={styles.uploadProgressTitle}>{t('memories.progress.title')}</Text>
+                        <View style={styles.progressBarContainer}>
+                            <View style={[styles.progressBar, { width: `${uploadProgress}%` }]} />
+                        </View>
+                        <Text style={styles.uploadProgressPercent}>{t('memories.progress.percent', { count: uploadProgress })}</Text>
+                    </View>
+                </View>
+            )}
         </View>
     );
 }
@@ -652,7 +670,9 @@ function formatDate(dateString?: string | null): string {
     if (!dateString) return '';
     const d = new Date(dateString);
     if (Number.isNaN(d.getTime())) return '';
-    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    const { i18n } = useTranslation();
+    const locale = i18n.language === 'fr' ? 'fr-FR' : 'en-US';
+    return d.toLocaleDateString(locale, { month: 'short', day: 'numeric', year: 'numeric' });
 }
 
 function ReactionCard({ item, onPress }: { item: ReactionVideoItem; onPress: () => void }) {
@@ -690,6 +710,8 @@ function ReactionsPanel({
     const { user } = useAuth();
     const { orders } = useOrders();
     const { bottom } = useSafeAreaInsets();
+    const { alert: showAlert } = useAlert();
+    const { t } = useTranslation();
 
     const [loading, setLoading] = useState(true);
     const [toYourGifts, setToYourGifts] = useState<ReactionVideoItem[]>([]);
@@ -743,11 +765,11 @@ function ReactionsPanel({
                 const date = formatDate(recorded);
                 const duration = formatDuration(r.duration_seconds);
 
-                let title = 'Reaction';
+                let title = t('memories.panels.reactions.title');
                 if (reactionType === 'to_your_gifts' && order?.recipient?.firstName) {
-                    title = `Reaction from ${order.recipient.firstName}`;
+                    title = t('memories.panels.reactions.to_your_gifts_template', { defaultValue: `Reaction from ${order.recipient.firstName}`, name: order.recipient.firstName });
                 } else if (reactionType === 'your_reactions') {
-                    title = 'Your reaction';
+                    title = t('memories.panels.reactions.your_reactions');
                 }
 
                 return {
@@ -803,25 +825,25 @@ function ReactionsPanel({
             }
         >
             <View style={styles.reactionsSection}>
-                <Text style={styles.sectionTitle}>Reactions</Text>
+                <Text style={styles.sectionTitle}>{t('memories.panels.reactions.title')}</Text>
                 <Text style={styles.sectionSubtitle}>
-                    {loading ? 'Loading reactions…' : hasAny ? 'All your reaction videos in one place.' : 'No reactions yet.'}
+                    {loading ? t('memories.panels.reactions.loading') : hasAny ? t('memories.panels.reactions.all_reactions') : t('memories.panels.reactions.no_reactions')}
                 </Text>
             </View>
 
             {!loading && !hasAny ? (
                 <View style={styles.sectionEmpty}>
                     <IconSymbol name="heart" size={34} color="#9ba1a6" />
-                    <Text style={styles.sectionEmptyText}>No reactions yet</Text>
+                    <Text style={styles.sectionEmptyText}>{t('memories.panels.reactions.empty_title')}</Text>
                     <Text style={styles.sectionEmptySubtext}>
-                        When someone reacts to a gift you sent — or when you record a reaction — it will appear here.
+                        {t('memories.panels.reactions.empty_subtitle')}
                     </Text>
                 </View>
             ) : (
                 <>
                     {toYourGifts.length > 0 && (
                         <View style={styles.reactionGroup}>
-                            <Text style={styles.reactionGroupTitle}>Reactions to your gifts</Text>
+                            <Text style={styles.reactionGroupTitle}>{t('memories.panels.reactions.to_your_gifts')}</Text>
                             {toYourGifts.map((item, idx) => (
                                 <ReactionCard
                                     key={item.id}
@@ -834,7 +856,7 @@ function ReactionsPanel({
 
                     {yourReactions.length > 0 && (
                         <View style={styles.reactionGroup}>
-                            <Text style={styles.reactionGroupTitle}>Your reactions</Text>
+                            <Text style={styles.reactionGroupTitle}>{t('memories.panels.reactions.your_reactions')}</Text>
                             {yourReactions.map((item, idx) => (
                                 <ReactionCard
                                     key={item.id}
@@ -870,6 +892,8 @@ function OverviewPanel({
     const { orders } = useOrders();
     const { sharedMemories } = useSharedMemories();
     const { user } = useAuth();
+    const { alert: showAlert } = useAlert();
+    const { t } = useTranslation();
 
     // Create maps of videoId -> sharedMemoryType for featured and remember memories
     const [featuredSharedMemoryMap, setFeaturedSharedMemoryMap] = useState<Map<string, 'video' | 'photo'>>(new Map());
@@ -924,7 +948,7 @@ function OverviewPanel({
     return (
         <View style={styles.sectionGap}>
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Featured messages</Text>
+                <Text style={styles.sectionTitle}>{t('memories.panels.overview.featured_messages')}</Text>
                 {featuredMemories.length > 0 ? (
                     <ScrollView
                         horizontal
@@ -943,19 +967,19 @@ function OverviewPanel({
                 ) : (
                     <View style={styles.sectionEmpty}>
                         <IconSymbol name="camera.fill" size={32} color="#9ba1a6" />
-                        <Text style={styles.sectionEmptyText}>No featured messages yet</Text>
-                        <Text style={styles.sectionEmptySubtext}>Your most recent video messages will appear here.</Text>
+                        <Text style={styles.sectionEmptyText}>{t('memories.panels.overview.no_featured_title')}</Text>
+                        <Text style={styles.sectionEmptySubtext}>{t('memories.panels.overview.no_featured_subtitle')}</Text>
                     </View>
                 )}
             </View>
 
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Vaults</Text>
+                <Text style={styles.sectionTitle}>{t('memories.panels.overview.vaults')}</Text>
                 {vaultsLoading && vaultCollections.length === 0 ? (
                     <View style={styles.sectionEmpty}>
                         <ActivityIndicator color={BRAND_COLOR} />
-                        <Text style={styles.sectionEmptyText}>Loading vaults…</Text>
-                        <Text style={styles.sectionEmptySubtext}>Hang tight while we fetch your personalized vaults.</Text>
+                        <Text style={styles.sectionEmptyText}>{t('memories.panels.overview.loading_vaults')}</Text>
+                        <Text style={styles.sectionEmptySubtext}>{t('memories.panels.overview.loading_vaults_subtitle')}</Text>
                     </View>
                 ) : vaultCollections.length > 0 ? (
                     <View style={styles.listStack}>
@@ -970,14 +994,14 @@ function OverviewPanel({
                 ) : (
                     <View style={styles.sectionEmpty}>
                         <IconSymbol name="camera.fill" size={32} color="#9ba1a6" />
-                        <Text style={styles.sectionEmptyText}>No vaults yet</Text>
-                        <Text style={styles.sectionEmptySubtext}>Your videos will appear here once our AI curates themed vaults.</Text>
+                        <Text style={styles.sectionEmptyText}>{t('memories.panels.overview.no_vaults_title')}</Text>
+                        <Text style={styles.sectionEmptySubtext}>{t('memories.panels.overview.no_vaults_subtitle')}</Text>
                     </View>
                 )}
             </View>
 
             <View style={styles.section}>
-                <Text style={styles.sectionTitle}>Remember this?</Text>
+                <Text style={styles.sectionTitle}>{t('memories.panels.overview.remember_this')}</Text>
                 {rememberMemories.length > 0 ? (
                     <ScrollView
                         horizontal
@@ -996,8 +1020,8 @@ function OverviewPanel({
                 ) : (
                     <View style={styles.sectionEmpty}>
                         <IconSymbol name="camera.fill" size={32} color="#9ba1a6" />
-                        <Text style={styles.sectionEmptyText}>No older memories yet</Text>
-                        <Text style={styles.sectionEmptySubtext}>Memories from more than 3 months ago will appear here.</Text>
+                        <Text style={styles.sectionEmptyText}>{t('memories.panels.overview.no_older_title')}</Text>
+                        <Text style={styles.sectionEmptySubtext}>{t('memories.panels.overview.no_older_subtitle')}</Text>
                     </View>
                 )}
             </View>
@@ -1013,6 +1037,8 @@ function MessagesPanel({ messageVideos, onOpenViewer, viewerVisible, refreshing,
     const { orders } = useOrders();
     const { user } = useAuth();
     const { sharedMemories } = useSharedMemories();
+    const { alert: showAlert } = useAlert();
+    const { t } = useTranslation();
     const [sharedMemoryMap, setSharedMemoryMap] = useState<Map<string, 'video' | 'photo'>>(new Map());
 
     const visibleVideos = useMemo(() => messageVideos.slice(0, visibleCount), [messageVideos, visibleCount]);
@@ -1177,8 +1203,8 @@ function MessagesPanel({ messageVideos, onOpenViewer, viewerVisible, refreshing,
         return (
             <View style={[styles.emptyState, { paddingTop: 40, paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20 }]}>
                 <IconSymbol name="camera.fill" size={48} color="#9ba1a6" />
-                <Text style={styles.emptyTitle}>No messages yet</Text>
-                <Text style={styles.emptySubtitle}>Your video messages will appear here once you send or receive them.</Text>
+                <Text style={styles.emptyTitle}>{t('memories.panels.messages.no_messages_title')}</Text>
+                <Text style={styles.emptySubtitle}>{t('memories.panels.messages.no_messages_subtitle')}</Text>
             </View>
         );
     }
@@ -1210,11 +1236,11 @@ function MessagesPanel({ messageVideos, onOpenViewer, viewerVisible, refreshing,
                     loadingMore ? (
                         <View style={styles.loadMoreFooter}>
                             <ActivityIndicator color={BRAND_COLOR} size="small" />
-                            <Text style={styles.loadMoreText}>Loading more messages…</Text>
+                            <Text style={styles.loadMoreText}>{t('memories.panels.messages.loading_more')}</Text>
                         </View>
                     ) : !canLoadMore ? (
                         <View style={styles.loadMoreFooter}>
-                            <Text style={styles.loadMoreText}>You're all caught up.</Text>
+                            <Text style={styles.loadMoreText}>{t('memories.panels.messages.caught_up')}</Text>
                         </View>
                     ) : null
                 }
@@ -1240,7 +1266,9 @@ function VaultsPanel({
     onUploadMemory?: () => void;
     onGoToMessages?: () => void;
 }) {
-    const [activeFilter, setActiveFilter] = useState('All');
+    const { alert: showAlert } = useAlert();
+    const { t } = useTranslation();
+    const [activeFilter, setActiveFilter] = useState(t('memories.panels.vaults.filter_all'));
 
     const filters = useMemo(() => {
         const uniqueNames = new Set(
@@ -1248,8 +1276,8 @@ function VaultsPanel({
                 .map((v) => String(v.name || 'Untitled'))
                 .filter((name) => name.trim().length > 0)
         );
-        return ['All', ...Array.from(uniqueNames)];
-    }, [vaultCollections]);
+        return [t('memories.panels.vaults.filter_all'), ...Array.from(uniqueNames)];
+    }, [vaultCollections, t]);
 
     const hasAnyVaultVideos = useMemo(() => {
         return vaultCollections.some((v) => (v.videos?.length ?? 0) > 0);
@@ -1257,11 +1285,11 @@ function VaultsPanel({
 
     const filteredVaults = useMemo(() => {
         const nonEmptyVaults = vaultCollections.filter((v) => (v.videos?.length ?? 0) > 0);
-        if (activeFilter === 'All') {
+        if (activeFilter === t('memories.panels.vaults.filter_all')) {
             return nonEmptyVaults;
         }
         return nonEmptyVaults.filter((collection) => String(collection.name || 'Untitled') === activeFilter);
-    }, [activeFilter, vaultCollections]);
+    }, [activeFilter, vaultCollections, t]);
 
     const { bottom } = useSafeAreaInsets();
     const renderVaultCard = useCallback(({ item }: { item: VaultCollectionItem }) => (
@@ -1276,28 +1304,28 @@ function VaultsPanel({
             {loading && vaultCollections.length === 0 ? (
                 <View style={[styles.vaultEmptyState, { paddingTop: 80, paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 40 }]}>
                     <ActivityIndicator color={BRAND_COLOR} />
-                    <Text style={styles.vaultSimpleText}>Loading vaults…</Text>
+                    <Text style={styles.vaultSimpleText}>{t('memories.panels.vaults.loading')}</Text>
                 </View>
             ) : !hasAnyVaultVideos ? (
                 <View style={[styles.vaultEmptyState, { paddingTop: 80, paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 40 }]}>
                     <View style={styles.vaultEmptyIconContainer}>
                         <IconSymbol name="square.stack.3d.up.fill" size={34} color={BRAND_COLOR} />
                     </View>
-                    <Text style={styles.vaultEmptyTitle}>No vaults yet</Text>
+                    <Text style={styles.vaultEmptyTitle}>{t('memories.panels.vaults.no_vaults_title')}</Text>
                     <Text style={styles.vaultEmptySubtitle}>
-                        Add memories first, then we’ll automatically group them into vaults so you can relive moments faster.
+                        {t('memories.panels.vaults.no_vaults_subtitle')}
                     </Text>
 
                     {onUploadMemory ? (
                         <Pressable style={styles.vaultEmptyPrimaryButton} onPress={onUploadMemory}>
                             <IconSymbol name="plus.circle.fill" size={18} color="#FFFFFF" />
-                            <Text style={styles.vaultEmptyPrimaryButtonText}>Add shared memory</Text>
+                            <Text style={styles.vaultEmptyPrimaryButtonText}>{t('memories.panels.vaults.add_button')}</Text>
                         </Pressable>
                     ) : null}
 
                     {onGoToMessages ? (
                         <Pressable style={styles.vaultEmptySecondaryButton} onPress={onGoToMessages}>
-                            <Text style={styles.vaultEmptySecondaryButtonText}>Go to Messages</Text>
+                            <Text style={styles.vaultEmptySecondaryButtonText}>{t('memories.panels.vaults.messages_button')}</Text>
                         </Pressable>
                     ) : null}
                 </View>
@@ -1339,8 +1367,8 @@ function VaultsPanel({
                     ListEmptyComponent={
                         !loading ? (
                             <View style={styles.vaultListEmptyState}>
-                                <Text style={styles.vaultSimpleTitle}>No matches</Text>
-                                <Text style={styles.vaultSimpleText}>Try another filter.</Text>
+                                <Text style={styles.vaultSimpleTitle}>{t('memories.panels.vaults.no_matches_title')}</Text>
+                                <Text style={styles.vaultSimpleText}>{t('memories.panels.vaults.no_matches_subtitle')}</Text>
                             </View>
                         ) : null
                     }
@@ -1357,7 +1385,7 @@ function VaultsPanel({
                     ListFooterComponent={
                         <View style={styles.vaultListFooter}>
                             <IconSymbol name="checkmark.circle.fill" size={24} color={palette.textSecondary} />
-                            <Text style={styles.vaultListFooterText}>You're all caught up</Text>
+                            <Text style={styles.vaultListFooterText}>{t('memories.panels.vaults.caught_up')}</Text>
                         </View>
                     }
                 />
@@ -1389,7 +1417,15 @@ function sharedMemoryToMemoryItem(memory: SharedMemory): MemoryVideoItem & { med
     };
 }
 
-function SharedMemoriesPanel({ sharedMemories, loading, onUpload, refreshing, onRefresh }: { sharedMemories: SharedMemory[]; loading: boolean; onUpload: () => void; refreshing?: boolean; onRefresh?: () => void }) {
+interface SharedMemoriesPanelProps {
+    sharedMemories: SharedMemory[];
+    loading: boolean;
+    onUpload: () => void;
+    refreshing?: boolean;
+    onRefresh?: () => void;
+}
+
+function SharedMemoriesPanel({ sharedMemories, loading, onUpload, refreshing, onRefresh }: SharedMemoriesPanelProps) {
     const batchSize = 9;
     const [visibleCount, setVisibleCount] = useState(batchSize);
     const [loadingMore, setLoadingMore] = useState(false);
@@ -1398,6 +1434,10 @@ function SharedMemoriesPanel({ sharedMemories, loading, onUpload, refreshing, on
     const [viewerIndex, setViewerIndex] = useState(0);
     const [viewerData, setViewerData] = useState<(MemoryVideoItem & { mediaType: 'video' | 'photo' })[]>([]);
     const { deleteSharedMemory } = useSharedMemories();
+    const { alert: showAlert } = useAlert();
+    const { t } = useTranslation();
+    const [isEditMode, setIsEditMode] = useState(false);
+    const [isDeletingSharedMemory, setIsDeletingSharedMemory] = useState(false);
 
     // Convert shared memories to memory items
     const memoryItems = useMemo(() => {
@@ -1434,33 +1474,40 @@ function SharedMemoriesPanel({ sharedMemories, loading, onUpload, refreshing, on
     }, []);
 
     const handleDeleteSharedMemory = useCallback(async (memoryId: string) => {
-        alert(
-            'Delete Shared Memory',
-            'Are you sure you want to delete this shared memory? This action cannot be undone.',
+        showAlert(
+            t('memories.panels.shared_memories.delete_alert_title'),
+            t('memories.panels.shared_memories.delete_alert_message'),
             [
-                { text: 'Cancel', style: 'cancel' },
+                { text: t('memories.panels.shared_memories.delete_cancel'), style: 'cancel' },
                 {
-                    text: 'Delete',
+                    text: t('memories.panels.shared_memories.delete_confirm'),
                     style: 'destructive',
                     onPress: async () => {
-                        const { error } = await deleteSharedMemory(memoryId);
-                        if (error) {
-                            alert('Error', 'Failed to delete shared memory. Please try again.');
-                            console.error('Error deleting shared memory:', error);
+                        setIsDeletingSharedMemory(true);
+                        try {
+                            const { error } = await deleteSharedMemory(memoryId);
+                            if (error) {
+                                showAlert(t('common.error'), t('memories.panels.shared_memories.delete_error'));
+                                console.error('Error deleting shared memory:', error);
+                            }
+                        } finally {
+                            setIsDeletingSharedMemory(false);
                         }
                     }
                 }
             ]
         );
-    }, [deleteSharedMemory]);
+    }, [deleteSharedMemory, showAlert, t]);
 
     const renderItem = useCallback(({ item, index }: { item: typeof memoryItems[0]; index: number }) => (
         <SharedMemoryCard
             item={item}
             onPress={() => handleOpenViewer(index)}
             onLongPress={() => handleDeleteSharedMemory(item.id)}
+            isEditMode={isEditMode}
+            onDelete={() => handleDeleteSharedMemory(item.id)}
         />
-    ), [handleOpenViewer, handleDeleteSharedMemory]);
+    ), [handleOpenViewer, handleDeleteSharedMemory, isEditMode]);
 
     const { bottom } = useSafeAreaInsets();
 
@@ -1523,10 +1570,21 @@ function SharedMemoriesPanel({ sharedMemories, loading, onUpload, refreshing, on
                                 <Text style={styles.messagesHeaderTitle}>Shared Memories</Text>
                                 <Text style={styles.messagesHeaderSubtitle}>{sharedMemories.length} {sharedMemories.length === 1 ? 'memory' : 'memories'}</Text>
                             </View>
-                            <Pressable style={styles.sharedMemoriesHeaderButton} onPress={onUpload}>
-                                <IconSymbol name="plus.circle.fill" size={18} color={BRAND_COLOR} />
-                                <Text style={styles.sharedMemoriesHeaderButtonText}>Add</Text>
-                            </Pressable>
+                            <View style={styles.sharedMemoriesHeaderActions}>
+                                <Pressable 
+                                    style={[styles.sharedMemoriesHeaderButton, isEditMode && styles.sharedMemoriesHeaderButtonActive]} 
+                                    onPress={() => setIsEditMode(!isEditMode)}
+                                >
+                                    <IconSymbol name={isEditMode ? "checkmark.circle.fill" : "pencil.circle"} size={18} color={isEditMode ? "#FFFFFF" : BRAND_COLOR} />
+                                    <Text style={[styles.sharedMemoriesHeaderButtonText, isEditMode && styles.sharedMemoriesHeaderButtonTextActive]}>
+                                        {isEditMode ? 'Done' : 'Edit'}
+                                    </Text>
+                                </Pressable>
+                                <Pressable style={styles.sharedMemoriesHeaderButton} onPress={onUpload}>
+                                    <IconSymbol name="plus.circle.fill" size={18} color={BRAND_COLOR} />
+                                    <Text style={styles.sharedMemoriesHeaderButtonText}>Add</Text>
+                                </Pressable>
+                            </View>
                         </View>
                         <View style={styles.sharedMemoriesIntroSection}>
                             <Text style={styles.sharedMemoriesIntroText}>
@@ -1555,11 +1613,33 @@ function SharedMemoriesPanel({ sharedMemories, loading, onUpload, refreshing, on
                 data={viewerData}
                 onClose={() => setViewerVisible(false)}
             />
+            
+            {isDeletingSharedMemory && (
+                <View style={styles.uploadProgressOverlay}>
+                    <View style={styles.uploadProgressContent}>
+                        <ActivityIndicator size="large" color={BRAND_COLOR} />
+                        <Text style={styles.uploadProgressTitle}>Deleting...</Text>
+                        <Text style={styles.uploadProgressPercent}>Please wait while we remove your memory.</Text>
+                    </View>
+                </View>
+            )}
         </View>
     );
 }
 
-function SharedMemoryCard({ item, onPress, onLongPress }: { item: MemoryVideoItem & { mediaType: 'video' | 'photo' }; onPress: () => void; onLongPress?: () => void }) {
+function SharedMemoryCard({ 
+    item, 
+    onPress, 
+    onLongPress, 
+    isEditMode, 
+    onDelete 
+}: { 
+    item: MemoryVideoItem & { mediaType: 'video' | 'photo' }; 
+    onPress: () => void; 
+    onLongPress?: () => void;
+    isEditMode?: boolean;
+    onDelete?: () => void;
+}) {
     const [imageError, setImageError] = useState(false);
 
     return (
@@ -1595,6 +1675,12 @@ function SharedMemoryCard({ item, onPress, onLongPress }: { item: MemoryVideoIte
                     <View style={styles.messagePhotoIndicator}>
                         <Text style={styles.messagePhotoText}>PHOTO</Text>
                     </View>
+                )}
+                
+                {isEditMode && (
+                    <Pressable style={styles.sharedMemoryDeleteBadge} onPress={onDelete}>
+                        <IconSymbol name="trash.fill" size={12} color="#FFFFFF" />
+                    </Pressable>
                 )}
             </View>
         </Pressable>
@@ -1907,6 +1993,7 @@ export function MessageVideoViewer({ visible, initialIndex, data, onClose }: { v
     const [qrItem, setQrItem] = useState<MemoryVideoItem | null>(null);
     const dataKey = useMemo(() => data.map((item) => item.id).join('|'), [data]);
     const { setVisible: setBottomBarVisible } = useBottomBarVisibility();
+    const { alert: showAlert } = useAlert();
 
     useEffect(() => {
         if (visible) {
@@ -2042,7 +2129,7 @@ export function MessageVideoViewer({ visible, initialIndex, data, onClose }: { v
 }
 
 function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, safeBottom, safeTop, onShowQr, onClose, viewerVisible }: { item: MemoryVideoItem | (MemoryVideoItem & { mediaType: 'video' | 'photo' }); index: number; currentIndex: number; screenHeight: number; screenWidth: number; safeBottom: number; safeTop: number; onShowQr: (video: MemoryVideoItem) => void; onClose: () => void; viewerVisible: boolean }) {
-    const videoRef = useRef<Video>(null);
+    const videoRef = useRef<{ play: () => void; pause: () => void } | null>(null);
     const shouldResumeMainVideoAfterSharedModalRef = useRef(false);
     const mediaType = 'mediaType' in item ? item.mediaType : 'video'; // Default to video for backward compatibility
     const isPhoto = mediaType === 'photo';
@@ -2085,6 +2172,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
     const { orders } = useOrders();
     const { sharedMemories, deleteSharedMemory } = useSharedMemories();
     const { user } = useAuth();
+    const { alert: showAlert } = useAlert();
 
     // Find the video message to check if it's already featured (only for video messages, not shared memories/photos)
     const videoMessage = useMemo(() => {
@@ -2188,40 +2276,24 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
         // Reset video state when URL changes - only pause, don't aggressively unload
         // Unloading is handled when the component becomes inactive
         if (!isPhoto && videoRef.current) {
-            const cleanupVideo = async () => {
-                try {
-                    const video = videoRef.current;
-                    if (video) {
-                        // Just pause, don't unload to avoid timeout errors
-                        await video.pauseAsync().catch(() => { });
-                    }
-                } catch (error) {
-                    console.warn('[ViewerSlide] Error pausing video on URL change:', error);
-                }
-            };
-            cleanupVideo();
+            videoRef.current.pause();
         }
     }, [playbackUrl, item.id, isPhoto]);
 
-    const handleTogglePlayback = useCallback(async () => {
+    const handleTogglePlayback = useCallback(() => {
         if (isPhoto || !isValidPlaybackUrl) return;
         if (!viewerVisible || currentIndex !== index) return;
         const video = videoRef.current;
         if (!video) return;
 
-        try {
-            const status = await video.getStatusAsync();
-            if (status?.isLoaded && status.isPlaying) {
-                await video.pauseAsync().catch(() => { });
-                setUserPaused(true);
-            } else if (status?.isLoaded) {
-                await video.playAsync().catch(() => { });
-                setUserPaused(false);
-            }
-        } catch (err) {
-            console.warn('[ViewerSlide] Toggle playback error:', err);
+        if (isPlaying) {
+            video.pause();
+            setUserPaused(true);
+        } else {
+            video.play();
+            setUserPaused(false);
         }
-    }, [currentIndex, index, isPhoto, isValidPlaybackUrl, viewerVisible]);
+    }, [currentIndex, index, isPhoto, isValidPlaybackUrl, viewerVisible, isPlaying]);
 
     // Measure title on mount and when title changes to determine if expand is needed
     useEffect(() => {
@@ -2246,48 +2318,24 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
         const isAdjacent = Math.abs(currentIndex - index) === 1;
 
         if (isActive) {
-            // When this video becomes active, start playing immediately
-            // Video may already be preloaded from when it was adjacent
-            const startPlaying = async () => {
-                try {
-                    if (videoRef.current) {
-                        // Respect user pause
-                        if (userPaused) {
-                            await videoRef.current.pauseAsync().catch(() => { });
-                            return;
-                        }
-                        // Try to play immediately - video may already be buffered
-                        await videoRef.current.playAsync().catch(() => { });
-                    }
-                } catch (error) {
-                    console.warn('[ViewerSlide] Error starting video playback:', error);
-                }
-            };
-            startPlaying();
+            if (videoRef.current) {
+                if (userPaused) videoRef.current.pause();
+                else videoRef.current.play();
+            }
         } else if (isAdjacent) {
             // Keep adjacent videos paused but loaded (they're preloading for smooth scrolling)
             // Don't unload them - just ensure they're paused
-            const pauseAdjacent = async () => {
-                try {
-                    if (videoRef.current) {
-                        await videoRef.current.pauseAsync().catch(() => { });
-                    }
-                } catch (error) {
-                    console.warn('[ViewerSlide] Error pausing adjacent video:', error);
-                }
+            const pauseAdjacent = () => {
+                if (videoRef.current) videoRef.current.pause();
             };
             pauseAdjacent();
         } else {
             // Videos far from current - pause and reset ready state
             // They will reload when scrolled to
-            const pauseDistant = async () => {
-                try {
-                    if (videoRef.current) {
-                        await videoRef.current.pauseAsync().catch(() => { });
-                        setVideoReady(false);
-                    }
-                } catch (error) {
-                    console.warn('[ViewerSlide] Error pausing distant video:', error);
+            const pauseDistant = () => {
+                if (videoRef.current) {
+                    videoRef.current.pause();
+                    setVideoReady(false);
                 }
             };
             pauseDistant();
@@ -2301,24 +2349,8 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
         }
 
         return () => {
-            // Cleanup function runs when component unmounts
             const video = videoRef.current;
-            if (video) {
-                // Just pause, don't aggressively unload to avoid timeout errors
-                const cleanup = async () => {
-                    try {
-                        await video.pauseAsync().catch(() => { });
-                        // Only unload if we're sure the video is no longer needed
-                        // Set a timeout to avoid blocking and timeout errors
-                        setTimeout(() => {
-                            video.unloadAsync().catch(() => { });
-                        }, 500);
-                    } catch (error) {
-                        console.warn('[ViewerSlide] Error during video cleanup:', error);
-                    }
-                };
-                cleanup();
-            }
+            if (video) video.pause();
         };
     }, [isPhoto]);
 
@@ -2337,24 +2369,12 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
 
         // Pause the main viewer video so it doesn't keep playing behind the modal.
         if (!isPhoto && videoRef.current) {
-            // IMPORTANT: This is a temporary pause (not a user pause).
-            // We'll resume automatically on close if it was playing.
-            const pauseMain = async () => {
-                try {
-                    const status = await videoRef.current?.getStatusAsync();
-                    const wasPlaying = !!(status && 'isLoaded' in status && (status as any).isLoaded && (status as any).isPlaying);
-                    shouldResumeMainVideoAfterSharedModalRef.current = wasPlaying;
-                } catch {
-                    shouldResumeMainVideoAfterSharedModalRef.current = false;
-                } finally {
-                    videoRef.current?.pauseAsync().catch(() => { });
-                }
-            };
-            pauseMain();
+            shouldResumeMainVideoAfterSharedModalRef.current = viewerVisible && currentIndex === index && !userPaused;
+            videoRef.current.pause();
         }
 
         setSharedMemoryViewerVisible(true);
-    }, [isPhoto, sharedMemory]);
+    }, [isPhoto, sharedMemory, viewerVisible, currentIndex, index, userPaused]);
 
     const closeSharedMemoryViewer = useCallback(() => {
         setSharedMemoryViewerVisible(false);
@@ -2364,12 +2384,12 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
         if (!isPhoto && !userPaused && viewerVisible && currentIndex === index && videoRef.current) {
             if (shouldResumeMainVideoAfterSharedModalRef.current) {
                 shouldResumeMainVideoAfterSharedModalRef.current = false;
-                videoRef.current.playAsync().catch(() => { });
+                videoRef.current.play();
             }
         } else {
             shouldResumeMainVideoAfterSharedModalRef.current = false;
         }
-    }, []);
+    }, [isPhoto, userPaused, viewerVisible, currentIndex, index]);
 
     const handleFeature = useCallback(async () => {
         if (isPhoto || !videoMessage) {
@@ -2380,18 +2400,18 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
         try {
             const { error } = await updateVideoMessageFeatured(videoMessage.id, !isFeatured);
             if (error) {
-                alert('Error', 'Failed to update featured status. Please try again.');
+                showAlert('Error', 'Failed to update featured status. Please try again.');
                 console.error('Error updating featured status:', error);
             } else {
                 setShowFeatureDialog(false);
             }
         } catch (err) {
-            alert('Error', 'An unexpected error occurred. Please try again.');
+            showAlert('Error', 'An unexpected error occurred. Please try again.');
             console.error('Unexpected error:', err);
         } finally {
             setIsFeaturing(false);
         }
-    }, [videoMessage, isFeatured, isPhoto, updateVideoMessageFeatured]);
+    }, [videoMessage, isFeatured, isPhoto, updateVideoMessageFeatured, showAlert]);
 
     const handleFeaturePress = useCallback(() => {
         if (isPhoto) {
@@ -2416,35 +2436,35 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                 // Delete shared memory
                 const { error } = await deleteSharedMemory(sharedMemory.id);
                 if (error) {
-                    alert('Error', 'Failed to delete shared memory. Please try again.');
+                    showAlert('Error', 'Failed to delete shared memory. Please try again.');
                     console.error('Error deleting shared memory:', error);
                 } else {
-                    alert('Deleted', 'Shared memory deleted successfully.');
+                    showAlert('Deleted', 'Shared memory deleted successfully.');
                     onClose(); // Close viewer after deletion
                 }
             } else if (!isPhoto && videoMessage) {
                 // Delete video message
                 const { error } = await deleteVideoMessage(videoMessage.id);
                 if (error) {
-                    alert('Error', 'Failed to delete video message. Please try again.');
+                    showAlert('Error', 'Failed to delete video message. Please try again.');
                     console.error('Error deleting video message:', error);
                 } else {
-                    alert('Deleted', 'Video message deleted successfully.');
+                    showAlert('Deleted', 'Video message deleted successfully.');
                     onClose(); // Close viewer after deletion
                 }
             }
         } catch (err) {
-            alert('Error', 'An unexpected error occurred. Please try again.');
+            showAlert('Error', 'An unexpected error occurred. Please try again.');
             console.error('Unexpected error deleting:', err);
         } finally {
             setIsDeleting(false);
             setShowMenu(false);
         }
-    }, [isPhoto, sharedMemory, videoMessage, deleteSharedMemory, deleteVideoMessage, onClose]);
+    }, [isPhoto, sharedMemory, videoMessage, deleteSharedMemory, deleteVideoMessage, onClose, showAlert]);
 
     const handleDeletePress = useCallback(() => {
         setShowMenu(false); // Close menu first
-        alert(
+        showAlert(
             'Delete Memory',
             isPhoto
                 ? 'Are you sure you want to delete this shared memory? This action cannot be undone.'
@@ -2458,7 +2478,7 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                 }
             ]
         );
-    }, [isPhoto, handleDelete]);
+    }, [isPhoto, handleDelete, showAlert]);
 
     return (
         <View style={[styles.viewerSlide, { height: screenHeight, width: screenWidth, backgroundColor: '#000000' }]}>
@@ -2498,30 +2518,20 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                 <>
                     {/* NOTE: Only mount the active video to avoid decoder/network issues on some real devices. */}
                     {isValidPlaybackUrl && viewerVisible && currentIndex === index ? (
-                        <Video
+                        <SimpleVideo
                             key={`video-${item.id}-${playbackUrl.substring(0, 50)}`}
-                            ref={videoRef}
                             style={styles.viewerVideo}
                             source={{ uri: playbackUrl }}
-                            overrideFileExtensionAndroid="mp4"
-                            resizeMode={ResizeMode.COVER}
+                            contentFit="cover"
                             shouldPlay={currentIndex === index && !userPaused && !sharedMemoryViewerVisible}
                             isMuted={false}
                             isLooping={true}
-                            volume={1.0}
                             useNativeControls={false}
-                            progressUpdateIntervalMillis={500}
+                            videoRef={videoRef}
+                            onPlayingChange={setIsPlaying}
                             onLoad={() => {
                                 console.log('[ViewerSlide] Video loaded:', item.id, playbackUrl.substring(0, 50));
-                                // Mark as ready when video is loaded (has enough buffer to start playing)
                                 setVideoReady(true);
-                                // Start playing immediately when video loads if this is the active video
-                                // Video may already be partially buffered if it was preloaded as adjacent
-                                if (currentIndex === index && viewerVisible && videoRef.current && !userPaused && !sharedMemoryViewerVisible) {
-                                    videoRef.current.playAsync().catch((err) => {
-                                        console.warn('[ViewerSlide] Error playing video on load:', err);
-                                    });
-                                }
                             }}
                             onError={(error) => {
                                 const errorStr = error?.toString() || '';
@@ -2549,85 +2559,6 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
 
                                 setVideoError(true);
                                 setVideoReady(false);
-                                // Don't aggressively unload on error to avoid timeout issues
-                                // Just pause the video
-                                if (videoRef.current) {
-                                    videoRef.current.pauseAsync().catch(() => { });
-                                }
-                            }}
-                            onLoadStart={() => {
-                                setVideoReady(false);
-                                setVideoError(false);
-                            }}
-                            onPlaybackStatusUpdate={(status) => {
-                                // Handle playback status updates
-                                try {
-                                    if (status?.isLoaded) {
-                                        setIsPlaying(!!status.isPlaying);
-                                        const isActive = viewerVisible && currentIndex === index;
-
-                                        // Mark as ready as soon as video starts playing or has enough buffer
-                                        // Hide loading indicator once playback begins (progressive playback)
-                                        if (status.isPlaying || (status.isLoaded && !videoReady)) {
-                                            setVideoReady(true);
-                                        }
-
-                                        // Auto-play when ready if this is the active video and not already playing
-                                        // Start playing as soon as video is loaded and has enough buffer (progressive playback)
-                                        if (isActive && status.isLoaded && !status.isPlaying && !status.didJustFinish && videoRef.current && !userPaused && !sharedMemoryViewerVisible) {
-                                            // Check if video has enough buffer to start playing
-                                            // If playableDuration exists and is > 0, we have enough buffer
-                                            const hasBuffer = status.playableDurationMillis
-                                                ? status.playableDurationMillis > 0
-                                                : status.isLoaded;
-
-                                            if (hasBuffer) {
-                                                // Start playing immediately when video has enough buffer
-                                                // This enables progressive playback without waiting for full load
-                                                videoRef.current.playAsync().catch((err) => {
-                                                    console.warn('[ViewerSlide] Error playing video from status update:', err);
-                                                });
-                                            }
-                                        }
-
-                                        // Handle playback errors
-                                        if (status.error) {
-                                            const errorStr = status.error?.toString() || '';
-                                            const isNetworkError = errorStr.includes('NSURLErrorDomain') || errorStr.includes('network') || errorStr.includes('connection');
-
-                                            // Only log non-network errors (network errors are often transient)
-                                            if (!isNetworkError) {
-                                                console.error('[ViewerSlide] Video playback status error:', status.error);
-                                            } else {
-                                                console.warn('[ViewerSlide] Video network error (will retry):', errorStr.substring(0, 100));
-                                            }
-
-                                            setVideoError(true);
-                                            setVideoReady(false);
-                                            // Don't aggressively unload on error to avoid timeout issues
-                                            // Just pause the video
-                                            if (videoRef.current) {
-                                                videoRef.current.pauseAsync().catch(() => { });
-                                            }
-                                        }
-                                    } else if (status?.isLoaded === false && status.error) {
-                                        // Handle errors even when video is not fully loaded
-                                        const errorStr = status.error?.toString() || '';
-                                        const isNetworkError = errorStr.includes('NSURLErrorDomain') || errorStr.includes('network') || errorStr.includes('connection');
-
-                                        // Only log non-network errors
-                                        if (!isNetworkError) {
-                                            console.error('[ViewerSlide] Video loading error:', status.error);
-                                        } else {
-                                            console.warn('[ViewerSlide] Video network loading error (will retry):', errorStr.substring(0, 100));
-                                        }
-
-                                        setVideoError(true);
-                                        setVideoReady(false);
-                                    }
-                                } catch (error) {
-                                    console.warn('[ViewerSlide] Error in playback status update:', error);
-                                }
                             }}
                         />
                     ) : currentIndex === index ? (
@@ -2907,16 +2838,14 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
                                     resizeMode="contain"
                                 />
                             ) : sharedMemorySignedUrl || sharedMemory?.fileUrl ? (
-                                <Video
+                                <SimpleVideo
                                     style={styles.sharedMemoryViewerMedia}
                                     source={{ uri: sharedMemorySignedUrl || sharedMemory?.fileUrl || '' }}
-                                    resizeMode={ResizeMode.CONTAIN}
-                                    useNativeControls
+                                    contentFit="contain"
+                                    useNativeControls={true}
                                     shouldPlay
                                     isLooping
                                     isMuted={false}
-                                    volume={1.0}
-                                    progressUpdateIntervalMillis={500}
                                     onError={(e) => {
                                         console.warn('[SharedMemoryViewer] Video error:', e?.toString?.() || e);
                                     }}
@@ -2976,6 +2905,35 @@ function ViewerSlide({ item, index, currentIndex, screenHeight, screenWidth, saf
 }
 
 const styles = StyleSheet.create({
+    sharedMemoriesHeaderActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    sharedMemoriesHeaderButtonActive: {
+        backgroundColor: BRAND_COLOR,
+        borderColor: BRAND_COLOR,
+    },
+    sharedMemoriesHeaderButtonTextActive: {
+        color: '#FFFFFF',
+    },
+    sharedMemoryDeleteBadge: {
+        position: 'absolute',
+        top: 6,
+        right: 6,
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: '#EF4444',
+        alignItems: 'center',
+        justifyContent: 'center',
+        shadowColor: '#000',
+        shadowOpacity: 0.3,
+        shadowRadius: 4,
+        shadowOffset: { width: 0, height: 2 },
+        elevation: 5,
+        zIndex: 20,
+    },
     screen: {
         flex: 1,
         backgroundColor: '#fff5f0',
@@ -3043,16 +3001,9 @@ const styles = StyleSheet.create({
     },
     heroCard: {
         backgroundColor: palette.card,
-        borderRadius: 20,
-        padding: 24,
-        borderWidth: 1,
-        borderColor: 'rgba(230, 222, 214, 0.4)',
-        gap: 24,
-        shadowColor: '#000',
-        shadowOpacity: 0.03,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 2 },
-        elevation: 2,
+        borderRadius: 32,
+        padding: 32,
+        gap: 28,
     },
     heroHeaderSection: {
         gap: 10,
@@ -3065,10 +3016,10 @@ const styles = StyleSheet.create({
     },
     heroHeading: {
         fontFamily: BRAND_FONT,
-        fontSize: 28,
+        fontSize: 32,
         color: palette.textPrimary,
-        fontWeight: '700',
-        letterSpacing: -0.5,
+        fontWeight: '800',
+        letterSpacing: -1,
     },
     heroNewBadge: {
         paddingHorizontal: 12,
@@ -3083,56 +3034,36 @@ const styles = StyleSheet.create({
     },
     heroSubtitle: {
         color: palette.textSecondary,
-        fontSize: 15,
-        lineHeight: 22,
-        letterSpacing: -0.2,
+        fontSize: 16,
+        lineHeight: 24,
+        letterSpacing: -0.3,
+        opacity: 0.8,
     },
     heroStatsGrid: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingVertical: 16,
-        borderTopWidth: 1,
-        borderBottomWidth: 1,
-        borderColor: 'rgba(230, 222, 214, 0.3)',
+        paddingTop: 12,
     },
     heroStatItem: {
         flex: 1,
         alignItems: 'center',
         gap: 6,
     },
-    heroStatDivider: {
-        width: 1,
-        height: 40,
-        backgroundColor: 'rgba(230, 222, 214, 0.4)',
-    },
     heroStatNumber: {
         fontFamily: BRAND_FONT,
-        fontSize: 24,
+        fontSize: 28,
         color: palette.textPrimary,
-        fontWeight: '700',
-        letterSpacing: -0.3,
+        fontWeight: '800',
+        letterSpacing: -0.5,
     },
     heroStatLabel: {
         color: palette.textSecondary,
-        fontSize: 13,
-        fontWeight: '500',
-    },
-    heroActionButton: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: 8,
-        paddingVertical: 14,
-        borderRadius: 14,
-        borderWidth: 1.5,
-        borderColor: 'rgba(247, 85, 7, 0.2)',
-        backgroundColor: 'rgba(247, 85, 7, 0.05)',
-    },
-    heroActionLabel: {
-        color: BRAND_COLOR,
-        fontSize: 15,
-        fontWeight: '700',
+        fontSize: 12,
+        fontWeight: '600',
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+        opacity: 0.6,
     },
     panelContainer: {
         paddingHorizontal: 20,
@@ -4954,5 +4885,50 @@ const styles = StyleSheet.create({
         fontWeight: '700',
         fontSize: 16,
         letterSpacing: 0.2,
+    },
+    uploadProgressContent: {
+        backgroundColor: 'white',
+        borderRadius: 20,
+        padding: 30,
+        alignItems: 'center',
+        width: '80%',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.25,
+        shadowRadius: 4,
+        elevation: 5,
+    },
+    uploadProgressTitle: {
+        fontSize: 18,
+        fontFamily: BRAND_FONT,
+        color: palette.textPrimary,
+        marginTop: 20,
+        marginBottom: 10,
+        fontWeight: '600',
+    },
+    progressBarContainer: {
+        width: '100%',
+        height: 8,
+        backgroundColor: '#F3F4F6',
+        borderRadius: 4,
+        overflow: 'hidden',
+        marginTop: 10,
+    },
+    progressBar: {
+        height: '100%',
+        backgroundColor: BRAND_COLOR,
+    },
+    uploadProgressPercent: {
+        fontSize: 14,
+        color: palette.textSecondary,
+        marginTop: 8,
+        fontWeight: '500',
+    },
+    uploadProgressOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.5)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        zIndex: 10000,
     },
 });

@@ -8,6 +8,7 @@ import { GIFTYY_THEME } from '../../../constants/giftyy-theme';
 import { BRAND_COLOR, BRAND_FONT } from '../../../constants/theme';
 import { useAuth } from '../../../contexts/AuthContext';
 import { useSettings } from '../../../hooks/useSettings';
+import { useTranslation } from 'react-i18next';
 
 export default function SettingsScreen() {
     const { top, bottom } = useSafeAreaInsets();
@@ -15,6 +16,7 @@ export default function SettingsScreen() {
     const { signOut } = useAuth();
     const { loading: settingsLoading } = useSettings();
     const [signOutVisible, setSignOutVisible] = useState(false);
+    const { t } = useTranslation();
 
     const handleSignOut = () => setSignOutVisible(true);
     const handleConfirmSignOut = async () => {
@@ -23,48 +25,48 @@ export default function SettingsScreen() {
     };
 
     return (
-        <View style={[styles.screen, { paddingTop: top + 64 }]}>
+        <View style={[styles.screen, { paddingTop: top + 72 }]}>
 
             <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottom + 24 }]}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24 }}>
-                    <Text style={[styles.pageTitle, { marginBottom: 0 }]}>Settings</Text>
+                    <Text style={[styles.pageTitle, { marginBottom: 0 }]}>{t('settings.title')}</Text>
                     {settingsLoading && <ActivityIndicator size="small" color={BRAND_COLOR} />}
                 </View>
 
                 <View style={styles.sectionGap}>
                     <View style={styles.groupCard}>
-                        <Text style={styles.groupTitle}>Notification preferences</Text>
+                        <Text style={styles.groupTitle}>{t('settings.notification_preferences')}</Text>
                         <SettingsNotificationsPanel />
                     </View>
 
                     <TourAnchor step="settings_reminders">
                         <View style={styles.groupCard}>
-                            <Text style={styles.groupTitle}>Reminder schedule</Text>
-                            <Text style={styles.groupSubtitle}>When should we remind you about upcoming occasions?</Text>
+                            <Text style={styles.groupTitle}>{t('settings.reminder_schedule')}</Text>
+                            <Text style={styles.groupSubtitle}>{t('settings.reminder_subtitle')}</Text>
                             <ReminderFrequencyPanel />
                         </View>
                     </TourAnchor>
 
                     <View style={styles.groupCard}>
-                        <Text style={styles.groupTitle}>Preferred language</Text>
-                        <Text style={styles.groupSubtitle}>Which language would you like to use?</Text>
+                        <Text style={styles.groupTitle}>{t('settings.preferred_language')}</Text>
+                        <Text style={styles.groupSubtitle}>{t('settings.language_subtitle')}</Text>
                         <LanguageSelector />
                     </View>
 
 
                     <View style={styles.groupCard}>
-                        <Text style={styles.groupTitle}>Privacy settings</Text>
+                        <Text style={styles.groupTitle}>{t('settings.privacy_settings')}</Text>
                         <SettingsLinkRow
                             onPress={() => router.push('/(buyer)/settings/privacy')}
-                            label="Privacy policy"
+                            label={t('settings.privacy_policy')}
                             icon="hand.raised.fill"
-                            subtitle="Read our privacy policy"
+                            subtitle={t('settings.privacy_policy_subtitle')}
                         />
                     </View>
 
                     <Pressable style={styles.dangerButton} onPress={handleSignOut}>
                         <IconSymbol name="arrow.right.square" size={18} color="#0f172a" />
-                        <Text style={styles.dangerLabel}>Sign out</Text>
+                        <Text style={styles.dangerLabel}>{t('settings.sign_out')}</Text>
                     </Pressable>
 
 
@@ -82,16 +84,16 @@ export default function SettingsScreen() {
                         <View style={styles.signOutIcon}>
                             <IconSymbol name="arrow.right.square.fill" size={22} color={BRAND_COLOR} />
                         </View>
-                        <Text style={styles.signOutTitle}>Sign out?</Text>
+                        <Text style={styles.signOutTitle}>{t('settings.sign_out_confirm')}</Text>
                         <Text style={styles.signOutSubtitle}>
-                            We’ll keep your preferences saved. You can sign back in anytime.
+                            {t('settings.sign_out_subtitle')}
                         </Text>
                         <View style={styles.signOutActions}>
                             <Pressable style={styles.signOutGhostButton} onPress={() => setSignOutVisible(false)}>
-                                <Text style={styles.signOutGhostLabel}>Cancel</Text>
+                                <Text style={styles.signOutGhostLabel}>{t('settings.cancel')}</Text>
                             </Pressable>
                             <Pressable style={styles.signOutPrimaryButton} onPress={handleConfirmSignOut}>
-                                <Text style={styles.signOutPrimaryLabel}>Sign out</Text>
+                                <Text style={styles.signOutPrimaryLabel}>{t('settings.sign_out')}</Text>
                             </Pressable>
                         </View>
                     </Pressable>
@@ -103,6 +105,7 @@ export default function SettingsScreen() {
 
 function SettingsNotificationsPanel() {
     const { settings, updateSettings, loading } = useSettings();
+    const { t } = useTranslation();
 
     if (loading && !settings) {
         return (
@@ -115,26 +118,26 @@ function SettingsNotificationsPanel() {
     return (
         <>
             <SettingsSwitchRow
-                label="Push notifications"
-                subtitle="Receive push notifications on your device"
+                label={t('settings.push_notifications')}
+                subtitle={t('settings.push_notifications_subtitle')}
                 value={settings?.push_notifications_enabled ?? true}
                 onValueChange={(val) => { updateSettings({ push_notifications_enabled: val }); }}
             />
             <SettingsSwitchRow
-                label="Occasion reminders"
-                subtitle="Reminders about upcoming events and deadlines"
+                label={t('settings.occasion_reminders')}
+                subtitle={t('settings.occasion_reminders_subtitle')}
                 value={settings?.occasion_reminders_enabled ?? true}
                 onValueChange={(val) => { updateSettings({ occasion_reminders_enabled: val }); }}
             />
             <SettingsSwitchRow
-                label="Order updates"
-                subtitle="Get notified about your order status"
+                label={t('settings.order_updates')}
+                subtitle={t('settings.order_updates_subtitle')}
                 value={settings?.order_updates_enabled ?? true}
                 onValueChange={(val) => { updateSettings({ order_updates_enabled: val }); }}
             />
             <SettingsSwitchRow
-                label="Email notifications"
-                subtitle="Receive important updates via email"
+                label={t('settings.email_notifications')}
+                subtitle={t('settings.email_notifications_subtitle')}
                 value={settings?.email_notifications_enabled ?? true}
                 onValueChange={(val) => { updateSettings({ email_notifications_enabled: val }); }}
             />
@@ -144,16 +147,17 @@ function SettingsNotificationsPanel() {
 
 function ReminderFrequencyPanel() {
     const { settings, updateSettings, loading } = useSettings();
+    const { t } = useTranslation();
 
     const options = [
-        { label: 'Day of', value: 0, icon: 'bell' },
-        { label: '1 day before', value: 1, icon: 'bell' },
-        { label: '2 days before', value: 2, icon: 'bell' },
-        { label: '3 days before', value: 3, icon: 'bell' },
-        { label: '5 days before', value: 5, icon: 'bell' },
-        { label: '1 week before', value: 7, icon: 'bell' },
-        { label: '2 weeks before', value: 14, icon: 'bell' },
-        { label: '1 month before', value: 30, icon: 'bell' },
+        { label: t('settings.day_of'), value: 0, icon: 'bell' },
+        { label: t('settings.day_before', { count: 1 }), value: 1, icon: 'bell' },
+        { label: t('settings.days_before', { count: 2 }), value: 2, icon: 'bell' },
+        { label: t('settings.days_before', { count: 3 }), value: 3, icon: 'bell' },
+        { label: t('settings.days_before', { count: 5 }), value: 5, icon: 'bell' },
+        { label: t('settings.week_before', { count: 1 }), value: 7, icon: 'bell' },
+        { label: t('settings.weeks_before', { count: 2 }), value: 14, icon: 'bell' },
+        { label: t('settings.month_before', { count: 1 }), value: 30, icon: 'bell' },
     ] as const;
 
     const currentFrequencies = settings?.reminder_days_before || [1, 7, 30];
@@ -209,32 +213,53 @@ function ReminderFrequencyPanel() {
 
 function LanguageSelector() {
     const { settings, updateSettings, loading } = useSettings();
+    const { t, i18n } = useTranslation();
+    const [switchingTo, setSwitchingTo] = useState<string | null>(null);
 
     const languages = [
-        { label: 'English', id: 'en', flag: '🇺🇸', enabled: true },
-        { label: 'Spanish', id: 'es', flag: '🇪🇸', enabled: false },
-        { label: 'French', id: 'fr', flag: '🇫🇷', enabled: false },
-        { label: 'German', id: 'de', flag: '🇩🇪', enabled: false },
+        { label: t('languages.en'), id: 'en', flag: '🇺🇸', enabled: true },
+        { label: t('languages.es'), id: 'es', flag: '🇪🇸', enabled: false },
+        { label: t('languages.fr'), id: 'fr', flag: '🇫🇷', enabled: false },
+        { label: t('languages.de'), id: 'de', flag: '🇩🇪', enabled: false },
     ];
 
-    const currentLanguage = settings?.language || 'en';
+    // Use current language from i18n, fall back to settings or 'en'
+    const currentLanguage = i18n.language || settings?.language || 'en';
+
+    const handleLanguageChange = async (langId: string) => {
+        if (switchingTo || currentLanguage.startsWith(langId)) return;
+        
+        try {
+            setSwitchingTo(langId);
+            // Change language in i18n first for immediate UI feedback
+            await i18n.changeLanguage(langId);
+            // Persistence
+            await updateSettings({ language: langId });
+        } catch (error) {
+            console.error('[LanguageSelector] Failed to change language:', error);
+        } finally {
+            setSwitchingTo(null);
+        }
+    };
 
     if (loading && !settings) return null;
 
     return (
         <View style={styles.languageGrid}>
             {languages.map((lang) => {
-                const isSelected = currentLanguage === lang.id;
+                const isSelected = currentLanguage.startsWith(lang.id);
+                const isSwitching = switchingTo === lang.id;
+                
                 return (
                     <Pressable
                         key={lang.id}
-                        onPress={() => lang.enabled && updateSettings({ language: lang.id })}
+                        onPress={() => lang.enabled && handleLanguageChange(lang.id)}
                         style={[
                             styles.languageChip,
                             isSelected && styles.languageChipActive,
                             !lang.enabled && styles.languageChipDisabled
                         ]}
-                        disabled={!lang.enabled}
+                        disabled={!lang.enabled || isSwitching}
                     >
                         <Text style={styles.languageFlag}>{lang.flag}</Text>
                         <Text style={[
@@ -244,13 +269,20 @@ function LanguageSelector() {
                         ]}>
                             {lang.label}
                         </Text>
-                        {!lang.enabled && (
-                            <View style={styles.comingSoonBadge}>
-                                <Text style={styles.comingSoonText}>Soon</Text>
-                            </View>
-                        )}
-                        {isSelected && lang.enabled && (
-                            <IconSymbol name="checkmark.circle.fill" size={16} color={BRAND_COLOR} />
+                        
+                        {isSwitching ? (
+                            <ActivityIndicator size="small" color={BRAND_COLOR} />
+                        ) : (
+                            <>
+                                {!lang.enabled && (
+                                    <View style={styles.comingSoonBadge}>
+                                        <Text style={styles.comingSoonText}>{t('languages.soon')}</Text>
+                                    </View>
+                                )}
+                                {isSelected && lang.enabled && (
+                                    <IconSymbol name="checkmark.circle.fill" size={16} color={BRAND_COLOR} />
+                                )}
+                            </>
                         )}
                     </Pressable>
                 );

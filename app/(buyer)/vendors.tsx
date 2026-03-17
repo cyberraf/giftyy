@@ -18,6 +18,7 @@ import {
 	RefreshControl,
 	StyleSheet,
 	Text,
+	TextInput,
 	View,
 } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
@@ -43,6 +44,7 @@ export default function VendorsScreen() {
 	const [vendors, setVendors] = useState<VendorWithProducts[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [refreshing, setRefreshing] = useState(false);
+	const [searchQuery, setSearchQuery] = useState('');
 
 	// Fetch all vendors
 	const fetchVendors = useCallback(async () => {
@@ -108,6 +110,14 @@ export default function VendorsScreen() {
 		fetchVendors();
 	}, [fetchVendors]);
 
+	const filteredVendors = useMemo(() => {
+		if (!searchQuery.trim()) return vendors;
+		const query = searchQuery.toLowerCase();
+		return vendors.filter(item => 
+			item.vendor.storeName?.toLowerCase().includes(query)
+		);
+	}, [vendors, searchQuery]);
+
 	const onRefresh = useCallback(async () => {
 		setRefreshing(true);
 		try {
@@ -122,8 +132,7 @@ export default function VendorsScreen() {
 		const productCount = products.filter(p => p.vendorId === item.vendor.id && p.isActive).length;
 		
 		return (
-			<Animated.View
-				entering={FadeInDown.duration(400).delay(index * 50)}
+			<View
 				style={styles.vendorCardWrapper}
 			>
 				<Pressable
@@ -185,7 +194,7 @@ export default function VendorsScreen() {
 						<IconSymbol name="chevron.right" size={16} color={GIFTYY_THEME.colors.primary} />
 					</View>
 				</Pressable>
-			</Animated.View>
+			</View>
 		);
 	}, [router, products]);
 
@@ -202,16 +211,7 @@ export default function VendorsScreen() {
 
 	return (
 		<View style={styles.container}>
-			{/* Header */}
-			<View style={[styles.header, { paddingTop: top + 6 }]}>
-				<Pressable onPress={() => router.back()} style={styles.headerButton}>
-					<IconSymbol name="chevron.left" size={24} color={GIFTYY_THEME.colors.gray900} />
-				</Pressable>
-				<Text style={styles.headerTitle}>All Vendors</Text>
-				<View style={styles.headerButton} />
-			</View>
-
-			{vendors.length === 0 ? (
+			{vendors.length === 0 && !loading ? (
 				<View style={[styles.emptyContainer, { paddingTop: top + 80, paddingBottom: bottom }]}>
 					<IconSymbol name="storefront.fill" size={64} color={GIFTYY_THEME.colors.gray300} />
 					<Text style={styles.emptyTitle}>No vendors found</Text>
@@ -219,13 +219,34 @@ export default function VendorsScreen() {
 				</View>
 			) : (
 				<FlatList
-					data={vendors}
+					data={filteredVendors}
 					renderItem={renderVendor}
 					keyExtractor={(item) => item.vendor.id}
 					numColumns={2}
+					ListHeaderComponent={(
+						<View style={{ marginBottom: 16 }}>
+							<View style={styles.searchContainer}>
+								<IconSymbol name="magnifyingglass" size={20} color={GIFTYY_THEME.colors.gray400} />
+								<TextInput
+									style={styles.searchInput}
+									placeholder="Search vendors..."
+									placeholderTextColor={GIFTYY_THEME.colors.gray400}
+									value={searchQuery}
+									onChangeText={setSearchQuery}
+									autoCorrect={false}
+								/>
+								{searchQuery.length > 0 && (
+									<Pressable onPress={() => setSearchQuery('')}>
+										<IconSymbol name="xmark.circle.fill" size={18} color={GIFTYY_THEME.colors.gray400} />
+									</Pressable>
+								)}
+							</View>
+							<Text style={styles.listTitle}>All Vendors ({filteredVendors.length})</Text>
+						</View>
+					)}
 					contentContainerStyle={[
 						styles.listContent,
-						{ paddingTop: top + 60, paddingBottom: bottom + 20 },
+						{ paddingTop: top + 72, paddingBottom: bottom + 20 },
 					]}
 					columnWrapperStyle={styles.row}
 					showsVerticalScrollIndicator={false}
@@ -248,32 +269,29 @@ const styles = StyleSheet.create({
 		flex: 1,
 		backgroundColor: GIFTYY_THEME.colors.white,
 	},
-	header: {
-		position: 'absolute',
-		top: 0,
-		left: 0,
-		right: 0,
-		zIndex: 20,
-		height: 56,
-		paddingHorizontal: GIFTYY_THEME.spacing.md,
+	searchContainer: {
 		flexDirection: 'row',
 		alignItems: 'center',
-		justifyContent: 'space-between',
-		backgroundColor: GIFTYY_THEME.colors.white,
-		borderBottomWidth: 1,
-		borderBottomColor: GIFTYY_THEME.colors.gray200,
-		...GIFTYY_THEME.shadows.sm,
+		backgroundColor: GIFTYY_THEME.colors.gray50,
+		borderRadius: 12,
+		paddingHorizontal: 12,
+		paddingVertical: 10,
+		marginBottom: 16,
+		borderWidth: 1,
+		borderColor: GIFTYY_THEME.colors.gray200,
 	},
-	headerButton: {
-		width: 40,
-		height: 40,
-		alignItems: 'center',
-		justifyContent: 'center',
-	},
-	headerTitle: {
-		fontSize: GIFTYY_THEME.typography.sizes.lg,
-		fontWeight: GIFTYY_THEME.typography.weights.bold,
+	searchInput: {
+		flex: 1,
+		marginLeft: 8,
+		fontSize: 16,
 		color: GIFTYY_THEME.colors.gray900,
+		padding: 0,
+	},
+	listTitle: {
+		fontSize: 18,
+		fontWeight: '700',
+		color: GIFTYY_THEME.colors.gray900,
+		marginBottom: 4,
 	},
 	listContent: {
 		paddingHorizontal: GIFTYY_THEME.spacing.md,

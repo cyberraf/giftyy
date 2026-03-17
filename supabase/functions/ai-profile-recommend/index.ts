@@ -87,38 +87,49 @@ async function searchRAG(params: {
     return data ?? [];
 }
 
+// ---------------------------------------------------------------------------
+// Weighting System (Expert Mode)
+// ---------------------------------------------------------------------------
+const PREFERENCE_WEIGHTS = {
+    CRITICAL_CONSTRAINTS: 100, // gender_identity, age_range, relationship
+    CORE_FIT: 90,             // sizes
+    EXPLICIT_NEEDS: 80,       // dietary_preferences, design_preferences
+    STRONG_INTERESTS: 70,     // fashion_style, home_decor_style, core_values, sports_activities
+    SOFT_INTERESTS: 60,       // favorite_music_genres, tech_interests, hobbies
+    PHYSICAL_DEALBREAKERS: -100, // food_allergies, scent_sensitivities
+    PREFERENCE_DEALBREAKERS: -90, // gift_dislikes
+};
+
 function serializeCandidates(products: any[]): string {
     return JSON.stringify(
         products.map((p) => ({
             id: p.id,
             name: p.name,
             price: p.price,
-            description: (p.description ?? '').slice(0, 150),
+            description: (p.description ?? '').slice(0, 100),
             category: p.category,
             subcategory: p.subcategory,
-            occasions: p.occasions,
-            recipient_types: p.recipient_types,
-            vibes: p.vibes,
-            interests: p.interests,
-            tags: p.tags,
-            product_text: p.product_text,
+            product_text: (p.product_text ?? '').slice(0, 1000),
             similarity_distance: Number((p.similarity_distance ?? 0).toFixed(4)),
         }))
     );
 }
 
-const SYSTEM_PROMPT = `You are Giftyy — an expert gift strategist.
-Your goal is to provide highly personalized gift recommendations for a specific occasion on a recipient's profile page.
+const SYSTEM_PROMPT = `1. PERSONALITY: You are Giftyy, a super cute, encouraging, and warm gift specialist. You are an EXPERT on this recipient and you absolutely LOVE finding the perfect "spark of joy" for them! ✨🎁
+   - TONE: Soft, friendly, and nurturing. Use emojis (✨, 💖, 🧸, 🌟) naturally.
+   - ENCOURAGEMENT: Celebrate finding items for them: "Oh, I found such lovely things for ${'{{recipientName}}'}! ✨"
 
-RULES:
-1. Select the top 4 to 8 products from the CANDIDATE LIST that best fit the recipient's preferences and the specific occasion.
-2. Even if the candidates don't seem like a "perfect" match, your job is to find the MOST relevant items from the provided list for this specific occasion and recipient.
-3. If the list is small, you can recommend all of them if they are even remotely relevant.
-4. You MUST only recommend products from the CANDIDATE LIST. Do NOT hallucinate products.
-6. For each recommendation, use the \`product_text\` to justify why it fits the recipient's specific granular preferences.
-7. Output MUST be a clean JSON object.
+2. EXPERT MODE (PROFILE PAGE):
+   - You are selecting gifts for a recipient whose profile is already built.
+   - FOCUS: Use their specific granular preferences, demographics, and relationship to find matches.
+   - WEIGHTING: Respect the Weighting System (Critical=100, etc.). ABSOLUTELY DO NOT suggest products that conflict with negative-weighted preferences (MUST AVOID).
 
-OUTPUT FORMAT:
+3. RULES:
+   - QUANTITY: Recommend 6-8 gifts from the CANDIDATE LIST.
+   - GROUNDING: ONLY recommend products from the provided CANDIDATE LIST. Do NOT hallucinate.
+   - INSIGHT: Provide a warm, 1-sentence insight about why these top picks were chosen.
+
+4. OUTPUT FORMAT (JSON):
 {
   "recommendations": [
     {
@@ -129,14 +140,15 @@ OUTPUT FORMAT:
       "confidence_0_1": 0.9
     }
   ],
-  "insight": "<A 1-sentence warm insight about why these gifts are the best choices for this recipient and occasion>",
-  "cautions": ["<caution if relevant regarding allergies/dislikes>"]
+  "insight": "<A 1-sentence warm insight>",
+  "cautions": ["<noting any slight mismatches or allergy concerns>"]
 }`;
 
 async function callLLM(
     intentString: string,
     candidatesJson: string,
-    recipient: any | null
+    recipient: any | null,
+    recipientName: string
 ): Promise<any> {
     const sensitivityLines: string[] = [];
     if (recipient) {
@@ -147,7 +159,7 @@ async function callLLM(
     }
 
     const messages = [
-        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'system', content: SYSTEM_PROMPT.replace('{{recipientName}}', recipientName || 'them') },
         { role: 'user', content: `=== CONTEXT ===\n${intentString}\n\n${sensitivityLines.length > 0 ? `=== RECIPIENT SENSITIVITIES ===\n${sensitivityLines.join('\n')}\n` : ''}\n=== CANDIDATE PRODUCTS ===\n${candidatesJson}\n\nReturn the best matches in JSON format.` }
     ];
 
@@ -165,10 +177,28 @@ async function callLLM(
         }),
     });
 
-    if (!res.ok) throw new Error(`OpenAI chat error ${res.status}: ${await res.text()}`);
+    if (!res.ok) {
+        const errText = await res.text();
+        console.error(`[ai-profile-recommend] OpenAI chat error ${res.status}:`, errText);
+        throw new Error(`OpenAI chat error ${res.status}`);
+    }
+
     const json = await res.json();
-    const raw = json.choices?.[0]?.message?.content ?? '';
-    return JSON.parse(raw);
+    let raw = json.choices?.[0]?.message?.content ?? '';
+
+    // Robust JSON cleaning: GPT sometimes wraps json_object in markdown blocks despite the flag
+    if (raw.includes('```json')) {
+        raw = raw.split('```json')[1].split('```')[0].trim();
+    } else if (raw.includes('```')) {
+        raw = raw.split('```')[1].split('```')[0].trim();
+    }
+
+    try {
+        return JSON.parse(raw);
+    } catch (e) {
+        console.error("[ai-profile-recommend] Failed to parse LLM JSON. Raw output:", raw);
+        throw new Error("Invalid JSON returned from LLM");
+    }
 }
 
 Deno.serve(async (req: Request) => {
@@ -180,10 +210,15 @@ Deno.serve(async (req: Request) => {
         const userClient = createClient(SUPABASE_URL, Deno.env.get('SUPABASE_ANON_KEY') ?? '', {
             global: { headers: { Authorization: authHeader } },
         });
-        const { data: { user } } = await userClient.auth.getUser();
-        if (!user) return errorResponse('Unauthorized', 401);
 
-        const { recipientProfileId, recipientName, recipientRelationship, occasion } = await req.json();
+        const { data: userData, error: authError } = await userClient.auth.getUser();
+        if (authError || !userData?.user) {
+            console.error('[ai-profile-recommend] Auth error:', authError);
+            return errorResponse('Unauthorized', 401);
+        }
+        const user = userData.user;
+
+        const { recipientProfileId, recipientName, recipientRelationship, occasion, excludeProductIds = [] } = await req.json();
 
         let recipient;
         if (recipientProfileId) {
@@ -236,47 +271,112 @@ Deno.serve(async (req: Request) => {
         ].filter(Boolean);
 
         const prefBlocks = [
-            recipient?.age_range ? `Age Range: ${recipient.age_range}` : null,
-            recipient?.gender_identity ? `Gender: ${recipient.gender_identity}` : null,
-            recipient?.lifestyle_type ? `Lifestyle: ${recipient.lifestyle_type}` : null,
-            recipient?.current_life_stage ? `Life Stage: ${recipient.current_life_stage}` : null,
-            recipient?.profile_text ? `Bio: ${recipient.profile_text}` : null,
-            interests.length > 0 ? `Interests: ${interests.join(', ')}` : null,
-            style.length > 0 ? `Style: ${style.join(', ')}` : null,
-            recipient?.design_preferences ? `Design Pref: ${recipient.design_preferences}` : null,
-            diet.length > 0 ? `Diet: ${diet.join(', ')}` : null,
-            values.length > 0 ? `Values: ${values.join(', ')}` : null,
-            sizes.length > 0 ? `Sizes: ${sizes.join(', ')}` : null,
-            media.length > 0 ? `Media: ${media.join(', ')}` : null,
-            recipient?.favorite_artists ? `Fav Artists: ${recipient.favorite_artists}` : null,
+            // CRITICAL (Weight: 100)
+            recipientName ? `Recipient Name: ${recipientName} [Weight: ${PREFERENCE_WEIGHTS.CRITICAL_CONSTRAINTS}]` : null,
+            recipientRelationship ? `Relationship: ${recipientRelationship} [Weight: ${PREFERENCE_WEIGHTS.CRITICAL_CONSTRAINTS}]` : null,
+            recipient?.gender_identity ? `Gender: ${recipient.gender_identity} [Weight: ${PREFERENCE_WEIGHTS.CRITICAL_CONSTRAINTS}]` : null,
+            recipient?.age_range ? `Age Range: ${recipient.age_range} [Weight: ${PREFERENCE_WEIGHTS.CRITICAL_CONSTRAINTS}]` : null,
+
+            // CORE FIT (Weight: 90)
+            sizes.length > 0 ? `Sizes: ${sizes.join(', ')} [Weight: ${PREFERENCE_WEIGHTS.CORE_FIT}]` : null,
+
+            // EXPLICIT NEEDS (Weight: 80)
+            diet.length > 0 ? `Diet/Allergies: ${diet.join(', ')} [Weight: ${PREFERENCE_WEIGHTS.EXPLICIT_NEEDS}]` : null,
+            recipient?.design_preferences ? `Design Pref: ${recipient.design_preferences} [Weight: ${PREFERENCE_WEIGHTS.EXPLICIT_NEEDS}]` : null,
+
+            // STRONG INTERESTS (Weight: 70)
+            interests.length > 0 ? `Interests: ${interests.join(', ')} [Weight: ${PREFERENCE_WEIGHTS.STRONG_INTERESTS}]` : null,
+            style.length > 0 ? `Style: ${style.join(', ')} [Weight: ${PREFERENCE_WEIGHTS.STRONG_INTERESTS}]` : null,
+            values.length > 0 ? `Values & Personality: ${values.join(', ')} [Weight: ${PREFERENCE_WEIGHTS.STRONG_INTERESTS}]` : null,
+
+            // SOFT INTERESTS (Weight: 60)
+            media.length > 0 ? `Media & Entertainment: ${media.join(', ')} [Weight: ${PREFERENCE_WEIGHTS.SOFT_INTERESTS}]` : null,
+            recipient?.favorite_artists ? `Fav Artists: ${recipient.favorite_artists} [Weight: ${PREFERENCE_WEIGHTS.SOFT_INTERESTS}]` : null,
+            recipient?.lifestyle_type ? `Lifestyle: ${recipient.lifestyle_type} [Weight: ${PREFERENCE_WEIGHTS.SOFT_INTERESTS}]` : null,
+
+            // MUST AVOID (Negative Weights: -90 to -100)
+            (recipient?.food_allergies?.length > 0 || recipient?.scent_sensitivities?.length > 0)
+                ? `MUST AVOID (Health): ${[...(recipient.food_allergies || []), ...(recipient.scent_sensitivities || [])].join(', ')} [Weight: ${PREFERENCE_WEIGHTS.PHYSICAL_DEALBREAKERS}]`
+                : null,
+            recipient?.gift_dislikes?.length > 0
+                ? `MUST AVOID (Dislikes): ${recipient.gift_dislikes.join(', ')} [Weight: ${PREFERENCE_WEIGHTS.PREFERENCE_DEALBREAKERS}]`
+                : null,
+
+            // Misc Context
+            recipient?.profile_text ? `Bio Notes: ${recipient.profile_text}` : null,
             recipient?.has_pets?.length > 0 ? `Pets: ${recipient.has_pets.join(', ')}` : null,
             recipient?.living_situation ? `Living: ${recipient.living_situation}` : null,
             recipient?.additional_notes ? `Notes: ${recipient.additional_notes}` : null,
         ].filter(Boolean);
 
-        const intentString = `Recipient: ${recipientName}. Relationship: ${recipientRelationship}. Occasion: ${occasion}.\n${prefBlocks.join('\n')}`;
+        // RELEVANCE BOOST: Emphasize the occasion repeatedly to the embedding engine 
+        const intentString = `URGENT: Finding the best gift for ${recipientName} (${recipientRelationship}) for their ${occasion}.\nFocus on items that fit the vibe of ${occasion} and their profile:\n${prefBlocks.join('\n')}`;
 
+        console.log(`[ai-profile-recommend] Generating embedding for ${recipientName} / ${occasion}...`);
         const embedding = await embedText(intentString);
-        const candidates = await searchRAG({ embedding, limit: 40 });
 
-        console.log(`[DEBUG] Occasion: ${occasion}, Candidates found: ${candidates.length}`);
+        console.log(`[ai-profile-recommend] Searching RAG for ${occasion}...`);
+        let candidates = await searchRAG({ embedding, limit: 50 }); // Reduced initial fetch to save DB/IO
+
+        // Filter out excluded products
+        if (excludeProductIds.length > 0) {
+            const excludeSet = new Set(excludeProductIds);
+            candidates = candidates.filter(p => !excludeSet.has(p.id));
+            console.log(`[ai-profile-recommend] Excluded ${excludeProductIds.length} products. Candidates remaining: ${candidates.length}`);
+        }
+
+        console.log(`[ai-profile-recommend] Occasion: ${occasion}, Candidates found: ${candidates.length}`);
         if (candidates.length > 0) {
-            console.log(`[DEBUG] Top 3 candidates: ${candidates.slice(0, 3).map(c => c.name).join(', ')}`);
+            console.log(`[ai-profile-recommend] Top candidate: ${candidates[0].name} (Distance: ${candidates[0].similarity_distance})`);
         }
 
         if (candidates.length === 0) {
             return jsonResponse({ recommendations: [], insight: 'No matching products found at the moment.', cautions: [] });
         }
 
-        const candidatesJson = serializeCandidates(candidates);
-        const output = await callLLM(intentString, candidatesJson, recipient);
+        // OPTIMIZATION: Send a healthy pool to LLM for 6-8 final recommendations
+        const finalCandidates = candidates.slice(0, 20);
+        const candidatesJson = serializeCandidates(finalCandidates);
 
-        console.log(`[DEBUG] LLM Output for ${occasion}:`, JSON.stringify(output));
+        console.log(`[ai-profile-recommend] Calling LLM reranker for ${occasion}...`);
+        const output = await callLLM(intentString, candidatesJson, recipient, recipientName);
+
+        // Enrich recommendations with images and full details from candidates
+        if (output.recommendations) {
+            output.recommendations = output.recommendations.map((r: any) => {
+                const candidate = finalCandidates.find((c: any) => c.id === r.product_id);
+                if (!candidate) return r;
+
+                // Handle image extraction
+                let primaryImage = '';
+                if (candidate.images && Array.isArray(candidate.images) && candidate.images.length > 0) {
+                    primaryImage = candidate.images[0];
+                } else if (candidate.image_url) {
+                    try {
+                        const parsed = JSON.parse(candidate.image_url);
+                        primaryImage = Array.isArray(parsed) ? parsed[0] : candidate.image_url;
+                    } catch {
+                        primaryImage = candidate.image_url;
+                    }
+                }
+
+                return {
+                    ...r,
+                    name: candidate.name,
+                    price: candidate.price,
+                    image_url: primaryImage,
+                    category: candidate.category,
+                    subcategory: candidate.subcategory
+                };
+            });
+        }
+
+        console.log(`[ai-profile-recommend] Success for ${occasion}. Recs count: ${output.recommendations?.length || 0}`);
 
         return jsonResponse(output);
 
     } catch (err) {
-        console.error('[ai-profile-recommend]', err);
+        console.error('[ai-profile-recommend] FATAL ERROR:', err);
         return errorResponse(`Internal error: ${err.message}`, 500);
     }
 });

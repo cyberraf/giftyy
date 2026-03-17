@@ -2,6 +2,8 @@ import { EmptyState } from '@/components/EmptyState';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import type { UpcomingOccasion } from '@/lib/hooks/useHome';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
+import { TFunction } from 'i18next';
 import {
 	ActivityIndicator,
 	Dimensions,
@@ -43,22 +45,17 @@ export function formatDateLabel(dateIso: string): string {
 	});
 }
 
-export function formatTimeUntil(diff: number): string {
-	if (diff === 0) return 'Today! 🎉';
-	if (diff === 1) return 'Tomorrow';
+export function formatTimeUntil(diff: number, t: TFunction): string {
+	if (diff === 0) return t('occasions.today');
+	if (diff === 1) return t('occasions.tomorrow');
 	if (diff < 0) return '';
 
 	const months = Math.floor(diff / 30);
-	const remDays = diff % 30;
-	const weeks = Math.floor(remDays / 7);
-	const days = remDays % 7;
+	const weeks = Math.floor(diff / 7);
 
-	const durationParts = [];
-	if (months > 0) durationParts.push(`${months}mo`);
-	if (weeks > 0) durationParts.push(`${weeks}w`);
-	if (days > 0 && months === 0) durationParts.push(`${days}d`);
-
-	return durationParts.length > 0 ? `in ${durationParts.join(' ')}` : `in ${diff}d`;
+	if (months > 0) return t('occasions.in_months', { count: months });
+	if (weeks > 0) return t('occasions.in_weeks', { count: weeks });
+	return t('occasions.in_days', { count: diff });
 }
 
 const OCCASION_EMOJI: Record<string, string> = {
@@ -95,13 +92,15 @@ function isUrgent(inDays: number) {
 }
 
 export function OccasionList({ occasions, loading, onPressOccasion, onAddOccasion }: Props) {
+	const { t } = useTranslation();
+
 	if (loading) {
 		return (
 			<View style={styles.container}>
-				<Text style={styles.title}>Coming up</Text>
+				<Text style={styles.title}>{t('occasions.coming_up')}</Text>
 				<View style={styles.loadingRow}>
 					<ActivityIndicator size="small" color={GIFTYY_THEME.colors.primary} />
-					<Text style={styles.loadingText}>Loading…</Text>
+					<Text style={styles.loadingText}>{t('occasions.loading')}</Text>
 				</View>
 			</View>
 		);
@@ -110,18 +109,18 @@ export function OccasionList({ occasions, loading, onPressOccasion, onAddOccasio
 	if (occasions.length === 0) {
 		return (
 			<View style={styles.container}>
-				<Text style={styles.title}>Coming up</Text>
+				<Text style={styles.title}>{t('occasions.coming_up')}</Text>
 				<View style={styles.emptyWrapper}>
 					<EmptyState
-						title="No upcoming occasions yet"
-						description="Add birthdays or special dates so you never miss a moment."
+						title={t('occasions.empty_title')}
+						description={t('occasions.empty_subtitle')}
 					/>
 					<Pressable
 						onPress={onAddOccasion}
 						style={({ pressed }) => [styles.addOccasionButton, pressed && styles.addOccasionButtonPressed]}
 						accessibilityRole="button"
 					>
-						<Text style={styles.addOccasionText}>Add an occasion</Text>
+						<Text style={styles.addOccasionText}>{t('occasions.add_button')}</Text>
 					</Pressable>
 				</View>
 			</View>
@@ -130,7 +129,7 @@ export function OccasionList({ occasions, loading, onPressOccasion, onAddOccasio
 
 	return (
 		<View style={styles.container}>
-			<Text style={styles.title}>Coming up</Text>
+			<Text style={styles.title}>{t('occasions.coming_up')}</Text>
 			<ScrollView
 				horizontal
 				nestedScrollEnabled
@@ -172,7 +171,7 @@ export function OccasionList({ occasions, loading, onPressOccasion, onAddOccasio
 							<Text style={styles.dateText}>{formatDateLabel(occ.date)}</Text>
 							<View style={[styles.badge, urgent && styles.badgeUrgent]}>
 								<Text style={[styles.badgeText, urgent && styles.badgeTextUrgent]}>
-									{formatTimeUntil(occ.inDays)}
+									{formatTimeUntil(occ.inDays, t)}
 								</Text>
 							</View>
 						</Pressable>

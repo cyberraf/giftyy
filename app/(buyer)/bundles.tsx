@@ -147,7 +147,7 @@ export default function BundlesScreen() {
 	}, [refreshProducts, refreshCollections]);
 
 	// Convert collections to GiftCollection format and filter out bundles without products
-	const giftCollections = useMemo<GiftCollection[]>(() => {
+	const giftCollections = useMemo<any[]>(() => {
 		return collections
 			.map((collection) => ({
 				id: collection.id,
@@ -215,12 +215,11 @@ export default function BundlesScreen() {
 	return (
 		<View style={styles.container}>
 			{/* Header */}
-			<Animated.View
-				entering={FadeInDown.duration(400)}
+			<View
 				style={[
 					styles.header,
 					{
-						paddingTop: top + 12,
+						paddingTop: top + 72,
 					},
 				]}
 			>
@@ -234,7 +233,7 @@ export default function BundlesScreen() {
 				>
 					<IconSymbol name="slider.horizontal.3" size={20} color={GIFTYY_THEME.colors.gray700} />
 				</Pressable>
-			</Animated.View>
+			</View>
 
 			{/* Background decorative sparkles */}
 			<View style={styles.backgroundContainer}>
@@ -414,7 +413,7 @@ export default function BundlesScreen() {
 													isActive && styles.filterChipTextActive,
 												]}
 											>
-												{'label' in meta ? meta.label : meta.label}
+												meta.label
 											</Text>
 										</Pressable>
 									);

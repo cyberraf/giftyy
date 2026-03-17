@@ -13,6 +13,7 @@ import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 /**
  * Buyer Home: AI Chat Interface with Upcoming Celebrations & Onboarding
@@ -35,6 +36,7 @@ export default function BuyerHomeIndexScreen() {
 	const { orders, refreshOrders } = useOrders();
 	const { videoMessages, refreshVideoMessages } = useVideoMessages();
 	const { refreshOccasions } = useHome();
+	const { t } = useTranslation();
 
 	const [hasReactions, setHasReactions] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);
@@ -141,61 +143,61 @@ export default function BuyerHomeIndexScreen() {
 			const steps: OnboardingStep[] = [
 				{
 					id: 'add-name',
-					label: 'Add your name',
+					label: t('onboarding.steps.add_name'),
 					completed: !!(profile?.first_name),
 					onPress: () => router.push('/(buyer)/(tabs)/profile'),
 				},
 				{
 					id: 'add-phone',
-					label: 'Add phone number',
+					label: t('onboarding.steps.add_phone'),
 					completed: !!(profile?.phone),
 					onPress: () => router.push('/(buyer)/(tabs)/profile'),
 				},
 				{
 					id: 'add-birthday',
-					label: 'Add your birthday',
+					label: t('onboarding.steps.add_birthday'),
 					completed: !!(profile?.date_of_birth),
 					onPress: () => router.push('/(buyer)/(tabs)/profile'),
 				},
 				{
 					id: 'add-recipient',
-					label: 'Add a recipient',
+					label: t('onboarding.steps.add_recipient'),
 					completed: hasRecipients,
 					onPress: () => router.push({ pathname: '/(buyer)/(tabs)/recipients', params: { tab: 'circle' } }),
 				},
 				{
 					id: 'set-occasion',
-					label: 'Set an occasion',
+					label: t('onboarding.steps.set_occasion'),
 					completed: hasOccasions,
 					onPress: () => router.push({ pathname: '/(buyer)/(tabs)/recipients', params: { tab: 'occasions' } }),
 				},
 				{
 					id: 'fill-preferences',
-					label: 'Fill your preferences',
+					label: t('onboarding.steps.fill_preferences'),
 					completed: hasPreferences,
 					onPress: () => router.push({ pathname: '/(buyer)/(tabs)/recipients', params: { tab: 'preferences' } }),
 				},
 				{
 					id: 'first-order',
-					label: 'Place your first order',
+					label: t('onboarding.steps.first_order'),
 					completed: orders.length > 0,
 					onPress: () => router.push('/(buyer)/(tabs)/shop'),
 				},
 				{
 					id: 'first-video',
-					label: 'Record a video message',
+					label: t('onboarding.steps.first_video'),
 					completed: videoMessages.some(v => v.direction === 'sent'),
 					onPress: () => router.push({ pathname: '/(buyer)/(tabs)/memory', params: { tab: 'Messages' } }),
 				},
 				{
 					id: 'first-memory',
-					label: 'Upload a shared memory',
+					label: t('onboarding.steps.first_memory'),
 					completed: sharedMemories.length > 0,
 					onPress: () => router.push({ pathname: '/(buyer)/(tabs)/memory', params: { tab: 'Shared memories' } }),
 				},
 				{
 					id: 'first-reaction',
-					label: 'Send your first reaction',
+					label: t('onboarding.steps.first_reaction'),
 					completed: hasReactions,
 					onPress: () => router.push({ pathname: '/(buyer)/(tabs)/memory', params: { tab: 'Reactions' } }),
 				},

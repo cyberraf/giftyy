@@ -209,7 +209,7 @@ export default function ReactionRecorder({
             // Read file as base64
             const fileUri = localUri.startsWith('file://') ? localUri : `file://${localUri}`;
             const base64 = await FileSystem.readAsStringAsync(fileUri, {
-                encoding: FileSystem.EncodingType.Base64,
+                encoding: 'base64',
             });
 
             setUploadProgressText('Uploading video...');

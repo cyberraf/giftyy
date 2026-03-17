@@ -11,6 +11,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, FlatList, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 type CardLabel = 'Giftyy Card';
 
@@ -26,6 +27,7 @@ type CardConfig = {
 };
 
 export default function DesignScreen() {
+    const { t } = useTranslation();
     const router = useRouter();
     const { cardType, setCardType, recipient, setCardPrice, defaultGiftyyCardPrice } = useCheckout();
     const { alert } = useAlert();
@@ -52,9 +54,13 @@ export default function DesignScreen() {
         bg: '#f75507', // Orange brand color
         fg: 'white',
         accent: '#f75507',
-        features: ['QR video message', 'Personal video greeting', 'Physical card included'],
+        features: [
+            t('checkout.design.features.qr_video'),
+            t('checkout.design.features.personal_greeting'),
+            t('checkout.design.features.physical_card')
+        ],
         price: `$${defaultGiftyyCardPrice.toFixed(2)}`,
-    }), [defaultGiftyyCardPrice]);
+    }), [defaultGiftyyCardPrice, t]);
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -189,7 +195,7 @@ export default function DesignScreen() {
 
     return (
         <View style={{ flex: 1, backgroundColor: 'white' }}>
-            <StepBar current={5} total={7} label="Choose a card style" />
+            <StepBar current={5} total={7} label={t('checkout.design.step_label')} />
             <ScrollView
                 style={{ flex: 1 }}
                 contentContainerStyle={{ flexGrow: 1 }}
@@ -220,7 +226,7 @@ export default function DesignScreen() {
                     >
                         <View style={styles.infoButtonContent}>
                             <IconSymbol name="info.circle.fill" size={20} color="#374151" />
-                            <Text style={styles.infoButtonText}>Learn more about Giftyy Cards</Text>
+                            <Text style={styles.infoButtonText}>{t('checkout.design.learn_more')}</Text>
                         </View>
                     </Pressable>
                 </View>
@@ -313,7 +319,7 @@ export default function DesignScreen() {
                                                             resizeMode="contain"
                                                         />
                                                     </View>
-                                                    <Text style={styles.logoText}>Giftyy</Text>
+                                                     <Text style={styles.logoText}>Giftyy</Text>
                                                 </View>
                                             </View>
 
@@ -323,7 +329,7 @@ export default function DesignScreen() {
                                                     style={styles.giftyyImage}
                                                     resizeMode="contain"
                                                 />
-                                                <Text style={styles.cardFooter}>Something special is waiting for you.</Text>
+                                                <Text style={styles.cardFooter}>{t('checkout.design.card_front_text')}</Text>
                                             </View>
                                         </Animated.View>
 
@@ -351,12 +357,12 @@ export default function DesignScreen() {
                                                         source={{
                                                             uri: `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent('https://giftyy.store')}&bgcolor=ffffff&color=000000&margin=1`
                                                         }}
-                                                        style={styles.qrCodeImage}
+                                                         style={styles.qrCodeImage}
                                                         resizeMode="contain"
                                                     />
                                                 </View>
-                                                <Text style={styles.qrInstruction}>Scan to unlock your message</Text>
-                                                <Text style={styles.qrInstructionSupport}>A personal video and surprise were made just for you.</Text>
+                                                <Text style={styles.qrInstruction}>{t('checkout.design.card_back_scan')}</Text>
+                                                <Text style={styles.qrInstructionSupport}>{t('checkout.design.card_back_desc')}</Text>
                                             </View>
                                         </Animated.View>
                                     </View>
@@ -392,19 +398,19 @@ export default function DesignScreen() {
                         style={{ paddingVertical: 12, paddingRight: 16 }}
                         onPress={() => router.back()}
                     >
-                        <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 13 }}>Back</Text>
+                         <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 13 }}>{t('checkout.common.back')}</Text>
                     </Pressable>
                     <Pressable
                         onPress={() => {
-                            if (disabled) {
-                                alert('Choose a card', 'Please select a card style to continue');
+                             if (disabled) {
+                                alert(t('checkout.design.alerts.choose_card'), t('checkout.design.alerts.select_style'));
                                 return;
                             }
                             router.push('/(buyer)/checkout/payment');
                         }}
                         style={{ flex: 1, backgroundColor: BRAND_COLOR, paddingVertical: 14, borderRadius: 999, alignItems: 'center', opacity: disabled ? 0.6 : 1 }}
                     >
-                        <Text style={{ color: 'white', fontWeight: '800', fontSize: 15 }}>Proceed</Text>
+                        <Text style={{ color: 'white', fontWeight: '800', fontSize: 15 }}>{t('checkout.design.proceed')}</Text>
                     </Pressable>
                 </View>
             </View>
@@ -425,10 +431,10 @@ export default function DesignScreen() {
                         onPress={(e) => e.stopPropagation()}
                     >
                         <View style={styles.modalHeader}>
-                            <View style={styles.modalIconContainer}>
+                             <View style={styles.modalIconContainer}>
                                 <IconSymbol name="info.circle.fill" size={32} color={BRAND_COLOR} />
                             </View>
-                            <Text style={styles.modalTitle}>What is a Giftyy Card?</Text>
+                            <Text style={styles.modalTitle}>{t('checkout.design.modal.title')}</Text>
                             <Pressable
                                 onPress={() => setShowInfoModal(false)}
                                 style={styles.modalCloseButton}
@@ -437,39 +443,39 @@ export default function DesignScreen() {
                             </Pressable>
                         </View>
 
-                        <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
+                         <ScrollView style={styles.modalBody} showsVerticalScrollIndicator={false}>
                             <Text style={styles.modalText}>
-                                A Giftyy Card is a physical QR code card that comes with your gift order. When your recipient receives the gift, they can scan the QR code on the card to unlock your recorded video message and view their special surprise.
+                                {t('checkout.design.modal.description')}
                             </Text>
 
                             <View style={styles.modalSection}>
-                                <Text style={styles.modalSectionTitle}>What's included:</Text>
+                                <Text style={styles.modalSectionTitle}>{t('checkout.design.modal.whats_included')}</Text>
                                 <View style={styles.modalList}>
                                     <View style={styles.modalListItem}>
                                         <IconSymbol name="checkmark.circle.fill" size={18} color={BRAND_COLOR} />
-                                        <Text style={styles.modalListItemText}>Physical QR code card</Text>
+                                        <Text style={styles.modalListItemText}>{t('checkout.design.features.physical_card')}</Text>
                                     </View>
                                     <View style={styles.modalListItem}>
                                         <IconSymbol name="checkmark.circle.fill" size={18} color={BRAND_COLOR} />
-                                        <Text style={styles.modalListItemText}>Personal video message</Text>
+                                        <Text style={styles.modalListItemText}>{t('checkout.design.features.personal_greeting')}</Text>
                                     </View>
                                     <View style={styles.modalListItem}>
                                         <IconSymbol name="checkmark.circle.fill" size={18} color={BRAND_COLOR} />
-                                        <Text style={styles.modalListItemText}>Shared memories and surprises</Text>
+                                        <Text style={styles.modalListItemText}>{t('checkout.design.features.shared_memories')}</Text>
                                     </View>
                                 </View>
                             </View>
 
                             <Text style={styles.modalText}>
-                                You will be able view the recipient's reaction to your gift and special message if they choose to share it.
+                                {t('checkout.design.modal.reaction_text')}
                             </Text>
                         </ScrollView>
 
-                        <Pressable
+                         <Pressable
                             style={styles.modalButton}
                             onPress={() => setShowInfoModal(false)}
                         >
-                            <Text style={styles.modalButtonText}>Got it</Text>
+                            <Text style={styles.modalButtonText}>{t('checkout.design.modal.got_it')}</Text>
                         </Pressable>
                     </Pressable>
                 </Pressable>

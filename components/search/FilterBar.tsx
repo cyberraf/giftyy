@@ -7,6 +7,7 @@ import { FilterChip } from '@/components/search/FilterChip';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 
@@ -24,15 +25,6 @@ type FilterBarProps = {
 	onFilterPress: () => void;
 };
 
-const SORT_OPTIONS = [
-	{ value: 'recommended', label: 'Recommended' },
-	{ value: 'popular', label: 'Most Popular' },
-	{ value: 'price-low', label: 'Price: Low to High' },
-	{ value: 'price-high', label: 'Price: High to Low' },
-	{ value: 'newest', label: 'Newest' },
-	{ value: 'rating', label: 'Best Reviewed' },
-];
-
 export function FilterBar({
 	sortBy,
 	onSortChange,
@@ -40,8 +32,19 @@ export function FilterBar({
 	onRemoveFilter,
 	onFilterPress,
 }: FilterBarProps) {
+	const { t } = useTranslation();
 	const [showSortModal, setShowSortModal] = useState(false);
-	const currentSortLabel = SORT_OPTIONS.find(opt => opt.value === sortBy)?.label || 'Sort';
+
+	const SORT_OPTIONS = [
+		{ value: 'recommended', label: t('search.sort_options.recommended') },
+		{ value: 'popular', label: t('search.sort_options.popular') },
+		{ value: 'price-low', label: t('search.sort_options.price_low') },
+		{ value: 'price-high', label: t('search.sort_options.price_high') },
+		{ value: 'newest', label: t('search.sort_options.newest') },
+		{ value: 'rating', label: t('search.sort_options.rating') },
+	];
+
+	const currentSortLabel = SORT_OPTIONS.find(opt => opt.value === sortBy)?.label || t('search.sort_button');
 
 	return (
 		<>
@@ -54,7 +57,7 @@ export function FilterBar({
 					{/* Filter Button */}
 					<Pressable onPress={onFilterPress} style={styles.filterButton}>
 						<IconSymbol name="slider.horizontal.3" size={18} color={GIFTYY_THEME.colors.primary} />
-						<Text style={styles.filterButtonText}>Filters</Text>
+						<Text style={styles.filterButtonText}>{t('search.filter_button')}</Text>
 						{appliedFilters.length > 0 && (
 							<View style={styles.badge}>
 								<Text style={styles.badgeText}>{appliedFilters.length}</Text>
@@ -92,7 +95,7 @@ export function FilterBar({
 				>
 					<Pressable onPress={(e) => e.stopPropagation()} style={styles.sortModal}>
 						<View style={styles.sortModalHeader}>
-							<Text style={styles.sortModalTitle}>Sort By</Text>
+							<Text style={styles.sortModalTitle}>{t('search.sort_modal_title')}</Text>
 							<Pressable onPress={() => setShowSortModal(false)}>
 								<IconSymbol name="xmark" size={24} color={GIFTYY_THEME.colors.gray700} />
 							</Pressable>

@@ -200,23 +200,38 @@ export default function ProfilePreferencesScreen() {
             alert('Validation error', 'First name is required.');
             return;
         }
+        
+        if (saving) {
+            console.warn('[Profile] Save already in progress, ignoring request');
+            return;
+        }
+        
         setSaving(true);
-        const phoneDigits = profile.phone.replace(/\D/g, '');
-        const fullPhone = phoneDigits ? `${selectedCountry.dial_code.replace('+', '')}${phoneDigits}` : null;
+        try {
+            const phoneDigits = profile.phone.replace(/\D/g, '');
+            const fullPhone = phoneDigits ? `${selectedCountry.dial_code.replace('+', '')}${phoneDigits}` : null;
 
-        const { error } = await updateAuthProfile({
-            first_name: profile.firstName.trim(),
-            last_name: profile.lastName.trim(),
-            phone: fullPhone,
-            date_of_birth: profile.dateOfBirth ? formatDateForDatabase(profile.dateOfBirth) : null,
-            bio: profile.bio || null,
-            profile_image_url: profile.profileImage || null,
-        });
-        setSaving(false);
-        if (error) alert('Error', error.message);
-        else {
-            setShowSuccessModal(true);
-            setHasChanges(false);
+            // Use withTimeout to prevent infinite hangs on bad network
+            const { error } = await withTimeout(updateAuthProfile({
+                first_name: profile.firstName.trim(),
+                last_name: profile.lastName.trim(),
+                phone: fullPhone,
+                date_of_birth: profile.dateOfBirth ? formatDateForDatabase(profile.dateOfBirth) : null,
+                bio: profile.bio || null,
+                profile_image_url: profile.profileImage || null,
+            }), 45000); // 45s timeout
+
+            if (error) {
+                alert('Error', error.message);
+            } else {
+                setShowSuccessModal(true);
+                setHasChanges(false);
+            }
+        } catch (err: any) {
+            console.error('[Profile] HandleSave Error:', err);
+            alert('Save Failed', err.message || 'An unexpected error occurred while saving your profile.');
+        } finally {
+            setSaving(false);
         }
     };
 

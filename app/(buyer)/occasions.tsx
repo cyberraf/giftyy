@@ -6,6 +6,7 @@ import { useHome, type UpcomingOccasion } from '@/lib/hooks/useHome';
 import { responsiveFontSize, scale, verticalScale } from '@/utils/responsive';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
     Pressable,
@@ -22,6 +23,7 @@ type FilterOption = 'All' | 'Birthdays' | 'Anniversaries' | 'This month';
 
 export default function OccasionsScreen() {
     const { top, bottom } = useSafeAreaInsets();
+    const { t } = useTranslation();
     const router = useRouter();
     const { recipientId } = useLocalSearchParams<{ recipientId: string }>();
     const { upcomingOccasions, recipientsLoading: loading, refreshOccasions, myProfileId } = useHome();
@@ -121,7 +123,7 @@ export default function OccasionsScreen() {
                             styles.gridTimeBadgeText,
                             occ.inDays <= 7 && styles.gridTimeBadgeTextUrgent
                         ]}>
-                            {formatTimeUntil(occ.inDays)}
+                            {formatTimeUntil(occ.inDays, t)}
                         </Text>
                     </View>
                 </View>
@@ -150,7 +152,7 @@ export default function OccasionsScreen() {
     );
 
     return (
-        <View style={[styles.screen, { paddingTop: top + 64 }]}>
+        <View style={[styles.screen, { paddingTop: top + 72 }]}>
             <View style={styles.bodyControls}>
                 {recipientId ? (
                     <View style={styles.activeFilterBanner}>

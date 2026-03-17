@@ -5,7 +5,8 @@
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import { useScrollToTop } from '@react-navigation/native';
+import React, { useMemo, useRef, useState } from 'react';
 import {
     Dimensions,
     Pressable,
@@ -18,6 +19,7 @@ import {
 } from 'react-native';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 // Components
 import { formatTimeUntil } from '@/components/home/OccasionList';
@@ -46,6 +48,10 @@ export default function HomeScreen() {
     // State
     const [refreshing, setRefreshing] = useState(false);
     const [aiPrompt, setAiPrompt] = useState('');
+    const { t } = useTranslation();
+    
+    const scrollRef = useRef<ScrollView>(null);
+    useScrollToTop(scrollRef);
 
     // Ensure bottom bar is visible
     React.useEffect(() => {
@@ -64,10 +70,10 @@ export default function HomeScreen() {
 
     // Quick AI prompts
     const quickPrompts = [
-        { icon: 'gift.fill', label: 'Birthday gift ideas', prompt: 'Find unique birthday gift ideas' },
-        { icon: 'heart.fill', label: 'Romantic gifts', prompt: 'Romantic gift under $50' },
-        { icon: 'wand.and.stars', label: 'Surprise me', prompt: 'Surprise me with something special' },
-        { icon: 'star.fill', label: 'Popular gifts', prompt: 'Show me the most popular gifts' },
+        { icon: 'gift.fill', label: t('home.quick_prompts.birthday'), prompt: 'Find unique birthday gift ideas' },
+        { icon: 'heart.fill', label: t('home.quick_prompts.romantic'), prompt: 'Romantic gift under $50' },
+        { icon: 'wand.and.stars', label: t('home.quick_prompts.surprise'), prompt: 'Surprise me with something special' },
+        { icon: 'star.fill', label: t('home.quick_prompts.popular'), prompt: 'Show me the most popular gifts' },
     ];
 
     // Calculate upcoming birthdays
@@ -136,8 +142,8 @@ export default function HomeScreen() {
             >
                 <View style={styles.headerContent}>
                     <View>
-                        <Text style={styles.greeting}>Hi, {firstName}! 👋</Text>
-                        <Text style={styles.subtitle}>How can I help you find the perfect gift?</Text>
+                        <Text style={styles.greeting}>{t('home.greeting', { name: firstName !== 'there' ? firstName : t('home.fallback_name') })}</Text>
+                        <Text style={styles.subtitle}>{t('home.subtitle')}</Text>
                     </View>
                     {unreadCount > 0 && (
                         <Pressable
@@ -152,6 +158,7 @@ export default function HomeScreen() {
             </Animated.View>
 
             <ScrollView
+                ref={scrollRef}
                 style={styles.scrollView}
                 contentContainerStyle={[
                     styles.scrollContent,
@@ -174,13 +181,13 @@ export default function HomeScreen() {
                     <View style={styles.aiChatCard}>
                         <View style={styles.aiChatHeader}>
                             <IconSymbol name="sparkles" size={28} color={GIFTYY_THEME.colors.primary} />
-                            <Text style={styles.aiChatTitle}>Giftyy AI</Text>
+                            <Text style={styles.aiChatTitle}>{t('home.ai_title')}</Text>
                         </View>
 
                         <View style={styles.aiInputContainer}>
                             <TextInput
                                 style={styles.aiInput}
-                                placeholder="Ask me anything... 'Gift for mom under $30'"
+                                placeholder={t('home.ai_placeholder')}
                                 placeholderTextColor={GIFTYY_THEME.colors.gray400}
                                 value={aiPrompt}
                                 onChangeText={setAiPrompt}
@@ -238,10 +245,12 @@ export default function HomeScreen() {
                             >
                                 <IconSymbol name="gift.fill" size={24} color={GIFTYY_THEME.colors.primary} />
                                 <Text style={styles.statValue}>{upcomingBirthdays.length}</Text>
-                                <Text style={styles.statLabel}>Upcoming {upcomingBirthdays.length === 1 ? 'Birthday' : 'Birthdays'}</Text>
+                                <Text style={styles.statLabel}>
+                                    {upcomingBirthdays.length === 1 ? t('home.stats.upcoming_birthday') : t('home.stats.upcoming_birthdays')}
+                                </Text>
                                 {upcomingBirthdays[0] && (
                                     <Text style={styles.statSubtext}>
-                                        {upcomingBirthdays[0].firstName} {formatTimeUntil(upcomingBirthdays[0].daysUntil)}
+                                        {upcomingBirthdays[0].firstName} {formatTimeUntil(upcomingBirthdays[0].daysUntil, t)}
                                     </Text>
                                 )}
                             </Pressable>
@@ -252,19 +261,19 @@ export default function HomeScreen() {
                 {/* Recipients Section */}
                 <Animated.View entering={FadeInDown.delay(400)} style={styles.recipientsSection}>
                     <View style={styles.sectionHeader}>
-                        <Text style={styles.sectionTitle}>Your Recipients</Text>
+                        <Text style={styles.sectionTitle}>{t('home.recipients.title')}</Text>
                         <Pressable
                             onPress={() => router.push('/(buyer)/recipients')}
                             style={styles.seeAllButton}
                         >
-                            <Text style={styles.seeAllText}>See All</Text>
+                            <Text style={styles.seeAllText}>{t('home.recipients.see_all')}</Text>
                             <IconSymbol name="chevron.right" size={16} color={GIFTYY_THEME.colors.primary} />
                         </Pressable>
                     </View>
 
                     {recipientsLoading ? (
                         <View style={styles.loadingContainer}>
-                            <Text style={styles.loadingText}>Loading recipients...</Text>
+                            <Text style={styles.loadingText}>{t('home.recipients.loading')}</Text>
                         </View>
                     ) : recipients.length === 0 ? (
                         <Pressable
@@ -272,9 +281,9 @@ export default function HomeScreen() {
                             style={styles.emptyRecipientsCard}
                         >
                             <IconSymbol name="person.badge.plus" size={48} color={GIFTYY_THEME.colors.gray400} />
-                            <Text style={styles.emptyRecipientsTitle}>Add Your First Recipient</Text>
+                            <Text style={styles.emptyRecipientsTitle}>{t('home.recipients.empty_title')}</Text>
                             <Text style={styles.emptyRecipientsText}>
-                                Start by adding people you'd like to send gifts to
+                                {t('home.recipients.empty_subtitle')}
                             </Text>
                         </Pressable>
                     ) : (
@@ -314,7 +323,7 @@ export default function HomeScreen() {
                                 <View style={styles.addRecipientAvatar}>
                                     <IconSymbol name="plus" size={24} color={GIFTYY_THEME.colors.primary} />
                                 </View>
-                                <Text style={styles.addRecipientText}>Add</Text>
+                                <Text style={styles.addRecipientText}>{t('home.recipients.add')}</Text>
                             </Pressable>
                         </ScrollView>
                     )}
@@ -334,8 +343,8 @@ export default function HomeScreen() {
                         >
                             <View style={styles.shopCTAContent}>
                                 <View>
-                                    <Text style={styles.shopCTATitle}>Browse Our Shop</Text>
-                                    <Text style={styles.shopCTASubtitle}>Discover thousands of unique gifts</Text>
+                                    <Text style={styles.shopCTATitle}>{t('home.shop_cta.title')}</Text>
+                                    <Text style={styles.shopCTASubtitle}>{t('home.shop_cta.subtitle')}</Text>
                                 </View>
                                 <IconSymbol name="arrow.right.circle.fill" size={32} color="white" />
                             </View>

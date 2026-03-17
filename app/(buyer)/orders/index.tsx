@@ -51,7 +51,7 @@ export default function OrdersScreen() {
     };
 
     return (
-        <View style={[styles.screen, { paddingTop: top + 64 }]}>
+        <View style={[styles.screen, { paddingTop: top + 72 }]}>
 
             <ScrollView
                 contentContainerStyle={styles.content}

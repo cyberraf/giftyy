@@ -179,7 +179,7 @@ export default function OrderTrackerScreen() {
     const getStatusConfig = (status: TrackingStatus) => STATUS_CONFIG[status];
 
     return (
-        <View style={[styles.screen, { paddingTop: top + 64 }]}>
+        <View style={[styles.screen, { paddingTop: top + 72 }]}>
             <ScrollView
                 contentContainerStyle={[styles.content, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20, flexGrow: 1 }]}
                 showsVerticalScrollIndicator={false}

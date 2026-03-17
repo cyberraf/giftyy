@@ -3,7 +3,7 @@
  * Displays all products in a specific bundle with 3-column grid layout
  */
 
-import { MarketplaceProductCard } from '@/components/marketplace/ProductCard';
+import { MarketplaceProductCard } from '@/components/marketplace/MarketplaceProductCard';
 import { SearchBar } from '@/components/search/SearchBar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
@@ -157,8 +157,8 @@ export default function BundleDetailScreen() {
 	
 	// Get header image from first product or bundle (use all products, not filtered)
 	const headerImage = useMemo(() => {
-		if (allBundleProducts.length > 0 && allBundleProducts[0].image) {
-			return allBundleProducts[0].image;
+		if (allBundleProducts.length > 0 && allBundleProducts[0].imageUrl) {
+			return allBundleProducts[0].imageUrl;
 		}
 		return null;
 	}, [allBundleProducts]);
@@ -177,7 +177,7 @@ export default function BundleDetailScreen() {
 	if (!bundle) {
 		return (
 			<View style={[styles.container, styles.centerContent, { paddingTop: top + 100 }]}>
-				<Pressable onPress={() => router.back()} style={[styles.backButton, { top: top + 12 }]}>
+				<Pressable onPress={() => router.back()} style={[styles.backButton, { top: top + 72 }]}>
 					<IconSymbol name="chevron.left" size={22} color={GIFTYY_THEME.colors.gray900} />
 				</Pressable>
 				<IconSymbol name="exclamationmark.triangle" size={48} color={GIFTYY_THEME.colors.error} />
@@ -198,7 +198,7 @@ export default function BundleDetailScreen() {
 				]}
 				start={{ x: 0, y: 0 }}
 				end={{ x: 1, y: 1 }}
-				style={[styles.header, { paddingTop: top + 12 }]}
+				style={[styles.header, { paddingTop: top + 72 }]}
 			>
 				<Pressable onPress={() => router.back()} style={styles.backButtonHeader} hitSlop={12}>
 					<IconSymbol name="chevron.left" size={22} color={GIFTYY_THEME.colors.white} />
@@ -291,7 +291,7 @@ export default function BundleDetailScreen() {
 									price={typeof item.price === 'number' && !isNaN(item.price) ? item.price : 0}
 									originalPrice={item.originalPrice !== undefined && item.originalPrice > item.price ? item.originalPrice : (typeof item.discountPercentage === 'number' && item.discountPercentage > 0 && typeof item.price === 'number' && !isNaN(item.price) ? item.price / (1 - item.discountPercentage / 100) : undefined)}
 									discountPercentage={typeof item.discountPercentage === 'number' && !isNaN(item.discountPercentage) ? item.discountPercentage : undefined}
-									image={imageUrl}
+									imageUrl={imageUrl}
 									vendorName={vendor?.storeName || undefined}
 									onPress={() => router.push({
 										pathname: '/(buyer)/(tabs)/product/[id]',

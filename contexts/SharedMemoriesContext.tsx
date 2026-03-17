@@ -19,7 +19,8 @@ type SharedMemoriesContextValue = {
 	addSharedMemory: (
 		localFileUri: string,
 		title: string,
-		mediaType: 'video' | 'photo'
+		mediaType: 'video' | 'photo',
+		onProgress?: (progress: number) => void
 	) => Promise<{ memory: SharedMemory | null; error: Error | null }>;
 	deleteSharedMemory: (id: string) => Promise<{ error: Error | null }>;
 	refreshSharedMemories: () => Promise<void>;
@@ -84,7 +85,8 @@ export function SharedMemoriesProvider({ children }: { children: React.ReactNode
 		async (
 			localFileUri: string,
 			title: string,
-			mediaType: 'video' | 'photo'
+			mediaType: 'video' | 'photo',
+			onProgress?: (progress: number) => void
 		): Promise<{ memory: SharedMemory | null; error: Error | null }> => {
 			if (!user) {
 				return { memory: null, error: new Error('User not authenticated') };
@@ -95,7 +97,8 @@ export function SharedMemoriesProvider({ children }: { children: React.ReactNode
 				const { url: fileUrl, error: uploadError } = await uploadMediaToStorage(
 					localFileUri,
 					user.id,
-					mediaType
+					mediaType,
+					onProgress
 				);
 
 				if (uploadError || !fileUrl) {

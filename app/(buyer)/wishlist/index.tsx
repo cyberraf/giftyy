@@ -1,8 +1,8 @@
 import { useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { MarketplaceProductCard } from '../../../components/marketplace/ProductCard';
+import { MarketplaceProductCard } from '../../../components/marketplace/MarketplaceProductCard';
 import { IconSymbol } from '../../../components/ui/icon-symbol';
 import { GIFTYY_THEME } from '../../../constants/giftyy-theme';
 import { BRAND_COLOR, BRAND_FONT } from '../../../constants/theme';
@@ -16,6 +16,9 @@ export default function WishlistScreen() {
     const { wishlist } = useWishlist();
     const { getProductById } = useProducts();
     const [vendorsMap, setVendorsMap] = useState<Map<string, VendorInfo>>(new Map());
+
+    const GRID_GAP = 12;
+    const COLUMN_WIDTH = (Dimensions.get('window').width - 52) / 2; // (SCREEN_WIDTH - paddingHorizontal*2 - gap) / 2
 
     const items = useMemo(() => {
         return wishlist
@@ -44,7 +47,7 @@ export default function WishlistScreen() {
 
 
     return (
-        <View style={[styles.screen, { paddingTop: top + 64 }]}>
+        <View style={[styles.screen, { paddingTop: top + 72 }]}>
 
             <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottom + 24 }]}>
                 <Text style={styles.pageTitle}>Your Wishlist</Text>
@@ -88,8 +91,9 @@ export default function WishlistScreen() {
                                             price={typeof product.price === 'number' && !isNaN(product.price) ? product.price : 0}
                                             originalPrice={product.originalPrice !== undefined && product.originalPrice > product.price ? product.originalPrice : (typeof product.discountPercentage === 'number' && product.discountPercentage > 0 && typeof product.price === 'number' && !isNaN(product.price) ? product.price / (1 - product.discountPercentage / 100) : undefined)}
                                             discountPercentage={typeof product.discountPercentage === 'number' && !isNaN(product.discountPercentage) ? product.discountPercentage : undefined}
-                                            image={imageUrl}
+                                            imageUrl={imageUrl}
                                             vendorName={vendor?.storeName || undefined}
+                                            width={COLUMN_WIDTH}
                                             onPress={() => router.push({
                                                 pathname: '/(buyer)/(tabs)/product/[id]',
                                                 params: { id: product.id },

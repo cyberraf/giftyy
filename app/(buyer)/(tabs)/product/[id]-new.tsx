@@ -16,12 +16,13 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { useCart } from '@/contexts/CartContext';
 import { useCategories } from '@/contexts/CategoriesContext';
-import { useProducts } from '@/contexts/ProductsContext';
+import { useProducts, Product } from '@/contexts/ProductsContext';
 import { useWishlist } from '@/contexts/WishlistContext';
 import { useCheckout } from '@/lib/CheckoutContext';
 import { logProductAnalyticsEvent } from '@/lib/product-analytics';
 import { supabase } from '@/lib/supabase';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useScrollToTop } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	ActivityIndicator,
@@ -50,11 +51,12 @@ type ProductVariation = {
 	sku?: string;
 	stockQuantity: number;
 	imageUrl?: string;
-	attributes: Record<string, string> | { options?: any[] };
+	attributes: any;
 	parsedOptions?: {
 		attributeName: string;
 		options: any[];
 	};
+	discountPercentage?: number;
 };
 
 type VariationOption = {
@@ -72,14 +74,42 @@ export default function ProductDetailsScreen() {
 	const { top, bottom } = useSafeAreaInsets();
 	const { videoUri, setVideoUri } = useCheckout();
 
-	const { getProductById, products, loading: productsLoading, refreshProducts } = useProducts();
+	const { getProductById, fetchProductById, products, loading: productsLoading, refreshProducts } = useProducts();
 	const { categories, refreshCategories } = useCategories();
-	const product = productId ? getProductById(productId) : undefined;
+	const contextProduct = productId ? getProductById(productId) : undefined;
+	const [localProduct, setLocalProduct] = useState<Product | undefined>(undefined);
+	const [isFetchingLocal, setIsFetchingLocal] = useState(false);
+	
+	const product = contextProduct || localProduct;
+	
 	const { isWishlisted, toggleWishlist } = useWishlist();
 	const { addItem } = useCart();
 	const viewLoggedRef = useRef<string | null>(null);
 	const [refreshing, setRefreshing] = useState(false);
 	const [showAdded, setShowAdded] = useState(false);
+	
+	const scrollRef = useRef<ScrollView>(null);
+	useScrollToTop(scrollRef);
+
+	// Fetch specific product if not in context
+	useEffect(() => {
+		if (productId && !contextProduct && !localProduct && !isFetchingLocal) {
+			const loadMissingProduct = async () => {
+				setIsFetchingLocal(true);
+				try {
+					const fetched = await fetchProductById(productId);
+					if (fetched) {
+						setLocalProduct(fetched);
+					}
+				} catch (err) {
+					console.error('[ProductDetails] Error fetching missing product:', err);
+				} finally {
+					setIsFetchingLocal(false);
+				}
+			};
+			loadMissingProduct();
+		}
+	}, [productId, contextProduct, localProduct, isFetchingLocal, fetchProductById]);
 
 	// Vendor state
 	const [vendor, setVendor] = useState<{ id: string; storeName?: string; profileImageUrl?: string } | null>(null);
@@ -237,21 +267,29 @@ export default function ProductDetailsScreen() {
 	}, [variations, product]);
 
 	// Handle variant selection
-	const handleVariantSelect = useCallback((attributeName: string, value: string) => {
-		setSelected((prev) => ({ ...prev, [attributeName]: value }));
-
-		// Find matching variation
-		const matchingVariation = variations.find((v) => {
-			if (typeof v.attributes === 'object' && !('options' in v.attributes)) {
-				return Object.entries({ ...selected, [attributeName]: value }).every(
-					([key, val]) => v.attributes[key] === val
-				);
+	const handleVariantSelect = useCallback((attributeName: string, value: string | null) => {
+		setSelected((prev) => {
+			const next = { ...prev };
+			if (value === null) {
+				delete next[attributeName];
+			} else {
+				next[attributeName] = value;
 			}
-			return false;
-		});
+			
+			// Find matching variation
+			const matchingVariation = variations.find((v) => {
+				if (typeof v.attributes === 'object' && !('options' in v.attributes)) {
+					return Object.entries(next).every(
+						([key, val]) => v.attributes[key] === val
+					);
+				}
+				return false;
+			});
 
-		setSelectedVariation(matchingVariation || null);
-	}, [variations, selected]);
+			setSelectedVariation(matchingVariation || null);
+			return next;
+		});
+	}, [variations]);
 
 	// Image handling
 	const imageUris: string[] = useMemo(() => {
@@ -461,7 +499,7 @@ export default function ProductDetailsScreen() {
 	];
 
 	// Mock reviews (replace with real data when available)
-	const reviews = [];
+	const reviews: any[] = [];
 
 	return (
 		<View style={styles.container}>
@@ -489,6 +527,7 @@ export default function ProductDetailsScreen() {
 
 			{/* Scrollable Content */}
 			<ScrollView
+                ref={scrollRef}
 				style={styles.scrollView}
 				contentContainerStyle={{ paddingBottom: BOTTOM_BAR_HEIGHT + bottom + 24 }}
 				showsVerticalScrollIndicator={false}
@@ -590,12 +629,10 @@ export default function ProductDetailsScreen() {
 				)}
 			</ScrollView>
 
-			{/* I - Sticky Bottom Bar */}
 			<StickyBottomBar
 				price={formattedPrice}
 				originalPrice={formattedOriginalPrice}
 				onAddToCart={handleAddToCart}
-				onBuyNow={handleBuyNow}
 				disabled={variationsLoading}
 				stockStatus={stockStatus}
 			/>

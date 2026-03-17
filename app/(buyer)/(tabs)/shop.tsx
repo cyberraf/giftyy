@@ -5,14 +5,16 @@
 
 import { LinearGradient } from 'expo-linear-gradient';
 import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useScrollToTop } from '@react-navigation/native';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+	ActivityIndicator,
 	Dimensions,
+	FlatList,
 	Image,
 	Modal,
 	Pressable,
 	RefreshControl,
-	ScrollView,
 	StyleSheet,
 	Text,
 	View
@@ -22,10 +24,11 @@ import Animated, {
 	FadeInUp
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation, Trans } from 'react-i18next';
 
 // Components
 import { AnimatedSectionHeader } from '@/components/marketplace/AnimatedSectionHeader';
-import { MarketplaceProductCard } from '@/components/marketplace/ProductCard';
+import { MarketplaceProductCard } from '@/components/marketplace/MarketplaceProductCard';
 import { PromotionalBanner } from '@/components/marketplace/PromotionalBanner';
 import { ProductGridShimmer } from '@/components/marketplace/ShimmerLoader';
 import { VendorCard } from '@/components/marketplace/VendorCard';
@@ -44,21 +47,21 @@ import { getVendorsInfo, type VendorInfo } from '@/lib/vendor-utils';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const DEALS_ROW_CARD_WIDTH = SCREEN_WIDTH * 0.44;
-const ALL_PRODUCTS_PER_PAGE = 18;
+const ALL_PRODUCTS_PER_PAGE = 64;
 
 // Constants
 
 // Category definitions
 const CATEGORIES = [
-	{ id: 'birthday', name: 'Birthday', icon: 'gift.fill' },
-	{ id: 'valentine', name: 'Valentine', icon: 'heart.fill' },
-	{ id: 'mother', name: 'Mother', icon: 'heart.circle.fill' },
-	{ id: 'father', name: 'Father', icon: 'person.fill' },
-	{ id: 'christmas', name: 'Christmas', icon: 'tree.fill' },
-	{ id: 'couples', name: 'Couples', icon: 'heart.2.fill' },
-	{ id: 'kids', name: 'Kids', icon: 'face.smiling.fill' },
-	{ id: 'luxury', name: 'Luxury', icon: 'star.fill' },
-	{ id: 'handmade', name: 'Handmade', icon: 'paintbrush.fill' },
+	{ id: 'birthday', nameKey: 'shop.category_labels.birthday', icon: 'gift.fill' },
+	{ id: 'valentine', nameKey: 'shop.category_labels.valentine', icon: 'heart.fill' },
+	{ id: 'mother', nameKey: 'shop.category_labels.mother', icon: 'heart.circle.fill' },
+	{ id: 'father', nameKey: 'shop.category_labels.father', icon: 'person.fill' },
+	{ id: 'christmas', nameKey: 'shop.category_labels.christmas', icon: 'tree.fill' },
+	{ id: 'couples', nameKey: 'shop.category_labels.couples', icon: 'heart.2.fill' },
+	{ id: 'kids', nameKey: 'shop.category_labels.kids', icon: 'face.smiling.fill' },
+	{ id: 'luxury', nameKey: 'shop.category_labels.luxury', icon: 'star.fill' },
+	{ id: 'handmade', nameKey: 'shop.category_labels.handmade', icon: 'paintbrush.fill' },
 ];
 
 export default function MarketplaceHomeScreen() {
@@ -67,9 +70,10 @@ export default function MarketplaceHomeScreen() {
 	const params = useLocalSearchParams<{ collection?: string; category?: string }>();
 	const pathname = usePathname();
 	const { setVisible } = useBottomBarVisibility();
+	const { t } = useTranslation();
 
 	// Contexts
-	const { products, collections, loading, refreshProducts, refreshCollections } = useProducts();
+	const { products, collections, loading, hasMore, refreshProducts, loadMoreProducts, refreshCollections } = useProducts();
 	const { unreadCount } = useNotifications();
 	const { categories } = useCategories();
 
@@ -84,8 +88,9 @@ export default function MarketplaceHomeScreen() {
 	const [searchQuery, setSearchQuery] = useState('');
 	const [showFilters, setShowFilters] = useState(false);
 	const [cartRequiredDialog, setCartRequiredDialog] = useState<null | { title: string; message: string }>(null);
-	const [allProductsPage, setAllProductsPage] = useState(1);
 	const [vendorsMap, setVendorsMap] = useState<Map<string, VendorInfo>>(new Map());
+	const [shopPage, setShopPage] = useState(1);
+	const [innerVisibleCount, setInnerVisibleCount] = useState(30);
 	const [filters, setFilters] = useState<{
 		categories: string[];
 		priceRange: { min: number; max: number };
@@ -101,6 +106,9 @@ export default function MarketplaceHomeScreen() {
 		minRating: 0,
 		sortBy: 'recommended',
 	});
+
+	const scrollRef = useRef<FlatList>(null);
+	useScrollToTop(scrollRef);
 
 	// Ensure bottom bar is visible
 	useEffect(() => {
@@ -119,9 +127,10 @@ export default function MarketplaceHomeScreen() {
 		}
 	}, [params.category]);
 
-	// Reset All Products pagination when filters/search change
+	// Reset inner pagination when filters/search change
 	useEffect(() => {
-		setAllProductsPage(1);
+		setShopPage(1);
+		setInnerVisibleCount(30);
 	}, [searchQuery, selectedCategory, filters]);
 
 	// Refresh handler
@@ -153,7 +162,7 @@ export default function MarketplaceHomeScreen() {
 
 	// Filter products
 	const filteredProducts = useMemo(() => {
-		let filtered = products.filter(p => p.isActive);
+		let filtered = products.filter(p => p.isActive && p.stockQuantity > 0);
 
 		// Filter by search query
 		if (searchQuery.trim()) {
@@ -240,19 +249,40 @@ export default function MarketplaceHomeScreen() {
 		return filtered;
 	}, [products, searchQuery, selectedCategory, filters]);
 
-	const allProductsTotalPages = useMemo(() => {
-		return Math.max(1, Math.ceil(filteredProducts.length / ALL_PRODUCTS_PER_PAGE));
-	}, [filteredProducts.length]);
+	// items for the current page (max 60)
+	const itemsForCurrentPage = useMemo(() => {
+		const start = (shopPage - 1) * 60;
+		const end = shopPage * 60;
+		return filteredProducts.slice(start, end);
+	}, [filteredProducts, shopPage]);
 
-	useEffect(() => {
-		// Clamp page if product count changes (e.g., filters applied)
-		setAllProductsPage(prev => Math.min(prev, allProductsTotalPages));
-	}, [allProductsTotalPages]);
-
+	// items currently visible in the grid (30-60, incrementing by 6)
 	const allProductsPageItems = useMemo(() => {
-		const start = (allProductsPage - 1) * ALL_PRODUCTS_PER_PAGE;
-		return filteredProducts.slice(start, start + ALL_PRODUCTS_PER_PAGE);
-	}, [filteredProducts, allProductsPage]);
+		return itemsForCurrentPage.slice(0, innerVisibleCount);
+	}, [itemsForCurrentPage, innerVisibleCount]);
+
+	const allProductsSubtitle = t('shop.pagination.status', { page: shopPage, visible: allProductsPageItems.length, total: itemsForCurrentPage.length });
+
+	const handleNextPage = useCallback(async () => {
+		if (loading) return;
+
+		const nextPage = shopPage + 1;
+		// If we need more products from context to satisfy the next page
+		if (filteredProducts.length < nextPage * 60 && hasMore) {
+			await loadMoreProducts();
+		}
+		setShopPage(nextPage);
+		setInnerVisibleCount(30);
+		scrollRef.current?.scrollToOffset({ offset: 0, animated: true });
+	}, [shopPage, filteredProducts.length, hasMore, loadMoreProducts, loading]);
+
+	const handlePrevPage = useCallback(() => {
+		if (shopPage > 1) {
+			setShopPage(prev => prev - 1);
+			setInnerVisibleCount(60); // Show full page when going back
+			scrollRef.current?.scrollToOffset({ offset: 0, animated: true });
+		}
+	}, [shopPage]);
 
 	// Get featured products (with discounts)
 	const saleProducts = useMemo(() => {
@@ -340,19 +370,268 @@ export default function MarketplaceHomeScreen() {
 	// Calculate responsive header height: safe area top + padding + search box height + bottom padding
 	const headerHeight = headerPaddingTop + 44 + 12; // 44 = searchBox height, 12 = paddingBottom
 
+	const renderHeader = () => (
+		<View>
+			{loading && products.length === 0 ? (
+				<ProductGridShimmer count={9} />
+			) : selectedCategory ? (
+				<>
+					{/* Category Filter Active - Show Only Filtered Products */}
+					<View style={styles.categoryHeader}>
+						<Pressable
+							style={styles.clearFilterButton}
+							onPress={() => setSelectedCategory(null)}
+						>
+							<IconSymbol name="xmark.circle.fill" size={20} color={GIFTYY_THEME.colors.gray600} />
+						</Pressable>
+						<Text style={styles.categoryHeaderTitle}>
+							{selectedCategory === 'deals' ? t('shop.category_labels.deals') : t(CATEGORIES.find(c => c.id === selectedCategory)?.nameKey || 'shop.category_labels.category_fallback', { defaultValue: 'Category' })}
+						</Text>
+						<Text style={styles.categoryHeaderSubtitle}>
+							{filteredProducts.length} {filteredProducts.length === 1 ? t('shop.unit.product') : t('shop.unit.products')}
+						</Text>
+					</View>
+
+					{filteredProducts.length === 0 && (
+						<View style={styles.emptyState}>
+							<IconSymbol name="square.grid.2x2" size={64} color={GIFTYY_THEME.colors.gray300} />
+							<Text style={styles.emptyStateTitle}>{t('shop.empty.title')}</Text>
+							<Text style={styles.emptyStateSubtitle}>
+								{t('shop.empty.subtitle')}
+							</Text>
+							<Pressable
+								style={styles.clearFilterButtonLarge}
+								onPress={() => setSelectedCategory(null)}
+							>
+								<Text style={styles.clearFilterButtonText}>{t('shop.empty.clear_filter')}</Text>
+							</Pressable>
+						</View>
+					)}
+				</>
+			) : (
+				<>
+					{/* Deals Section */}
+					{saleProducts.length > 0 && (
+						<>
+							<TourAnchor step="shop_intro">
+								<AnimatedSectionHeader
+									title={t('shop.sections.deals_title')}
+									subtitle={t('shop.sections.deals_subtitle')}
+									icon="tag.fill"
+									actionText={t('home.recipients.see_all')}
+									onActionPress={() => router.push('/(buyer)/deals')}
+								/>
+								<FlatList
+									horizontal
+									showsHorizontalScrollIndicator={false}
+									contentContainerStyle={styles.dealsRowContainer}
+									data={saleProducts.slice(0, 12)}
+									keyExtractor={(item) => `sale-${item.id}`}
+									renderItem={({ item, index }) => (
+										<View
+											style={{ marginRight: index === Math.min(11, saleProducts.length - 1) ? 0 : 12 }}
+										>
+											<MarketplaceProductCard
+												id={item.id}
+												name={item.name || ''}
+												price={typeof item.price === 'number' && !isNaN(item.price) ? item.price : 0}
+												originalPrice={item.originalPrice !== undefined && item.originalPrice > item.price ? item.originalPrice : (typeof item.discountPercentage === 'number' && item.discountPercentage > 0 && typeof item.price === 'number' && !isNaN(item.price) ? item.price / (1 - item.discountPercentage / 100) : undefined)}
+												discountPercentage={typeof item.discountPercentage === 'number' && !isNaN(item.discountPercentage) ? item.discountPercentage : undefined}
+												imageUrl={item.imageUrl}
+												vendorName={item.vendorName || undefined}
+												onPress={() => router.push({
+													pathname: '/(buyer)/(tabs)/product/[id]',
+													params: { id: item.id, returnTo: pathname },
+												})}
+												width={DEALS_ROW_CARD_WIDTH}
+											/>
+										</View>
+									)}
+								/>
+							</TourAnchor>
+						</>
+					)}
+
+					{/* Vendor Spotlight */}
+					{featuredVendors.length > 0 && (
+						<>
+							<AnimatedSectionHeader
+								title={t('shop.sections.vendors_title')}
+								subtitle={t('shop.sections.vendors_subtitle')}
+								icon="storefront.fill"
+								actionText={t('home.recipients.see_all')}
+								onActionPress={() => router.push('/(buyer)/vendors')}
+							/>
+							<FlatList
+								horizontal
+								showsHorizontalScrollIndicator={false}
+								contentContainerStyle={styles.vendorsContainer}
+								data={featuredVendors}
+								keyExtractor={(item) => `vendor-${item.vendor.id}`}
+								renderItem={({ item, index }) => (
+									<View
+										style={{ marginRight: 16 }}
+									>
+										<VendorCard
+											id={item.vendor.id}
+											name={item.vendor.storeName || 'Vendor'}
+											profileImageUrl={item.vendor.profileImageUrl}
+											featuredProducts={item.products}
+											onPress={() => router.push({
+												pathname: '/(buyer)/vendor/[id]',
+												params: { id: item.vendor.id, returnTo: pathname },
+											})}
+										/>
+									</View>
+								)}
+							/>
+						</>
+					)}
+
+					{/* Giftyy Bundles */}
+					{bundlesWithProducts.length > 0 && (
+						<>
+							<AnimatedSectionHeader
+								title={t('shop.sections.bundles_title')}
+								subtitle={t('shop.sections.bundles_subtitle')}
+								icon="rectangle.grid.2x2"
+								actionText={t('home.recipients.see_all')}
+								onActionPress={() => router.push('/(buyer)/bundles')}
+							/>
+							<FlatList
+								horizontal
+								showsHorizontalScrollIndicator={false}
+								contentContainerStyle={styles.collectionsContainer}
+								data={bundlesWithProducts.slice(0, 5)}
+								keyExtractor={(item) => `bundle-${item.id}`}
+								renderItem={({ item, index }) => {
+									const collectionProducts = item.products.map(productToSimpleProduct);
+									const firstProductImage = collectionProducts[0]?.image ? (() => {
+										try {
+											const parsed = JSON.parse(collectionProducts[0].image);
+											return Array.isArray(parsed) ? parsed[0] : collectionProducts[0].image;
+										} catch {
+											return collectionProducts[0].image;
+										}
+									})() : undefined;
+
+									return (
+										<View
+											style={{ marginRight: 16 }}
+										>
+											<Pressable
+												style={[styles.collectionCard, { backgroundColor: item.color }]}
+												onPress={() => router.push({
+													pathname: '/(buyer)/bundle/[id]',
+													params: { id: item.id },
+												})}
+											>
+												<LinearGradient
+													colors={[item.color, item.color + 'DD']}
+													style={styles.collectionGradient}
+												>
+													{firstProductImage && (
+														<Image
+															source={{ uri: firstProductImage }}
+															style={styles.collectionImage}
+															resizeMode="cover"
+														/>
+													)}
+													<View style={styles.collectionContent}>
+														<Text style={styles.collectionTitle}>{item.title}</Text>
+														{item.description && (
+															<Text style={styles.collectionDescription} numberOfLines={2}>
+																{item.description}
+															</Text>
+														)}
+														<Text style={styles.collectionProductCount}>
+															{collectionProducts.length} {collectionProducts.length === 1 ? t('shop.unit.product') : t('shop.unit.products')}
+														</Text>
+													</View>
+												</LinearGradient>
+											</Pressable>
+										</View>
+									);
+								}}
+							/>
+						</>
+					)}
+
+					{/* All Products Grid Title */}
+					{filteredProducts.length > 0 && (
+						<AnimatedSectionHeader
+							title={t('shop.sections.all_products')}
+							subtitle={allProductsSubtitle}
+							icon="square.grid.3x3"
+						/>
+					)}
+				</>
+			)}
+		</View>
+	);
+
+	const renderItem = ({ item, index }: { item: Product, index: number }) => {
+		const vendor = item.vendorId ? vendorsMap.get(item.vendorId) : undefined;
+		const imageUrl = item.imageUrl ? (() => {
+			try {
+				const parsed = JSON.parse(item.imageUrl!);
+				return Array.isArray(parsed) ? parsed[0] : item.imageUrl;
+			} catch {
+				return item.imageUrl;
+			}
+		})() : undefined;
+
+		// True 3-column grid width with consistent gaps
+		const gridGap = 10;
+		const gridPadding = GIFTYY_THEME.spacing.lg;
+		const threeColumnWidth = (SCREEN_WIDTH - gridPadding * 2 - gridGap * 2) / 3;
+
+		return (
+			<View
+				style={{ width: threeColumnWidth, marginBottom: gridGap }}
+			>
+				<MarketplaceProductCard
+					id={item.id}
+					name={item.name || ''}
+					price={typeof item.price === 'number' && !isNaN(item.price) ? item.price : 0}
+					originalPrice={item.originalPrice !== undefined && item.originalPrice > item.price ? item.originalPrice : (typeof item.discountPercentage === 'number' && item.discountPercentage > 0 && typeof item.price === 'number' && !isNaN(item.price) ? item.price / (1 - item.discountPercentage / 100) : undefined)}
+					discountPercentage={typeof item.discountPercentage === 'number' && !isNaN(item.discountPercentage) ? item.discountPercentage : undefined}
+					imageUrl={imageUrl}
+					vendorName={vendor?.storeName || undefined}
+					width={threeColumnWidth}
+					onPress={() => router.push({
+						pathname: '/(buyer)/(tabs)/product/[id]',
+						params: { id: item.id, returnTo: pathname },
+					})}
+				/>
+			</View>
+		);
+	};
+
 	return (
 		<View style={styles.container}>
-
-			{/* Main Content */}
-			<ScrollView
-				style={styles.scrollView}
+			<FlatList
+				ref={scrollRef}
+				data={allProductsPageItems}
+				renderItem={renderItem}
+				keyExtractor={(item) => item.id}
+				ListHeaderComponent={renderHeader}
+				numColumns={3}
+				columnWrapperStyle={styles.columnWrapper}
 				contentContainerStyle={[
 					styles.scrollContent,
 					{
-						paddingTop: top + 64,
+						paddingTop: top + 72,
 						paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 24
 					},
 				]}
+				onEndReached={() => {
+					if (innerVisibleCount < itemsForCurrentPage.length && innerVisibleCount < 60) {
+						// Load next 2 rows (6 items)
+						setInnerVisibleCount(prev => Math.min(60, prev + 6));
+					}
+				}}
+				onEndReachedThreshold={0.5}
 				showsVerticalScrollIndicator={false}
 				refreshControl={
 					<RefreshControl
@@ -362,335 +641,45 @@ export default function MarketplaceHomeScreen() {
 						colors={[GIFTYY_THEME.colors.primary]}
 					/>
 				}
-			>
-				{loading && products.length === 0 ? (
-					<>
-						<ProductGridShimmer count={9} />
-					</>
-				) : selectedCategory ? (
-					<>
-						{/* Category Filter Active - Show Only Filtered Products */}
-						<View style={styles.categoryHeader}>
-							<Pressable
-								style={styles.clearFilterButton}
-								onPress={() => setSelectedCategory(null)}
-							>
-								<IconSymbol name="xmark.circle.fill" size={20} color={GIFTYY_THEME.colors.gray600} />
-							</Pressable>
-							<Text style={styles.categoryHeaderTitle}>
-								{CATEGORIES.find(c => c.id === selectedCategory)?.name || 'Category'}
-							</Text>
-							<Text style={styles.categoryHeaderSubtitle}>
-								{filteredProducts.length} {filteredProducts.length === 1 ? 'product' : 'products'}
-							</Text>
-						</View>
+				ListFooterComponent={() => {
+					const isPageComplete = innerVisibleCount >= itemsForCurrentPage.length || innerVisibleCount >= 60;
+					const hasNextPage = (shopPage * 60 < filteredProducts.length) || hasMore;
 
-						{filteredProducts.length > 0 ? (
-							<View style={styles.dealsGrid}>
-								{filteredProducts.map((product, index) => {
-									const vendor = product.vendorId ? vendorsMap.get(product.vendorId) : undefined;
-									const imageUrl = product.imageUrl ? (() => {
-										try {
-											const parsed = JSON.parse(product.imageUrl);
-											return Array.isArray(parsed) ? parsed[0] : product.imageUrl;
-										} catch {
-											return product.imageUrl;
-										}
-									})() : undefined;
-
-									// Ensure 3-column layout - remove marginRight from last item in each row
-									const isLastInRow = (index + 1) % 3 === 0;
-									// Use 3-column width from theme
-									const threeColumnWidth = GIFTYY_THEME.layout.cardWidth3Col;
-
-									return (
-										<Animated.View
-											key={product.id}
-											entering={FadeInUp.duration(400).delay(100 + index * 30)}
-											style={{
-												marginRight: isLastInRow ? 0 : 10,
-												marginBottom: 10
-											}}
-										>
-											<MarketplaceProductCard
-												id={product.id}
-												name={product.name || ''}
-												price={typeof product.price === 'number' && !isNaN(product.price) ? product.price : 0}
-												originalPrice={product.originalPrice !== undefined && product.originalPrice > product.price ? product.originalPrice : (typeof product.discountPercentage === 'number' && product.discountPercentage > 0 && typeof product.price === 'number' && !isNaN(product.price) ? product.price / (1 - product.discountPercentage / 100) : undefined)}
-												discountPercentage={typeof product.discountPercentage === 'number' && !isNaN(product.discountPercentage) ? product.discountPercentage : undefined}
-												image={imageUrl}
-												vendorName={vendor?.storeName || undefined}
-												width={threeColumnWidth}
-												onPress={() => router.push({
-													pathname: '/(buyer)/(tabs)/product/[id]',
-													params: { id: product.id, returnTo: pathname },
-												})}
-											/>
-										</Animated.View>
-									);
-								})}
-							</View>
-						) : (
-							<View style={styles.emptyState}>
-								<IconSymbol name="square.grid.2x2" size={64} color={GIFTYY_THEME.colors.gray300} />
-								<Text style={styles.emptyStateTitle}>No products found</Text>
-								<Text style={styles.emptyStateSubtitle}>
-									Try selecting a different category
-								</Text>
-								<Pressable
-									style={styles.clearFilterButtonLarge}
-									onPress={() => setSelectedCategory(null)}
-								>
-									<Text style={styles.clearFilterButtonText}>Clear filter</Text>
-								</Pressable>
-							</View>
-						)}
-					</>
-				) : (
-					<>
-						{/* Hero Banner removed */}
-
-						{/* Deals Section */}
-						{saleProducts.length > 0 && (
-							<>
-								<TourAnchor step="shop_intro">
-									<AnimatedSectionHeader
-										title="Deals for You"
-										subtitle="Limited time offers"
-										icon="tag.fill"
-										actionText="See All"
-										onActionPress={() => router.push('/(buyer)/deals')}
-									/>
-									<ScrollView
-										horizontal
-										showsHorizontalScrollIndicator={false}
-										contentContainerStyle={styles.dealsRowContainer}
-										nestedScrollEnabled={true}
-										scrollEventThrottle={16}
-										decelerationRate="fast"
-									>
-										{saleProducts.slice(0, 12).map((product, index) => (
-											<Animated.View
-												key={product.id}
-												entering={FadeInRight.duration(350).delay(150 + index * 60)}
-												style={{ marginRight: index === Math.min(11, saleProducts.length - 1) ? 0 : 12 }}
-											>
-												<MarketplaceProductCard
-													id={product.id}
-													name={product.name || ''}
-													price={typeof product.price === 'number' && !isNaN(product.price) ? product.price : 0}
-													originalPrice={product.originalPrice !== undefined && product.originalPrice > product.price ? product.originalPrice : (typeof product.discountPercentage === 'number' && product.discountPercentage > 0 && typeof product.price === 'number' && !isNaN(product.price) ? product.price / (1 - product.discountPercentage / 100) : undefined)}
-													discountPercentage={typeof product.discountPercentage === 'number' && !isNaN(product.discountPercentage) ? product.discountPercentage : undefined}
-													image={product.imageUrl}
-													vendorName={product.vendorName || undefined}
-													onPress={() => router.push({
-														pathname: '/(buyer)/(tabs)/product/[id]',
-														params: { id: product.id, returnTo: pathname },
-													})}
-													width={DEALS_ROW_CARD_WIDTH}
-												/>
-											</Animated.View>
-										))}
-									</ScrollView>
-								</TourAnchor>
-							</>
-						)}
-
-						{/* Vendor Spotlight */}
-						{featuredVendors.length > 0 && (
-							<>
-								<AnimatedSectionHeader
-									title="Featured Vendors"
-									subtitle="Shop from trusted sellers"
-									icon="storefront.fill"
-									actionText="See All"
-									onActionPress={() => router.push('/(buyer)/vendors')}
-								/>
-								<ScrollView
-									horizontal
-									showsHorizontalScrollIndicator={false}
-									contentContainerStyle={styles.vendorsContainer}
-									nestedScrollEnabled={true}
-									scrollEventThrottle={16}
-								>
-									{featuredVendors.map((item, index) => (
-										<Animated.View
-											key={item.vendor.id}
-											entering={FadeInRight.duration(400).delay(250 + index * 100)}
-											style={{ marginRight: 16 }}
-										>
-											<VendorCard
-												id={item.vendor.id}
-												name={item.vendor.storeName || 'Vendor'}
-												profileImageUrl={item.vendor.profileImageUrl}
-												featuredProducts={item.products}
-												onPress={() => router.push({
-													pathname: '/(buyer)/vendor/[id]',
-													params: { id: item.vendor.id, returnTo: pathname },
-												})}
-											/>
-										</Animated.View>
-									))}
-								</ScrollView>
-							</>
-						)}
-
-
-						{/* Giftyy Bundles */}
-						{bundlesWithProducts.length > 0 && (
-							<>
-								<AnimatedSectionHeader
-									title="Giftyy Bundles"
-									subtitle="Curated gift sets"
-									icon="rectangle.grid.2x2"
-									actionText="See All"
-									onActionPress={() => router.push('/(buyer)/bundles')}
-								/>
-								<ScrollView
-									horizontal
-									showsHorizontalScrollIndicator={false}
-									contentContainerStyle={styles.collectionsContainer}
-									nestedScrollEnabled={true}
-									scrollEventThrottle={16}
-								>
-									{bundlesWithProducts.slice(0, 5).map((collection, index) => {
-										const collectionProducts = collection.products.map(productToSimpleProduct);
-										const firstProductImage = collectionProducts[0]?.image ? (() => {
-											try {
-												const parsed = JSON.parse(collectionProducts[0].image);
-												return Array.isArray(parsed) ? parsed[0] : collectionProducts[0].image;
-											} catch {
-												return collectionProducts[0].image;
-											}
-										})() : undefined;
-
-										return (
-											<Animated.View
-												key={collection.id}
-												entering={FadeInRight.duration(400).delay(350 + index * 100)}
-												style={{ marginRight: 16 }}
-											>
-												<Pressable
-													style={[styles.collectionCard, { backgroundColor: collection.color }]}
-													onPress={() => router.push({
-														pathname: '/(buyer)/bundle/[id]',
-														params: { id: collection.id },
-													})}
-												>
-													<LinearGradient
-														colors={[collection.color, collection.color + 'DD']}
-														style={styles.collectionGradient}
-													>
-														{firstProductImage && (
-															<Image
-																source={{ uri: firstProductImage }}
-																style={styles.collectionImage}
-																resizeMode="cover"
-															/>
-														)}
-														<View style={styles.collectionContent}>
-															<Text style={styles.collectionTitle}>{collection.title}</Text>
-															{collection.description && (
-																<Text style={styles.collectionDescription} numberOfLines={2}>
-																	{collection.description}
-																</Text>
-															)}
-															<Text style={styles.collectionProductCount}>
-																{collectionProducts.length} products
-															</Text>
-														</View>
-													</LinearGradient>
-												</Pressable>
-											</Animated.View>
-										);
-									})}
-								</ScrollView>
-							</>
-						)}
-
-						{/* All Products Grid */}
-						{filteredProducts.length > 0 && (
-							<>
-								<AnimatedSectionHeader
-									title="All Products"
-									subtitle={`${filteredProducts.length} items available • Page ${allProductsPage} of ${allProductsTotalPages}`}
-									icon="square.grid.3x3"
-								/>
-								<View style={styles.allProductsGrid}>
-									{allProductsPageItems.map((product, index) => {
-										const vendor = product.vendorId ? vendorsMap.get(product.vendorId) : undefined;
-										const imageUrl = product.imageUrl ? (() => {
-											try {
-												const parsed = JSON.parse(product.imageUrl);
-												return Array.isArray(parsed) ? parsed[0] : product.imageUrl;
-											} catch {
-												return product.imageUrl;
-											}
-										})() : undefined;
-
-										// True 3-column grid width with consistent gaps
-										const gridGap = 10;
-										const gridPadding = GIFTYY_THEME.spacing.lg;
-										const threeColumnWidth = (SCREEN_WIDTH - gridPadding * 2 - gridGap * 2) / 3;
-
-										return (
-											<Animated.View
-												key={product.id}
-												entering={FadeInUp.duration(400).delay(400 + index * 30)}
-												style={{ width: threeColumnWidth, marginBottom: gridGap }}
-											>
-												<MarketplaceProductCard
-													id={product.id}
-													name={product.name || ''}
-													price={typeof product.price === 'number' && !isNaN(product.price) ? product.price : 0}
-													originalPrice={product.originalPrice !== undefined && product.originalPrice > product.price ? product.originalPrice : (typeof product.discountPercentage === 'number' && product.discountPercentage > 0 && typeof product.price === 'number' && !isNaN(product.price) ? product.price / (1 - product.discountPercentage / 100) : undefined)}
-													discountPercentage={typeof product.discountPercentage === 'number' && !isNaN(product.discountPercentage) ? product.discountPercentage : undefined}
-													image={imageUrl}
-													vendorName={vendor?.storeName || undefined}
-													width={threeColumnWidth}
-													onPress={() => router.push({
-														pathname: '/(buyer)/(tabs)/product/[id]',
-														params: { id: product.id, returnTo: pathname },
-													})}
-												/>
-											</Animated.View>
-										);
-									})}
+					return (
+						<View style={styles.footerContainer}>
+							{loading && (
+								<View style={{ paddingVertical: 20 }}>
+									<ActivityIndicator color={GIFTYY_THEME.colors.primary} />
 								</View>
-								{allProductsTotalPages > 1 && (
-									<View style={styles.paginationContainer}>
-										<Pressable
-											onPress={() => setAllProductsPage(p => Math.max(1, p - 1))}
-											disabled={allProductsPage <= 1}
-											style={[
-												styles.paginationButton,
-												allProductsPage <= 1 && styles.paginationButtonDisabled,
-											]}
-										>
-											<Text style={styles.paginationButtonText}>Prev</Text>
-										</Pressable>
+							)}
 
-										<Text style={styles.paginationText}>
-											{allProductsPage} / {allProductsTotalPages}
-										</Text>
+							{!loading && isPageComplete && (
+								<View style={styles.paginationControls}>
+									<Pressable
+										style={[styles.paginationButton, shopPage === 1 && styles.paginationButtonDisabled]}
+										onPress={handlePrevPage}
+										disabled={shopPage === 1}
+									>
+										<IconSymbol name="chevron.left" size={20} color={shopPage === 1 ? GIFTYY_THEME.colors.gray400 : GIFTYY_THEME.colors.gray800} />
+										<Text style={[styles.paginationButtonText, shopPage === 1 && { color: GIFTYY_THEME.colors.gray400 }]}>{t('shop.pagination.previous')}</Text>
+									</Pressable>
 
-										<Pressable
-											onPress={() => setAllProductsPage(p => Math.min(allProductsTotalPages, p + 1))}
-											disabled={allProductsPage >= allProductsTotalPages}
-											style={[
-												styles.paginationButton,
-												allProductsPage >= allProductsTotalPages && styles.paginationButtonDisabled,
-											]}
-										>
-											<Text style={styles.paginationButtonText}>Next</Text>
-										</Pressable>
-									</View>
-								)}
-							</>
-						)}
-					</>
-				)}
-			</ScrollView>
+									<Text style={styles.paginationPageIndicator}>Page {shopPage}</Text>
+
+									<Pressable
+										style={[styles.paginationButton, !hasNextPage && styles.paginationButtonDisabled]}
+										onPress={handleNextPage}
+										disabled={!hasNextPage}
+									>
+										<Text style={[styles.paginationButtonText, !hasNextPage && { color: GIFTYY_THEME.colors.gray400 }]}>{t('shop.pagination.next')}</Text>
+										<IconSymbol name="chevron.right" size={20} color={!hasNextPage ? GIFTYY_THEME.colors.gray400 : GIFTYY_THEME.colors.gray800} />
+									</Pressable>
+								</View>
+							)}
+						</View>
+					);
+				}}
+			/>
 
 			{/* Filters Modal */}
 			<FilterModal
@@ -771,17 +760,17 @@ export default function MarketplaceHomeScreen() {
 									router.push('/(buyer)/(tabs)/cart');
 								}}
 								accessibilityRole="button"
-								accessibilityLabel="Go to cart"
+								accessibilityLabel={t('shop.cart_dialog.go_to_cart')}
 							>
-								<Text style={styles.dialogSecondaryText}>Go to cart</Text>
+								<Text style={styles.dialogSecondaryText}>{t('shop.cart_dialog.go_to_cart')}</Text>
 							</Pressable>
 							<Pressable
 								style={styles.dialogPrimaryButton}
 								onPress={() => setCartRequiredDialog(null)}
 								accessibilityRole="button"
-								accessibilityLabel="Browse gifts"
+								accessibilityLabel={t('shop.cart_dialog.browse_gifts')}
 							>
-								<Text style={styles.dialogPrimaryText}>Browse gifts</Text>
+								<Text style={styles.dialogPrimaryText}>{t('shop.cart_dialog.browse_gifts')}</Text>
 							</Pressable>
 						</View>
 					</Pressable>
@@ -904,31 +893,43 @@ const styles = StyleSheet.create({
 		paddingHorizontal: GIFTYY_THEME.spacing.lg,
 		paddingVertical: GIFTYY_THEME.spacing.md,
 	},
-	paginationContainer: {
+	footerContainer: {
+		paddingVertical: 32,
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
+		alignItems: 'center',
+	},
+	paginationControls: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'space-between',
-		paddingHorizontal: GIFTYY_THEME.spacing.lg,
-		paddingTop: GIFTYY_THEME.spacing.sm,
-		paddingBottom: GIFTYY_THEME.spacing.xl,
+		width: '100%',
+		paddingTop: 10,
+	},
+	paginationPageIndicator: {
+		fontSize: GIFTYY_THEME.typography.sizes.base,
+		fontWeight: GIFTYY_THEME.typography.weights.bold,
+		color: GIFTYY_THEME.colors.gray900,
 	},
 	paginationButton: {
-		minWidth: 86,
-		height: 40,
+		flexDirection: 'row',
+		alignItems: 'center',
+		paddingVertical: 10,
+		paddingHorizontal: 20,
 		borderRadius: GIFTYY_THEME.radius.full,
-		backgroundColor: GIFTYY_THEME.colors.gray100,
+		backgroundColor: GIFTYY_THEME.colors.white,
 		borderWidth: 1,
 		borderColor: GIFTYY_THEME.colors.gray200,
-		alignItems: 'center',
-		justifyContent: 'center',
+		...GIFTYY_THEME.shadows.sm,
 	},
 	paginationButtonDisabled: {
 		opacity: 0.5,
+		backgroundColor: GIFTYY_THEME.colors.gray50,
 	},
 	paginationButtonText: {
 		fontSize: GIFTYY_THEME.typography.sizes.sm,
 		fontWeight: GIFTYY_THEME.typography.weights.bold,
 		color: GIFTYY_THEME.colors.gray800,
+		marginHorizontal: 4,
 	},
 	dialogOverlay: {
 		flex: 1,
@@ -1224,6 +1225,11 @@ const styles = StyleSheet.create({
 		fontSize: GIFTYY_THEME.typography.sizes.base,
 		fontWeight: GIFTYY_THEME.typography.weights.bold,
 		color: GIFTYY_THEME.colors.white,
+	},
+	columnWrapper: {
+		justifyContent: 'flex-start',
+		gap: 10,
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
 	},
 });
 

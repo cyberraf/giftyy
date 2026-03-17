@@ -79,15 +79,18 @@ function getNextBirthdayOccasion(recipient: Recipient): UpcomingOccasion | null 
 
 export function useHome(): UseHomeResult {
 	const { recipients, loading: recipientsLoading, refreshRecipients } = useRecipients();
-	const { activeRecipientId } = useAppStore();
-	const [initialLoading, setInitialLoading] = useState(true);
-	const [profileLoading, setProfileLoading] = useState(true);
-	const [circleOccasionsLoading, setCircleOccasionsLoading] = useState(true);
-	const [myProfileId, setMyProfileId] = useState<string | null>(null);
+	const { activeRecipientId, homeDataCache, setHomeDataCache } = useAppStore();
+	
+	const hasCache = !!homeDataCache && (Date.now() - homeDataCache.lastFetched < 1000 * 60 * 5); // 5 min cache
+	
+	const [initialLoading, setInitialLoading] = useState(!hasCache);
+	const [profileLoading, setProfileLoading] = useState(!hasCache);
+	const [circleOccasionsLoading, setCircleOccasionsLoading] = useState(!hasCache);
+	const [myProfileId, setMyProfileId] = useState<string | null>(homeDataCache?.myProfileId || null);
 
-	const [myProfileOccasions, setMyProfileOccasions] = useState<any[]>([]);
-	const [circleOccasions, setCircleOccasions] = useState<any[]>([]);
-	const [myPreferences, setMyPreferences] = useState<any | null>(null);
+	const [myProfileOccasions, setMyProfileOccasions] = useState<any[]>(homeDataCache?.myProfileOccasions || []);
+	const [circleOccasions, setCircleOccasions] = useState<any[]>(homeDataCache?.circleOccasions || []);
+	const [myPreferences, setMyPreferences] = useState<any | null>(homeDataCache?.myPreferences || null);
 
 	// Fetch current user's profile, occasions, and preferences
 	const fetchMyData = useCallback(async () => {
@@ -115,12 +118,14 @@ export function useHome(): UseHomeResult {
 				.eq('recipient_profile_id', rp.id)
 				.order('date', { ascending: true });
 
+			let myProfileOccasionsRef = myProfileOccasions;
 			if (occs) {
 				const localized = occs.map(o => ({
 					...o,
 					label: o.label || o.title || 'Occasion'
 				}));
 				setMyProfileOccasions(localized);
+				myProfileOccasionsRef = localized;
 			}
 
 			// 3. Get preferences for self
@@ -131,7 +136,11 @@ export function useHome(): UseHomeResult {
 				.maybeSingle();
 
 			if (prefs) {
-				setMyPreferences(dbRowToPreferences(prefs));
+				const localizedPrefs = dbRowToPreferences(prefs);
+				setMyPreferences(localizedPrefs);
+				setHomeDataCache({ myPreferences: localizedPrefs, myProfileId: rp.id, myProfileOccasions: myProfileOccasionsRef, lastFetched: Date.now() });
+			} else {
+				setHomeDataCache({ myProfileId: rp.id, myProfileOccasions: myProfileOccasionsRef, lastFetched: Date.now() });
 			}
 		}
 		setProfileLoading(false);
@@ -205,6 +214,7 @@ export function useHome(): UseHomeResult {
 			}
 
 			setCircleOccasions(allOccs);
+			setHomeDataCache({ circleOccasions: allOccs, lastFetched: Date.now() });
 			setCircleOccasionsLoading(false);
 		};
 

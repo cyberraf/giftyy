@@ -26,7 +26,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { DealCategoryTabs } from '@/components/deals/DealCategoryTabs';
 import { LightningDealCard } from '@/components/deals/LightningDealCard';
 import { VendorPromotionCard } from '@/components/deals/VendorPromotionCard';
-import { MarketplaceProductCard } from '@/components/marketplace/ProductCard';
+import { MarketplaceProductCard } from '@/components/marketplace/MarketplaceProductCard';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 
 // Contexts & Utils
@@ -276,10 +276,10 @@ export default function DealsScreen() {
 		}
 	}, [refreshProducts]);
 
-	const headerPaddingTop = top + 6;
+	const headerPaddingTop = top + 72;
 	// Calculate responsive header height: original base (110) + safe area top
 	// Original was 110px (for devices without notch), now adapts to safe area
-	const headerHeight = 110 + top;
+	const headerHeight = 110 + top + 72;
 
 	return (
 		<View style={styles.container}>
@@ -454,14 +454,7 @@ export default function DealsScreen() {
 															price={product.price}
 															originalPrice={product.originalPrice}
 															discountPercentage={product.discountPercentage}
-															image={(() => {
-																try {
-																	const parsed = JSON.parse(product.imageUrl || '');
-																	return Array.isArray(parsed) ? parsed[0] : product.imageUrl;
-																} catch {
-																	return product.imageUrl;
-																}
-															})()}
+															imageUrl={product.imageUrl}
 															vendorName={product.vendorId ? vendorsMap.get(product.vendorId)?.storeName : undefined}
 															onPress={() =>
 																router.push({
@@ -517,14 +510,7 @@ export default function DealsScreen() {
 													price={product.price}
 													originalPrice={product.originalPrice}
 													discountPercentage={product.discountPercentage}
-													image={(() => {
-														try {
-															const parsed = JSON.parse(product.imageUrl || '');
-															return Array.isArray(parsed) ? parsed[0] : product.imageUrl;
-														} catch {
-															return product.imageUrl;
-														}
-													})()}
+													imageUrl={product.imageUrl}
 													vendorName={product.vendorId ? vendorsMap.get(product.vendorId)?.storeName : undefined}
 													onPress={() => router.push({
 														pathname: '/(buyer)/(tabs)/product/[id]',

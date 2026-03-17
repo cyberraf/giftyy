@@ -9,6 +9,7 @@ import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import {
 	Dimensions,
 	Modal,
@@ -49,6 +50,7 @@ export function FilterModal({
 	categories = [],
 	vendors = [],
 }: FilterModalProps) {
+	const { t } = useTranslation();
 	const [localFilters, setLocalFilters] = useState(filters);
 	const [categoriesExpanded, setCategoriesExpanded] = useState(true);
 
@@ -104,10 +106,10 @@ export function FilterModal({
 							<View style={styles.header}>
 								<Pressable onPress={onReset} style={styles.resetButton}>
 									<IconSymbol name="arrow.counterclockwise" size={18} color={GIFTYY_THEME.colors.primary} />
-									<Text style={styles.resetText}>Reset</Text>
+									<Text style={styles.resetText}>{t('search.reset')}</Text>
 								</Pressable>
 								<View style={styles.titleContainer}>
-									<Text style={styles.title}>Filters</Text>
+									<Text style={styles.title}>{t('search.filter_button')}</Text>
 									{appliedCount > 0 && (
 										<View style={styles.countBadge}>
 											<Text style={styles.countText}>{appliedCount}</Text>
@@ -125,7 +127,7 @@ export function FilterModal({
 							<View style={styles.appliedContainer}>
 								<IconSymbol name="checkmark.circle.fill" size={16} color={GIFTYY_THEME.colors.success} />
 								<Text style={styles.appliedText}>
-									{appliedCount} {appliedCount === 1 ? 'filter' : 'filters'} active
+									{t('search.applied_filters', { count: appliedCount, filterText: appliedCount === 1 ? t('search.filter') : t('search.filter_plural') })}
 								</Text>
 							</View>
 						)}
@@ -142,7 +144,7 @@ export function FilterModal({
 									onPress={() => setCategoriesExpanded(!categoriesExpanded)}
 								>
 									<View style={styles.dropdownHeaderContent}>
-										<Text style={styles.sectionTitle}>Categories</Text>
+										<Text style={styles.sectionTitle}>{t('search.categories')}</Text>
 										{localFilters.categories.length > 0 && (
 											<View style={styles.badge}>
 												<Text style={styles.badgeText}>
@@ -196,7 +198,7 @@ export function FilterModal({
 												})}
 											</View>
 										) : (
-											<Text style={styles.emptyText}>No categories available</Text>
+											<Text style={styles.emptyText}>{t('search.no_categories')}</Text>
 										)}
 									</View>
 								)}
@@ -206,7 +208,7 @@ export function FilterModal({
 							<View style={styles.section}>
 								<View style={styles.sectionHeader}>
 									<IconSymbol name="dollarsign.circle.fill" size={20} color={GIFTYY_THEME.colors.primary} />
-									<Text style={styles.sectionTitle}>Price Range</Text>
+									<Text style={styles.sectionTitle}>{t('search.price_range')}</Text>
 								</View>
 								<View style={styles.priceSection}>
 									<PriceRangeSlider
@@ -228,7 +230,7 @@ export function FilterModal({
 								onPress={onReset}
 							>
 								<IconSymbol name="arrow.counterclockwise" size={18} color={GIFTYY_THEME.colors.gray700} />
-								<Text style={styles.resetAllText}>Reset</Text>
+								<Text style={styles.resetAllText}>{t('search.reset')}</Text>
 							</Pressable>
 							<Pressable
 								style={[
@@ -252,7 +254,7 @@ export function FilterModal({
 										appliedCount === 0 && styles.applyButtonTextDisabled,
 									]}
 								>
-									Apply {appliedCount > 0 ? `(${appliedCount})` : ''}
+									{t('search.apply')} {appliedCount > 0 ? `(${appliedCount})` : ''}
 								</Text>
 							</Pressable>
 						</View>

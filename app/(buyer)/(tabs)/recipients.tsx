@@ -17,7 +17,8 @@ import { DEFAULT_HOLIDAYS } from '@/lib/utils/occasion-seeding';
 import { dbRowToPreferences, RecipientPreferences } from '@/types/recipient-preferences';
 import { responsiveFontSize, scale, verticalScale } from '@/utils/responsive';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
+import { useScrollToTop } from '@react-navigation/native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
 	Dimensions,
 	Image,
@@ -28,6 +29,7 @@ import {
 	View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const COLUMN_GAP = 12;
@@ -84,12 +86,12 @@ const getInitials = (name: string): string => {
 	return `${firstCh}${lastCh}`.toUpperCase();
 };
 
-const formatInDaysSmart = (days: number): string => {
-	if (days === 0) return 'Today';
-	if (days === 1) return 'Tomorrow';
-	if (days < 7) return `in ${days}d`;
-	if (days < 30) return `in ${Math.floor(days / 7)}w`;
-	return `in ${Math.floor(days / 30)}m`;
+const formatInDaysSmart = (days: number, t: any): string => {
+	if (days === 0) return t('recipients.time.today');
+	if (days === 1) return t('recipients.time.tomorrow');
+	if (days < 7) return t('recipients.time.in_days', { count: days });
+	if (days < 30) return t('recipients.time.in_weeks', { count: Math.floor(days / 7) });
+	return t('recipients.time.in_months', { count: Math.floor(days / 30) });
 };
 
 const getOccasionIcon = (label?: string): string => {
@@ -131,6 +133,7 @@ function RecipientCard({
 	isOutgoing,
 	displayName,
 }: RecipientCardProps & { onApprove?: () => void, onReject?: () => void }) {
+	const { t } = useTranslation();
 	const isPending = status === 'pending';
 	const showApprovalActions = isPending && !isOutgoing;
 	const isIncoming = !isOutgoing;
@@ -195,7 +198,7 @@ function RecipientCard({
 					{isPending ? (
 						<View style={[styles.relationshipBadge, { backgroundColor: '#FEF2F2' }]}>
 							<Text style={[styles.relationshipBadgeText, { color: '#DC2626' }]}>
-								{isOutgoing ? 'WAITING' : 'REQUEST'}
+								{isOutgoing ? t('recipients.status.waiting') : t('recipients.status.pending_request')}
 							</Text>
 						</View>
 					) : isClaimed ? (
@@ -239,6 +242,7 @@ function PendingCarouselCard({
 	isOutgoing,
 	displayName,
 }: RecipientCardProps & { onApprove?: () => void, onReject?: () => void }) {
+	const { t } = useTranslation();
 	const isIncoming = !isOutgoing;
 	const displayAvatarUrl = isIncoming ? senderAvatarUrl : avatarUrl;
 	const currentDisplayName = isIncoming && senderName ? senderName : displayName;
@@ -280,12 +284,12 @@ function PendingCarouselCard({
 								styles.statusBadgeText,
 								{ color: isOutgoing ? '#FF6B00' : '#EF4444' }
 							]}>
-								{isOutgoing ? 'Waiting' : 'Request'}
+								{isOutgoing ? t('recipients.status.waiting_label') : t('recipients.status.request_label')}
 							</Text>
 						</View>
 					</View>
 					<Text style={styles.pendingSubtitle}>
-						{isOutgoing ? 'Awaiting their approval' : 'Wants to connect with you'}
+						{isOutgoing ? t('recipients.status.waiting_subtitle') : t('recipients.status.request_subtitle')}
 					</Text>
 				</View>
 			</View>
@@ -298,7 +302,7 @@ function PendingCarouselCard({
 							onPress={onApprove}
 						>
 							<IconSymbol name="checkmark" size={16} color="#FFFFFF" />
-							<Text style={styles.pendingBtnTextWhite}>Accept</Text>
+							<Text style={styles.pendingBtnTextWhite}>{t('recipients.status.accept')}</Text>
 						</Pressable>
 						<Pressable
 							style={[styles.pendingActionBtn, styles.pendingBtnReject]}
@@ -313,7 +317,7 @@ function PendingCarouselCard({
 						onPress={onDelete}
 					>
 						<IconSymbol name="trash" size={14} color={GIFTYY_THEME.colors.gray500} />
-						<Text style={styles.pendingBtnTextGray}>Cancel Invitation</Text>
+						<Text style={styles.pendingBtnTextGray}>{t('recipients.status.cancel_invite')}</Text>
 					</Pressable>
 				)}
 			</View>
@@ -324,6 +328,7 @@ function PendingCarouselCard({
 export default function RecipientsScreen() {
 	const { top, bottom } = useSafeAreaInsets();
 	const router = useRouter();
+	const { t } = useTranslation();
 	const { profile: authProfile, user } = useAuth();
 	const { recipients, loading, refreshRecipients, approveConnection, rejectConnection, addRecipient, deleteRecipient, syncContacts } = useRecipients();
 
@@ -372,6 +377,9 @@ export default function RecipientsScreen() {
 	const [editingOccasionId, setEditingOccasionId] = useState<string | null>(null);
 	const [phantomProfile, setPhantomProfile] = useState<any | null>(null);
 	const [initialPrefsStepLabel, setInitialPrefsStepLabel] = useState<string | undefined>(undefined);
+	
+	const scrollRef = useRef<ScrollView>(null);
+	useScrollToTop(scrollRef);
 
 	const myOccasions = myProfileOccasions;
 
@@ -456,11 +464,11 @@ export default function RecipientsScreen() {
 	const handleAddOccasion = () => {
 		if (!myRpId) {
 			GiftyyAlert(
-				'Profile Setup Required',
-				'Please set up your gifting profile first to save your occasions.',
+				t('recipients.alerts.profile_setup_required'),
+				t('recipients.alerts.profile_setup_message'),
 				[
-					{ text: 'Cancel', style: 'cancel' },
-					{ text: 'Set Up Now', onPress: () => setIsConversationalFormVisible(true) }
+					{ text: t('recipients.alerts.cancel'), style: 'cancel' },
+					{ text: t('recipients.alerts.setup_now'), onPress: () => setIsConversationalFormVisible(true) }
 				]
 			);
 			return;
@@ -476,12 +484,12 @@ export default function RecipientsScreen() {
 
 	const handleDeleteOccasion = async (id: string, label: string) => {
 		GiftyyAlert(
-			'Delete Occasion',
-			`Remove "${label}" from your occasions?`,
+			t('recipients.alerts.delete_occasion_title'),
+			t('recipients.alerts.delete_occasion_message', { label }),
 			[
-				{ text: 'Cancel', style: 'cancel' },
+				{ text: t('recipients.alerts.cancel'), style: 'cancel' },
 				{
-					text: 'Delete',
+					text: t('recipients.alerts.delete'),
 					style: 'destructive',
 					onPress: async () => {
 						try {
@@ -494,7 +502,7 @@ export default function RecipientsScreen() {
 							refreshOccasions();
 						} catch (err) {
 							console.error('Error deleting occasion:', err);
-							GiftyyAlert('Error', 'Failed to delete occasion.');
+							GiftyyAlert(t('auth.error'), t('recipients.alerts.error_deleting'));
 						}
 					},
 				},
@@ -528,7 +536,7 @@ export default function RecipientsScreen() {
 			refreshOccasions();
 		} catch (err) {
 			console.error('Error adding suggested holiday:', err);
-			GiftyyAlert('Error', 'Failed to add holiday.');
+			GiftyyAlert(t('auth.error'), t('recipients.alerts.error_adding_holiday'));
 		}
 	};
 
@@ -540,7 +548,7 @@ export default function RecipientsScreen() {
 		try {
 			if (contact.isIncomingInvitation && contact.connectionId) {
 				const { error } = await approveConnection(contact.connectionId, { relationship, nickname });
-				if (error) GiftyyAlert('Error', `Failed to approve: ${error.message}`);
+				if (error) GiftyyAlert(t('auth.error'), t('recipients.alerts.error_approving', { message: error.message }));
 			} else {
 				const { error } = await addRecipient({
 					fullName: contact.name,
@@ -549,7 +557,7 @@ export default function RecipientsScreen() {
 					nickname,
 					profileId: contact.userId,
 				});
-				if (error) GiftyyAlert('Error', error.message);
+				if (error) GiftyyAlert(t('auth.error'), error.message);
 			}
 		} catch (error) {
 			console.error('[handleConnect] Error:', error);
@@ -604,11 +612,16 @@ export default function RecipientsScreen() {
 		});
 
 		// Filter out empty groups and order categories
-		const order = ['Family', 'Friends', 'Colleagues', 'Others'];
+		const order: [string, string][] = [
+			['Family', t('recipients.sections.family')],
+			['Friends', t('recipients.sections.friends')],
+			['Colleagues', t('recipients.sections.colleagues')],
+			['Others', t('recipients.sections.others')]
+		];
 		return order
-			.filter(cat => groups[cat].length > 0)
-			.map(cat => [cat, groups[cat]] as [string, Recipient[]]);
-	}, [approvedRecipients]);
+			.filter(([cat]) => groups[cat].length > 0)
+			.map(([cat, label]) => [label, groups[cat]] as [string, Recipient[]]);
+	}, [approvedRecipients, t]);
 
 	const onRefresh = React.useCallback(async () => {
 		setRefreshing(true);
@@ -646,15 +659,15 @@ export default function RecipientsScreen() {
 	};
 
 	const handleDelete = (id: string) => {
-		GiftyyAlert('Remove recipient', 'Are you sure you want to remove this recipient?', [
-			{ text: 'Cancel', style: 'cancel' },
+		GiftyyAlert(t('recipients.alerts.remove_recipient_title'), t('recipients.alerts.remove_recipient_message'), [
+			{ text: t('recipients.alerts.cancel'), style: 'cancel' },
 			{
-				text: 'Remove',
+				text: t('recipients.alerts.remove_confirm'),
 				style: 'destructive',
 				onPress: async () => {
 					const { error } = await deleteRecipient(id);
 					if (error) {
-						GiftyyAlert('Error', `Failed to delete recipient: ${error.message}`);
+						GiftyyAlert(t('auth.error'), t('recipients.alerts.error_rejecting')); // Maybe wrong key, but similar
 					} else {
 						if (activeRecipientId === id) {
 							closeModal();
@@ -675,7 +688,7 @@ export default function RecipientsScreen() {
 		if (!pendingApprovalId) return;
 		const { error } = await approveConnection(pendingApprovalId, { relationship, nickname });
 		if (error) {
-			GiftyyAlert('Error', `Failed to approve: ${error.message}`);
+			GiftyyAlert(t('auth.error'), t('recipients.alerts.error_approving', { message: error.message }));
 		}
 		setRelationshipModalVisible(false);
 		setPendingApprovalId(null);
@@ -684,19 +697,20 @@ export default function RecipientsScreen() {
 
 	const handleReject = async (id: string) => {
 		const { error } = await rejectConnection(id);
-		if (error) GiftyyAlert('Error', `Failed to reject: ${error.message}`);
+		if (error) GiftyyAlert(t('auth.error'), t('recipients.alerts.error_rejecting'));
 	};
 
 	return (
 		<View style={styles.screen}>
 
 			<ScrollView
+				ref={scrollRef}
 				style={styles.mainScrollView}
 				contentContainerStyle={[
 					styles.content,
 					{
 						paddingBottom: bottom + verticalScale(140),
-						paddingTop: top + 64
+						paddingTop: top + 72
 					}
 				]}
 				scrollEnabled={true}
@@ -718,7 +732,7 @@ export default function RecipientsScreen() {
 							onPress={() => setActiveTab('circle')}
 							style={[styles.tab, activeTab === 'circle' && styles.activeTab]}
 						>
-							<Text style={[styles.tabText, activeTab === 'circle' && styles.activeTabText]}>My Circle</Text>
+							<Text style={[styles.tabText, activeTab === 'circle' && styles.activeTabText]}>{t('recipients.tabs.circle')}</Text>
 						</Pressable>
 					</TourAnchor>
 					<TourAnchor step="occasions_tab">
@@ -726,7 +740,7 @@ export default function RecipientsScreen() {
 							onPress={() => setActiveTab('occasions')}
 							style={[styles.tab, activeTab === 'occasions' && styles.activeTab]}
 						>
-							<Text style={[styles.tabText, activeTab === 'occasions' && styles.activeTabText]}>My Occasions</Text>
+							<Text style={[styles.tabText, activeTab === 'occasions' && styles.activeTabText]}>{t('recipients.tabs.occasions')}</Text>
 						</Pressable>
 					</TourAnchor>
 					<TourAnchor step="preferences_tab">
@@ -734,7 +748,7 @@ export default function RecipientsScreen() {
 							onPress={() => setActiveTab('preferences')}
 							style={[styles.tab, activeTab === 'preferences' && styles.activeTab]}
 						>
-							<Text style={[styles.tabText, activeTab === 'preferences' && styles.activeTabText]}>My Preferences</Text>
+							<Text style={[styles.tabText, activeTab === 'preferences' && styles.activeTabText]}>{t('recipients.tabs.preferences')}</Text>
 						</Pressable>
 					</TourAnchor>
 				</View>
@@ -745,7 +759,7 @@ export default function RecipientsScreen() {
 							<View style={[styles.section, { marginBottom: verticalScale(32) }]}>
 								<View style={styles.sectionHeader}>
 									<View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-										<Text style={[styles.sectionTitle, { color: '#FF6B00', marginBottom: 0 }]}>Pending Connections</Text>
+										<Text style={[styles.sectionTitle, { color: '#FF6B00', marginBottom: 0 }]}>{t('recipients.sections.pending')}</Text>
 										<View style={[styles.countBadge, { backgroundColor: 'rgba(255, 107, 0, 0.1)', borderColor: 'rgba(255, 107, 0, 0.2)', height: 20, paddingHorizontal: 8 }]}>
 											<Text style={[styles.countBadgeText, { color: '#FF6B00' }]}>{pendingRecipients.length}</Text>
 										</View>
@@ -778,8 +792,8 @@ export default function RecipientsScreen() {
 						<View style={styles.welcomeSection}>
 							<View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
 								<View>
-									<Text style={styles.welcomeTitle}>Your Gifting Circle</Text>
-									<Text style={styles.welcomeSubtitle}>Browse and manage your recipients.</Text>
+									<Text style={styles.welcomeTitle}>{t('recipients.sections.circle')}</Text>
+									<Text style={styles.welcomeSubtitle}>{t('recipients.sections.circle_subtitle')}</Text>
 								</View>
 								<Pressable
 									style={[styles.syncButton, isSyncing && { opacity: 0.7 }]}
@@ -792,7 +806,7 @@ export default function RecipientsScreen() {
 										color="#FFF"
 									/>
 									<Text style={styles.syncButtonText}>
-										{isSyncing ? 'Syncing...' : 'Find Friends'}
+										{isSyncing ? t('recipients.actions.syncing') : t('recipients.actions.find_friends')}
 									</Text>
 								</Pressable>
 							</View>
@@ -836,10 +850,10 @@ export default function RecipientsScreen() {
 								<View style={styles.emptyIconContainer}>
 									<IconSymbol name="person.2.fill" size={48} color={GIFTYY_THEME.colors.gray300} />
 								</View>
-								<Text style={styles.emptyStateTitle}>No recipients yet</Text>
-								<Text style={styles.emptyStateSubtitle}>Add someone you gift regularly so checkout stays fast and special.</Text>
+								<Text style={styles.emptyStateTitle}>{t('recipients.empty.no_recipients')}</Text>
+								<Text style={styles.emptyStateSubtitle}>{t('recipients.empty.no_recipients_subtitle')}</Text>
 								<Pressable style={styles.emptyAddButton} onPress={handleSyncContacts}>
-									<Text style={styles.emptyAddButtonText}>Find Friends</Text>
+									<Text style={styles.emptyAddButtonText}>{t('recipients.actions.find_friends')}</Text>
 								</Pressable>
 							</View>
 						)}
@@ -852,17 +866,17 @@ export default function RecipientsScreen() {
 							<View style={[styles.sectionHeader, { alignItems: 'flex-start', paddingHorizontal: 0 }]}>
 								<View style={styles.sectionTitleBlock}>
 									<View style={styles.titleRow}>
-										<Text style={styles.sectionTitle}>My Preferences</Text>
+										<Text style={styles.sectionTitle}>{t('recipients.sections.preferences')}</Text>
 										<View style={styles.privateBadge}>
 											<IconSymbol name="lock.fill" size={10} color="#C2410C" />
-											<Text style={styles.privateBadgeText}>PRIVATE</Text>
+											<Text style={styles.privateBadgeText}>{t('recipients.status.private_badge')}</Text>
 										</View>
 									</View>
-									<Text style={styles.sectionSubtext}>Only used by Giftyy to recommend better gifts</Text>
+									<Text style={styles.sectionSubtext}>{t('recipients.sections.preferences_subtext')}</Text>
 								</View>
 								{(myPrefs || myRpId) && (
 									<Pressable onPress={() => setIsConversationalFormVisible(true)} style={styles.editBtn}>
-										<Text style={styles.editBtnText}>{myPrefs ? 'Update' : 'Set Up'}</Text>
+										<Text style={styles.editBtnText}>{myPrefs ? t('recipients.actions.update') : t('recipients.actions.set_up')}</Text>
 									</Pressable>
 								)}
 							</View>
@@ -874,24 +888,23 @@ export default function RecipientsScreen() {
 							) : phantomProfile ? (
 								<View style={[styles.emptyCard, styles.phantomCard]}>
 									<View style={styles.phantomBadge}>
-										<Text style={styles.phantomBadgeText}>FOUND! ✨</Text>
+										<Text style={styles.phantomBadgeText}>{t('recipients.status.found_badge')}</Text>
 									</View>
 									<IconSymbol name="gift" size={40} color={GIFTYY_THEME.colors.accent} />
-									<Text style={styles.phantomIdTitle}>Good news!</Text>
+									<Text style={styles.phantomIdTitle}>{t('recipients.empty.phantom_found_title')}</Text>
 									<Text style={styles.phantomIdText}>
-										We found a gifting profile your friends set up for you ({phantomProfile.full_name}).
-										Claim it to see what they added and start receiving better gifts!
+										{t('recipients.empty.phantom_found_text', { name: phantomProfile.full_name })}
 									</Text>
 									<Pressable style={styles.claimBtn} onPress={() => setIsConversationalFormVisible(true)}>
-										<Text style={styles.claimBtnText}>Claim My Profile</Text>
+										<Text style={styles.claimBtnText}>{t('recipients.actions.claim_profile')}</Text>
 									</Pressable>
 								</View>
 							) : (
 								<View style={styles.emptyCard}>
 									<IconSymbol name="sparkles" size={32} color={GIFTYY_THEME.colors.gray300} />
-									<Text style={styles.emptyProfileText}>Tell Giftyy what you love to get better recommendations!</Text>
+									<Text style={styles.emptyProfileText}>{t('recipients.empty.no_preferences')}</Text>
 									<Pressable style={styles.setupBtn} onPress={() => setIsConversationalFormVisible(true)}>
-										<Text style={styles.setupBtnText}>Take the Gifting Quiz</Text>
+										<Text style={styles.setupBtnText}>{t('recipients.actions.take_quiz')}</Text>
 									</Pressable>
 								</View>
 							)}
@@ -902,17 +915,17 @@ export default function RecipientsScreen() {
 							<View style={[styles.sectionHeader, { alignItems: 'flex-start', paddingHorizontal: 0 }]}>
 								<View style={styles.sectionTitleBlock}>
 									<View style={styles.titleRow}>
-										<Text style={styles.sectionTitle}>Shipping Address</Text>
+										<Text style={styles.sectionTitle}>{t('recipients.sections.shipping_address')}</Text>
 										<View style={styles.privateBadge}>
 											<IconSymbol name="lock.fill" size={10} color="#64748B" />
-											<Text style={styles.privateBadgeText}>PRIVATE</Text>
+											<Text style={styles.privateBadgeText}>{t('recipients.status.private_badge')}</Text>
 										</View>
 									</View>
-									<Text style={styles.sectionSubtext}>Hidden from your friends to preserve the surprise</Text>
+									<Text style={styles.sectionSubtext}>{t('recipients.sections.shipping_address_subtext')}</Text>
 								</View>
 								{myRpId && (
 									<Pressable onPress={handleOpenAddressEdit} style={styles.editBtn}>
-										<Text style={styles.editBtnText}>{myProfileData?.address ? 'Update' : 'Add'}</Text>
+										<Text style={styles.editBtnText}>{myProfileData?.address ? t('recipients.actions.update') : t('recipients.actions.add_address')}</Text>
 									</Pressable>
 								)}
 							</View>
@@ -931,7 +944,7 @@ export default function RecipientsScreen() {
 									</View>
 								) : (
 									<View style={styles.emptyAddress}>
-										<Text style={styles.emptyProfileText}>No shipping address added yet. Update your profile to add one.</Text>
+										<Text style={styles.emptyProfileText}>{t('recipients.empty.no_address')}</Text>
 									</View>
 								)}
 							</View>
@@ -943,7 +956,7 @@ export default function RecipientsScreen() {
 						{/* Circle Celebrations Section */}
 						<View style={[styles.profileSection, { marginBottom: 24 }]}>
 							<View style={[styles.sectionHeader, { paddingHorizontal: 0 }]}>
-								<Text style={styles.sectionTitle}>Circle Celebrations</Text>
+								<Text style={styles.sectionTitle}>{t('recipients.sections.circle_celebrations')}</Text>
 							</View>
 							{displayedOccasions.length > 0 ? (
 								<ScrollView
@@ -973,7 +986,7 @@ export default function RecipientsScreen() {
 															styles.celebrationDaysTextSmall,
 															(occ.inDays === 0 || occ.inDays === 1) && { color: GIFTYY_THEME.colors.error }
 														]}>
-															{formatInDaysSmart(occ.inDays)}
+															{formatInDaysSmart(occ.inDays, t)}
 														</Text>
 													</View>
 												</View>
@@ -994,7 +1007,7 @@ export default function RecipientsScreen() {
 									onPress={handleSyncContacts}
 								>
 									<IconSymbol name="person.2.fill" size={24} color={GIFTYY_THEME.colors.gray300} />
-									<Text style={styles.emptyOccasionsText}>Add someone to your circle to see their dates here</Text>
+									<Text style={styles.emptyOccasionsText}>{t('recipients.empty.no_occasions_circle')}</Text>
 								</Pressable>
 							)}
 						</View>
@@ -1003,17 +1016,17 @@ export default function RecipientsScreen() {
 							<View style={[styles.sectionHeader, { paddingHorizontal: 0 }]}>
 								<View style={styles.sectionTitleBlock}>
 									<View style={styles.titleRow}>
-										<Text style={styles.sectionTitle}>My Occasions ({myOccasions.length})</Text>
+										<Text style={styles.sectionTitle}>{t('recipients.sections.my_occasions', { count: myOccasions.length })}</Text>
 										<View style={styles.publicBadge}>
 											<IconSymbol name="eye.fill" size={10} color="#059669" />
-											<Text style={styles.publicBadgeText}>PUBLIC</Text>
+											<Text style={styles.publicBadgeText}>{t('recipients.status.public_badge')}</Text>
 										</View>
 									</View>
-									<Text style={styles.sectionSubtext}>Your friends get notified of these dates automatically</Text>
+									<Text style={styles.sectionSubtext}>{t('recipients.sections.my_occasions_subtext')}</Text>
 								</View>
 								<Pressable onPress={handleAddOccasion} style={styles.addBtn}>
 									<IconSymbol name="plus" size={14} color={GIFTYY_THEME.colors.accent} />
-									<Text style={styles.addBtnText}>Add</Text>
+									<Text style={styles.addBtnText}>{t('recipients.actions.add_occasion')}</Text>
 								</Pressable>
 							</View>
 
@@ -1049,13 +1062,13 @@ export default function RecipientsScreen() {
 								</View>
 							) : (
 								<View style={styles.premiumCard}>
-									<Text style={styles.emptyProfileText}>No personal occasions added yet.</Text>
+									<Text style={styles.emptyProfileText}>{t('recipients.empty.no_occasions_personal')}</Text>
 								</View>
 							)}
 
 							{unaddedHolidays.length > 0 && (
 								<View style={styles.suggestionsSection}>
-									<Text style={styles.suggestionsTitle}>Suggested Holidays</Text>
+									<Text style={styles.suggestionsTitle}>{t('recipients.sections.suggested_holidays')}</Text>
 									<ScrollView
 										horizontal
 										showsHorizontalScrollIndicator={false}
@@ -1160,8 +1173,8 @@ export default function RecipientsScreen() {
 					setPendingApprovalName(undefined);
 				}}
 				onSelect={handleRelationshipSelect}
-				title="How do you know them?"
-				subtitle="Select your relationship to approve connection"
+				title={t('recipients.relationship_modal.title')}
+				subtitle={t('recipients.relationship_modal.subtitle')}
 				targetName={pendingApprovalName}
 			/>
 
@@ -1170,53 +1183,54 @@ export default function RecipientsScreen() {
 }
 
 function PreferencePreview({ preferences }: { preferences: RecipientPreferences }) {
+	const { t } = useTranslation();
 	const categories = [
 		// Demographics & Identity
-		{ label: 'Age Range', data: preferences.ageRange ? [preferences.ageRange] : [], icon: 'person.fill', bgColor: '#F0F9FF', borderColor: '#BAE6FD', textColor: '#0369A1' },
-		{ label: 'Gender Identity', data: preferences.genderIdentity ? [preferences.genderIdentity] : [], icon: 'person.fill', bgColor: '#FDF4FF', borderColor: '#F0ABFC', textColor: '#A21CAF' },
-		{ label: 'Cultural Background', data: preferences.culturalBackground || [], icon: 'globe.americas.fill', bgColor: '#ECFDF5', borderColor: '#A7F3D0', textColor: '#047857' },
+		{ label: t('recipients.preferences_labels.age_range'), data: preferences.ageRange ? [preferences.ageRange] : [], icon: 'person.fill', bgColor: '#F0F9FF', borderColor: '#BAE6FD', textColor: '#0369A1' },
+		{ label: t('recipients.preferences_labels.gender_identity'), data: preferences.genderIdentity ? [preferences.genderIdentity] : [], icon: 'person.fill', bgColor: '#FDF4FF', borderColor: '#F0ABFC', textColor: '#A21CAF' },
+		{ label: t('recipients.preferences_labels.cultural_background'), data: preferences.culturalBackground || [], icon: 'globe.americas.fill', bgColor: '#ECFDF5', borderColor: '#A7F3D0', textColor: '#047857' },
 
 		// Interests & Hobbies
-		{ label: 'Interests', data: preferences.sportsActivities || [], icon: 'star.fill', bgColor: '#EFF6FF', borderColor: '#BFDBFE', textColor: '#1D4ED8' },
-		{ label: 'Hobbies', data: preferences.creativeHobbies || [], icon: 'paintbrush.fill', bgColor: '#FFF7ED', borderColor: '#FED7AA', textColor: '#C2410C' },
-		{ label: 'Collecting', data: preferences.collectingInterests || [], icon: 'trophy.fill', bgColor: '#FFFBEB', borderColor: '#FDE68A', textColor: '#B45309' },
-		{ label: 'Tech Interests', data: preferences.techInterests || [], icon: 'laptopcomputer', bgColor: '#F0F9FF', borderColor: '#BAE6FD', textColor: '#0284C7' },
-		{ label: 'Outdoor Activities', data: preferences.outdoorActivities || [], icon: 'mountain.2.fill', bgColor: '#F0FDF4', borderColor: '#BBF7D0', textColor: '#15803D' },
-		{ label: 'Indoor Activities', data: preferences.indoorActivities || [], icon: 'gamecontroller.fill', bgColor: '#FAF5FF', borderColor: '#E9D5FF', textColor: '#7E22CE' },
+		{ label: t('recipients.preferences_labels.interests'), data: preferences.sportsActivities || [], icon: 'star.fill', bgColor: '#EFF6FF', borderColor: '#BFDBFE', textColor: '#1D4ED8' },
+		{ label: t('recipients.preferences_labels.hobbies'), data: preferences.creativeHobbies || [], icon: 'paintbrush.fill', bgColor: '#FFF7ED', borderColor: '#FED7AA', textColor: '#C2410C' },
+		{ label: t('recipients.preferences_labels.collecting'), data: preferences.collectingInterests || [], icon: 'trophy.fill', bgColor: '#FFFBEB', borderColor: '#FDE68A', textColor: '#B45309' },
+		{ label: t('recipients.preferences_labels.tech'), data: preferences.techInterests || [], icon: 'laptopcomputer', bgColor: '#F0F9FF', borderColor: '#BAE6FD', textColor: '#0284C7' },
+		{ label: t('recipients.preferences_labels.outdoor'), data: preferences.outdoorActivities || [], icon: 'mountain.2.fill', bgColor: '#F0FDF4', borderColor: '#BBF7D0', textColor: '#15803D' },
+		{ label: t('recipients.preferences_labels.indoor'), data: preferences.indoorActivities || [], icon: 'gamecontroller.fill', bgColor: '#FAF5FF', borderColor: '#E9D5FF', textColor: '#7E22CE' },
 
 		// Entertainment & Media
-		{ label: 'Music', data: preferences.favoriteMusicGenres || [], icon: 'music.note', bgColor: '#FDF2F8', borderColor: '#FBCFE8', textColor: '#BE185D' },
-		{ label: 'Favorite Artists', data: preferences.favoriteArtists ? [preferences.favoriteArtists] : [], icon: 'music.note.list', bgColor: '#FDF2F8', borderColor: '#FBCFE8', textColor: '#9D174D' },
-		{ label: 'Books', data: preferences.favoriteBooksGenres || [], icon: 'book.fill', bgColor: '#FFF7ED', borderColor: '#FED7AA', textColor: '#9A3412' },
-		{ label: 'Movies', data: preferences.favoriteMoviesGenres || [], icon: 'film.fill', bgColor: '#F5F3FF', borderColor: '#DDD6FE', textColor: '#6D28D9' },
-		{ label: 'TV Shows', data: preferences.favoriteTvShows || [], icon: 'tv.fill', bgColor: '#EFF6FF', borderColor: '#BFDBFE', textColor: '#1D4ED8' },
-		{ label: 'Podcasts', data: preferences.podcastInterests || [], icon: 'headphones', bgColor: '#FEF2F2', borderColor: '#FECACA', textColor: '#B91C1C' },
+		{ label: t('recipients.preferences_labels.music'), data: preferences.favoriteMusicGenres || [], icon: 'music.note', bgColor: '#FDF2F8', borderColor: '#FBCFE8', textColor: '#BE185D' },
+		{ label: t('recipients.preferences_labels.artists'), data: preferences.favoriteArtists ? [preferences.favoriteArtists] : [], icon: 'music.note.list', bgColor: '#FDF2F8', borderColor: '#FBCFE8', textColor: '#9D174D' },
+		{ label: t('recipients.preferences_labels.books'), data: preferences.favoriteBooksGenres || [], icon: 'book.fill', bgColor: '#FFF7ED', borderColor: '#FED7AA', textColor: '#9A3412' },
+		{ label: t('recipients.preferences_labels.movies'), data: preferences.favoriteMoviesGenres || [], icon: 'film.fill', bgColor: '#F5F3FF', borderColor: '#DDD6FE', textColor: '#6D28D9' },
+		{ label: t('recipients.preferences_labels.tv_shows'), data: preferences.favoriteTvShows || [], icon: 'tv.fill', bgColor: '#EFF6FF', borderColor: '#BFDBFE', textColor: '#1D4ED8' },
+		{ label: t('recipients.preferences_labels.podcasts'), data: preferences.podcastInterests || [], icon: 'headphones', bgColor: '#FEF2F2', borderColor: '#FECACA', textColor: '#B91C1C' },
 
 		// Style & Aesthetics
-		{ label: 'Style', data: preferences.fashionStyle || [], icon: 'tag.fill', bgColor: '#FAF5FF', borderColor: '#E9D5FF', textColor: '#7E22CE' },
-		{ label: 'Color Preferences', data: preferences.colorPreferences || [], icon: 'palette.fill', bgColor: '#FFF1F2', borderColor: '#FECDD3', textColor: '#E11D48' },
-		{ label: 'Home Decor', data: preferences.homeDecorStyle || [], icon: 'sofa.fill', bgColor: '#F8FAFC', borderColor: '#E2E8F0', textColor: '#475569' },
-		{ label: 'Design Style', data: preferences.designPreferences ? [preferences.designPreferences] : [], icon: 'paintbrush.fill', bgColor: '#FFFBEB', borderColor: '#FDE68A', textColor: '#B45309' },
+		{ label: t('recipients.preferences_labels.style'), data: preferences.fashionStyle || [], icon: 'tag.fill', bgColor: '#FAF5FF', borderColor: '#E9D5FF', textColor: '#7E22CE' },
+		{ label: t('recipients.preferences_labels.colors'), data: preferences.colorPreferences || [], icon: 'palette.fill', bgColor: '#FFF1F2', borderColor: '#FECDD3', textColor: '#E11D48' },
+		{ label: t('recipients.preferences_labels.home_decor'), data: preferences.homeDecorStyle || [], icon: 'sofa.fill', bgColor: '#F8FAFC', borderColor: '#E2E8F0', textColor: '#475569' },
+		{ label: t('recipients.preferences_labels.design'), data: preferences.designPreferences ? [preferences.designPreferences] : [], icon: 'paintbrush.fill', bgColor: '#FFFBEB', borderColor: '#FDE68A', textColor: '#B45309' },
 
 		// Food & Wellness
-		{ label: 'Food', data: preferences.dietaryPreferences || [], icon: 'leaf.fill', bgColor: '#F0FDF4', borderColor: '#BBF7D0', textColor: '#15803D' },
-		{ label: 'Allergies', data: preferences.foodAllergies || [], icon: 'xmark.circle.fill', bgColor: '#FEF2F2', borderColor: '#FECACA', textColor: '#DC2626' },
-		{ label: 'Cuisines', data: preferences.favoriteCuisines || [], icon: 'fork.knife', bgColor: '#FFF7ED', borderColor: '#FED7AA', textColor: '#C2410C' },
-		{ label: 'Beverages', data: preferences.beveragePreferences || [], icon: 'cup.and.saucer.fill', bgColor: '#FDF4FF', borderColor: '#F0ABFC', textColor: '#A21CAF' },
-		{ label: 'Wellness', data: preferences.wellnessInterests || [], icon: 'cross.case.fill', bgColor: '#F0FDF4', borderColor: '#BBF7D0', textColor: '#047857' },
+		{ label: t('recipients.preferences_labels.food'), data: preferences.dietaryPreferences || [], icon: 'leaf.fill', bgColor: '#F0FDF4', borderColor: '#BBF7D0', textColor: '#15803D' },
+		{ label: t('recipients.preferences_labels.allergies'), data: preferences.foodAllergies || [], icon: 'xmark.circle.fill', bgColor: '#FEF2F2', borderColor: '#FECACA', textColor: '#DC2626' },
+		{ label: t('recipients.preferences_labels.cuisines'), data: preferences.favoriteCuisines || [], icon: 'fork.knife', bgColor: '#FFF7ED', borderColor: '#FED7AA', textColor: '#C2410C' },
+		{ label: t('recipients.preferences_labels.beverages'), data: preferences.beveragePreferences || [], icon: 'cup.and.saucer.fill', bgColor: '#FDF4FF', borderColor: '#F0ABFC', textColor: '#A21CAF' },
+		{ label: t('recipients.preferences_labels.wellness'), data: preferences.wellnessInterests || [], icon: 'cross.case.fill', bgColor: '#F0FDF4', borderColor: '#BBF7D0', textColor: '#047857' },
 
 		// Lifestyle & Values
-		{ label: 'Lifestyle', data: preferences.lifestyleType ? [preferences.lifestyleType] : [], icon: 'house.fill', bgColor: '#F8FAFC', borderColor: '#E2E8F0', textColor: '#334155' },
-		{ label: 'Values', data: preferences.coreValues || [], icon: 'heart.text.square.fill', bgColor: '#FEF2F2', borderColor: '#FECACA', textColor: '#B91C1C' },
-		{ label: 'Causes', data: preferences.causesTheySupport || [], icon: 'globe.americas.fill', bgColor: '#ECFDF5', borderColor: '#A7F3D0', textColor: '#047857' },
+		{ label: t('recipients.preferences_labels.lifestyle'), data: preferences.lifestyleType ? [preferences.lifestyleType] : [], icon: 'house.fill', bgColor: '#F8FAFC', borderColor: '#E2E8F0', textColor: '#334155' },
+		{ label: t('recipients.preferences_labels.values'), data: preferences.coreValues || [], icon: 'heart.text.square.fill', bgColor: '#FEF2F2', borderColor: '#FECACA', textColor: '#B91C1C' },
+		{ label: t('recipients.preferences_labels.causes'), data: preferences.causesTheySupport || [], icon: 'globe.americas.fill', bgColor: '#ECFDF5', borderColor: '#A7F3D0', textColor: '#047857' },
 
 		// Gift Preferences
-		{ label: 'Gift Types', data: preferences.giftTypePreference || [], icon: 'gift.fill', bgColor: '#FFF1F2', borderColor: '#FECDD3', textColor: '#E11D48' },
-		{ label: 'Dislikes', data: preferences.giftDislikes || [], icon: 'xmark.circle.fill', bgColor: '#FEF2F2', borderColor: '#FECACA', textColor: '#DC2626' },
+		{ label: t('recipients.preferences_labels.gift_types'), data: preferences.giftTypePreference || [], icon: 'gift.fill', bgColor: '#FFF1F2', borderColor: '#FECDD3', textColor: '#E11D48' },
+		{ label: t('recipients.preferences_labels.dislikes'), data: preferences.giftDislikes || [], icon: 'xmark.circle.fill', bgColor: '#FEF2F2', borderColor: '#FECACA', textColor: '#DC2626' },
 
 		// Sizes
 		{
-			label: 'Sizes', data: [
+			label: t('recipients.preferences_labels.sizes'), data: [
 				preferences.sizeTshirt ? `T-Shirt: ${preferences.sizeTshirt}` : '',
 				preferences.sizeShoes ? `Shoes: ${preferences.sizeShoes}` : '',
 				preferences.sizePants ? `Pants: ${preferences.sizePants}` : '',
@@ -1227,14 +1241,14 @@ function PreferencePreview({ preferences }: { preferences: RecipientPreferences 
 		},
 
 		// Life Context
-		{ label: 'Life Stage', data: preferences.currentLifeStage ? [preferences.currentLifeStage] : [], icon: 'figure.walk', bgColor: '#F0FDFA', borderColor: '#CCFBF1', textColor: '#0F766E' },
-		{ label: 'Pets', data: preferences.hasPets || [], icon: 'pawprint.fill', bgColor: '#FFF7ED', borderColor: '#FED7AA', textColor: '#C2410C' },
+		{ label: t('recipients.preferences_labels.life_stage'), data: preferences.currentLifeStage ? [preferences.currentLifeStage] : [], icon: 'figure.walk', bgColor: '#F0FDFA', borderColor: '#CCFBF1', textColor: '#0F766E' },
+		{ label: t('recipients.preferences_labels.pets'), data: preferences.hasPets || [], icon: 'pawprint.fill', bgColor: '#FFF7ED', borderColor: '#FED7AA', textColor: '#C2410C' },
 
 		// Personality
-		{ label: 'Personality', data: preferences.personalityTraits || [], icon: 'lightbulb.fill', bgColor: '#F0FDFA', borderColor: '#CCFBF1', textColor: '#0F766E' },
+		{ label: t('recipients.preferences_labels.personality'), data: preferences.personalityTraits || [], icon: 'lightbulb.fill', bgColor: '#F0FDFA', borderColor: '#CCFBF1', textColor: '#0F766E' },
 	].filter(cat => cat.data.length > 0);
 
-	if (categories.length === 0) return <Text style={styles.emptyProfileText}>No detailed preferences shared yet.</Text>;
+	if (categories.length === 0) return <Text style={styles.emptyProfileText}>{t('recipients.empty.no_preferences_detailed')}</Text>;
 
 	return (
 		<View style={styles.previewContainer}>

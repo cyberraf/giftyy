@@ -4,6 +4,23 @@ type AppState = {
 	activeRecipientId: string | null;
 	setActiveRecipient: (id: string | null) => void;
 	clearActiveRecipient: () => void;
+	
+	homeAiState: {
+		messages: any[] | null;
+		sessionId: string | null;
+		text: string;
+		isExpanded: boolean;
+	} | null;
+	setHomeAiState: (state: Partial<NonNullable<AppState['homeAiState']>>) => void;
+	
+	homeDataCache: {
+		myProfileId: string | null;
+		circleOccasions: any[];
+		myProfileOccasions: any[];
+		myPreferences: any | null;
+		lastFetched: number;
+	} | null;
+	setHomeDataCache: (cache: Partial<NonNullable<AppState['homeDataCache']>>) => void;
 };
 
 /**
@@ -18,5 +35,21 @@ export const useAppStore = create<AppState>((set) => ({
 	activeRecipientId: null,
 	setActiveRecipient: (id) => set({ activeRecipientId: id }),
 	clearActiveRecipient: () => set({ activeRecipientId: null }),
+
+	homeAiState: null,
+	setHomeAiState: (newState) => set((s) => ({
+		homeAiState: {
+			...(s.homeAiState || { messages: null, sessionId: null, text: '', isExpanded: false }),
+			...newState
+		}
+	})),
+
+	homeDataCache: null,
+	setHomeDataCache: (newCache) => set((s) => ({
+		homeDataCache: {
+			...(s.homeDataCache || { myProfileId: null, circleOccasions: [], myProfileOccasions: [], myPreferences: null, lastFetched: 0 }),
+			...newCache
+		}
+	})),
 }));
 

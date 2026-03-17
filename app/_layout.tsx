@@ -1,9 +1,12 @@
-// Configure React Native Reanimated logger to disable strict mode warnings
 import { configureReanimatedLogger } from 'react-native-reanimated';
 
-configureReanimatedLogger({
-  strict: false, // Disable strict mode warnings about reading from `value` during render
-});
+try {
+  configureReanimatedLogger({
+    strict: false, // Disable strict mode warnings about reading from `value` during render
+  });
+} catch (e) {
+  console.warn('Reanimated logger configuration failed:', e);
+}
 
 // Import polyfills for React Native (required for Supabase)
 import { decode, encode } from 'base-64';
@@ -60,6 +63,12 @@ export const unstable_settings = {
 
 SplashScreen.preventAutoHideAsync().catch(() => { });
 
+import { I18nextProvider } from 'react-i18next';
+import i18nInstance from '@/lib/i18n';
+import { useTranslation } from 'react-i18next';
+import { useSettings } from '@/hooks/useSettings';
+import { SettingsProvider } from '@/contexts/SettingsContext';
+
 export default function RootLayout() {
   const [appReady, setAppReady] = useState(false);
   const [showLoader, setShowLoader] = useState(true);
@@ -68,7 +77,7 @@ export default function RootLayout() {
   const [fontsLoaded, fontError] = useFonts({
     'Cooper BT': require('@/assets/fonts/Cooper-Md-BT-Medium.ttf'),
   });
-  
+
   // Animation refs
   const overlayOpacity = useRef(new Animated.Value(1)).current;
   const logoScale = useRef(new Animated.Value(0)).current;
@@ -154,7 +163,6 @@ export default function RootLayout() {
       setShowLoader(false);
     });
   }, [appReady, fontsLoaded, fontError]);
-
   // Global font family setup (uses Cooper BT if added to the project)
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -164,148 +172,169 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <ThemeProvider value={AppTheme}>
-      <SafeStripeProvider publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY}>
-        <TourProvider>
-          <AlertProvider>
-            <ToastProvider>
-            <AuthProvider>
-              <CartProvider>
-                <WishlistProvider>
-                  <CheckoutProvider>
-                    <RecipientsProvider>
-                      <VideoMessagesProvider>
-                        <SharedMemoriesProvider>
-                          <VaultsProvider>
-                            <OrdersProvider>
-                              <CategoriesProvider>
-                                <ProductsProvider>
-                                  <NotificationsProvider>
-                                    <KeyboardAvoidingView
-                                      style={{ flex: 1 }}
-                                      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                                    >
-                                      <AuthGuard>
-                                          <Stack>
-                                            <Stack.Screen name="index" options={{ headerShown: false }} />
-                                            <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-                                            <Stack.Screen name="(buyer)" options={{ headerShown: false }} />
-                                            <Stack.Screen name="(vendor)" options={{ headerShown: false }} />
-                                            <Stack.Screen name="offline" options={{ headerShown: false }} />
-                                            <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-                                          </Stack>
-                                      </AuthGuard>
-                                    </KeyboardAvoidingView>
-                                  </NotificationsProvider>
-                                </ProductsProvider>
-                              </CategoriesProvider>
-                            </OrdersProvider>
-                          </VaultsProvider>
-                        </SharedMemoriesProvider>
-                      </VideoMessagesProvider>
-                    </RecipientsProvider>
-                  </CheckoutProvider>
-                </WishlistProvider>
-              </CartProvider>
-            </AuthProvider>
-          </ToastProvider>
-        </AlertProvider>
-      </TourProvider>
-    </SafeStripeProvider>
-      <StatusBar style="auto" />
+    <I18nextProvider i18n={i18nInstance}>
+      <ThemeProvider value={AppTheme}>
+        <SafeStripeProvider publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY}>
+          <TourProvider>
+            <AlertProvider>
+              <ToastProvider>
+                <AuthProvider>
+                  <SettingsProvider>
+                    <LanguageSync />
+                    <CartProvider>
+                    <WishlistProvider>
+                      <CheckoutProvider>
+                        <RecipientsProvider>
+                          <VideoMessagesProvider>
+                            <SharedMemoriesProvider>
+                              <VaultsProvider>
+                                <OrdersProvider>
+                                  <CategoriesProvider>
+                                    <ProductsProvider>
+                                      <NotificationsProvider>
+                                        <KeyboardAvoidingView
+                                          style={{ flex: 1 }}
+                                          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                                        >
+                                          <AuthGuard>
+                                            <Stack>
+                                              <Stack.Screen name="index" options={{ headerShown: false }} />
+                                              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                                              <Stack.Screen name="(buyer)" options={{ headerShown: false }} />
+                                              <Stack.Screen name="(vendor)" options={{ headerShown: false }} />
+                                              <Stack.Screen name="offline" options={{ headerShown: false }} />
+                                              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+                                            </Stack>
+                                          </AuthGuard>
+                                        </KeyboardAvoidingView>
+                                      </NotificationsProvider>
+                                    </ProductsProvider>
+                                  </CategoriesProvider>
+                                </OrdersProvider>
+                              </VaultsProvider>
+                            </SharedMemoriesProvider>
+                          </VideoMessagesProvider>
+                        </RecipientsProvider>
+                      </CheckoutProvider>
+                    </WishlistProvider>
+                  </CartProvider>
+                </SettingsProvider>
+                </AuthProvider>
+              </ToastProvider>
+            </AlertProvider>
+          </TourProvider>
+        </SafeStripeProvider>
 
-      {showLoader && (
-        <Animated.View
-          pointerEvents="none"
-          style={{
-            position: 'absolute',
-            top: 0,
-            bottom: 0,
-            left: 0,
-            right: 0,
-            backgroundColor: '#fff5f0', // Match GIFTYY_THEME.colors.cream
-            alignItems: 'center',
-            justifyContent: 'center',
-            opacity: overlayOpacity,
-            zIndex: 9999,
-          }}>
-          <View style={{ alignItems: 'center' }}>
-            <Animated.View 
-              style={{ 
-                opacity: logoOpacity,
-                transform: [
-                  { scale: logoScale },
-                  { scale: breathingAnim } // Apply breathing effect here
-                ] 
+        <StatusBar style="auto" />
+
+        {showLoader && (
+          <Animated.View
+            pointerEvents="none"
+            style={{
+              position: 'absolute',
+              top: 0,
+              bottom: 0,
+              left: 0,
+              right: 0,
+              backgroundColor: '#fff5f0',
+              alignItems: 'center',
+              justifyContent: 'center',
+              opacity: overlayOpacity,
+              zIndex: 9999,
+            }}>
+            <View style={{ alignItems: 'center' }}>
+              <Animated.View
+                style={{
+                  opacity: logoOpacity,
+                  transform: [
+                    { scale: logoScale },
+                    { scale: breathingAnim }
+                  ]
+                }}
+              >
+                <Image
+                  source={require('@/assets/images/giftyy.png')}
+                  style={{ width: 180, height: 180 }}
+                  resizeMode="contain"
+                />
+              </Animated.View>
+
+              <Animated.View
+                style={{
+                  marginTop: 20,
+                  opacity: textOpacity,
+                  transform: [{ translateY: textTranslateY }]
+                }}
+              >
+                <Text
+                  style={{
+                    fontSize: 42,
+                    fontWeight: '900',
+                    color: '#f75507',
+                    letterSpacing: -0.5,
+                    textAlign: 'center',
+                    fontFamily: 'Cooper BT',
+                  }}>
+                  Giftyy
+                </Text>
+                <Text
+                  style={{
+                    fontSize: 14,
+                    fontWeight: '500',
+                    color: '#9ca3af',
+                    marginTop: 4,
+                    textAlign: 'center',
+                    letterSpacing: 2,
+                    textTransform: 'uppercase',
+                  }}>
+                  Giving Redefined
+                </Text>
+              </Animated.View>
+            </View>
+
+            <Animated.View
+              style={{
+                position: 'absolute',
+                bottom: 60,
+                opacity: textOpacity
               }}
             >
-              <Image
-                source={require('@/assets/images/giftyy.png')}
-                style={{ width: 180, height: 180 }}
-                resizeMode="contain"
-              />
+              <View style={{
+                width: 4,
+                height: 4,
+                borderRadius: 2,
+                backgroundColor: '#f75507',
+                opacity: 0.3
+              }} />
             </Animated.View>
-            
-            <Animated.View 
-              style={{ 
-                marginTop: 20,
-                opacity: textOpacity,
-                transform: [{ translateY: textTranslateY }]
-              }}
-            >
-              <Text
-                style={{
-                  fontSize: 42,
-                  fontWeight: '900',
-                  color: '#f75507',
-                  letterSpacing: -0.5,
-                  textAlign: 'center',
-                  fontFamily: 'Cooper BT',
-                }}>
-                Giftyy
-              </Text>
-              <Text
-                style={{
-                  fontSize: 14,
-                  fontWeight: '500',
-                  color: '#9ca3af',
-                  marginTop: 4,
-                  textAlign: 'center',
-                  letterSpacing: 2,
-                  textTransform: 'uppercase',
-                }}>
-                Giving Redefined
-              </Text>
-            </Animated.View>
-          </View>
-          
-          {/* Subtle bottom indicator */}
-          <Animated.View 
-            style={{ 
-              position: 'absolute', 
-              bottom: 60,
-              opacity: textOpacity 
-            }}
-          >
-            <View style={{ 
-              width: 4, 
-              height: 4, 
-              borderRadius: 2, 
-              backgroundColor: '#f75507', 
-              opacity: 0.3 
-            }} />
           </Animated.View>
-        </Animated.View>
-      )}
-    </ThemeProvider>
+        )}
+      </ThemeProvider>
+    </I18nextProvider>
   );
+}
+
+function LanguageSync() {
+  const { i18n } = useTranslation();
+  const { settings } = useSettings();
+  const hasSyncedInitial = useRef(false);
+
+  useEffect(() => {
+    if (settings?.language && !hasSyncedInitial.current) {
+      if (settings.language !== i18n.language) {
+        i18n.changeLanguage(settings.language);
+      }
+      hasSyncedInitial.current = true;
+    }
+  }, [settings?.language, i18n]);
+
+  return null;
 }
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, loading, isOffline } = useAuth();
   const segments = useSegments();
   const router = useRouter();
-
   useEffect(() => {
     if (loading) return;
 

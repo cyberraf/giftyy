@@ -405,7 +405,7 @@ export default function SubscriptionScreen() {
     };
 
     return (
-        <View style={[styles.screen, { paddingTop: top + 64 }]}>
+        <View style={[styles.screen, { paddingTop: top + 72 }]}>
             <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20 }]}>
                 {/* Header */}
                 <View style={styles.header}>

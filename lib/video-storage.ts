@@ -23,7 +23,7 @@ export async function uploadVideoToStorage(
 		// Read video file as base64 using expo-file-system legacy API
 		const fileUri = localUri.startsWith('file://') ? localUri : `file://${localUri}`;
 		const base64 = await FileSystem.readAsStringAsync(fileUri, {
-			encoding: FileSystem.EncodingType.Base64,
+			encoding: 'base64',
 		});
 
 		// Convert base64 to ArrayBuffer

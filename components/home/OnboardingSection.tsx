@@ -3,6 +3,7 @@ import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { BRAND_FONT } from '@/constants/theme';
 import { scale, verticalScale } from '@/utils/responsive';
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 export type OnboardingStep = {
@@ -25,6 +26,7 @@ const getProgressColor = (percentage: number) => {
 };
 
 export const OnboardingSection: React.FC<OnboardingSectionProps> = ({ percentage, steps }) => {
+    const { t } = useTranslation();
     const progressColor = getProgressColor(percentage);
 
     return (
@@ -33,9 +35,9 @@ export const OnboardingSection: React.FC<OnboardingSectionProps> = ({ percentage
             <View style={styles.summaryCard}>
                 <View style={styles.headerRow}>
                     <View style={styles.titleContainer}>
-                        <Text style={styles.title}>Complete Your Setup</Text>
+                        <Text style={styles.title}>{t('onboarding_ui.title')}</Text>
                         <Text style={styles.percentageText}>
-                            {Math.round(percentage)}% complete
+                            {t('onboarding_ui.percentage', { count: Math.round(percentage) })}
                         </Text>
                     </View>
                     <View style={[styles.miniBadge, { backgroundColor: progressColor + '20' }]}>
