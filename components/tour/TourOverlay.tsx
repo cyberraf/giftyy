@@ -23,6 +23,7 @@ const OVERLAY_COLOR = 'rgba(0,0,0,0.72)';
 const STEP_CONTENT: Record<TourStep, { title: string; body: string }> = {
 	'welcome': { title: '👋 Welcome to Giftyy', body: 'Let’s take a quick tour to show you how to find the perfect gifts for your loved ones.' },
 	'home_ai_chat': { title: '🎁 AI Gift Concierge', body: 'Type anything here! Ask for gift ideas for any occasion, person, or budget. Giftyy AI is here to help.' },
+	'home_tagging': { title: '@ Tag Your Loved Ones', body: 'Use @ to mention a recipient in your prompt. Start typing a name after @ and pick the person you want to include.' },
 	'home_burger_menu': { title: '🍔 Quick Navigation', body: 'Access all areas of the app quickly through the side menu.' },
 	'global_profile': { title: '👤 Your Profile', body: 'Manage your settings, notifications, and orders from your profile menu.' },
 	'shop_intro': { title: '🛍️ Premium Shop', body: 'Browse curated gifts from top vendors. We’ve handpicked the best items for your Circle.' },
@@ -30,11 +31,12 @@ const STEP_CONTENT: Record<TourStep, { title: string; body: string }> = {
 	'occasions_tab': { title: '📅 My Occasions', body: 'Keep track of your own important dates so your Circle never misses a celebration!' },
 	'preferences_tab': { title: '⭐ My Preferences', body: 'Tell your Circle what you love. We use these to suggest the perfect gifts for you.' },
 	'memories_intro': { title: '📼 Digital Memories', body: 'Relive the joy! Every gift card comes with photos, videos, and reactions saved forever.' },
+	'settings_reminders': { title: '🔔 Reminder Settings', body: 'Choose when you want gift reminders to arrive so you never miss an important celebration.' },
 	'tour_complete': { title: "🎉 You're All Set!", body: 'You’re ready to start gifting. Add someone to your Circle to get started!' }
 };
 
 export function TourOverlay() {
-    const { isActive, currentStep, elements, nextStep, prevStep, skipTour, targetRoute } = useTour();
+    const { isActive, currentStep, elements, nextStep, prevStep, skipTour, completeTour, targetRoute } = useTour();
     const router = useRouter();
     const lastRoute = useRef<string | null>(null);
 
@@ -58,9 +60,12 @@ export function TourOverlay() {
         router.replace('/(buyer)/(tabs)' as any);
     };
     const handleFinish = () => {
-        nextStep();
         if (isLastStep) {
+            // Mark tour as completed and prevent future auto-starts
+            completeTour();
             router.replace('/(buyer)/(tabs)' as any);
+        } else {
+            nextStep();
         }
     };
 
