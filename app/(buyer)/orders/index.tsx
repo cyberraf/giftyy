@@ -4,7 +4,8 @@ import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
 import { useOrders } from '@/contexts/OrdersContext';
 import { Link, useRouter } from 'expo-router';
 import React from 'react';
-import { ActivityIndicator, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { OrdersListSkeleton } from '@/components/ui/SkeletonLoader';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function OrdersScreen() {
@@ -62,10 +63,7 @@ export default function OrdersScreen() {
                 <Text style={styles.pageTitle}>Your Orders</Text>
 
                 {loading && !refreshing && orders.length === 0 ? (
-                    <View style={styles.centerContainer}>
-                        <ActivityIndicator size="large" color={BRAND_COLOR} />
-                        <Text style={styles.loadingText}>Loading orders...</Text>
-                    </View>
+                    <OrdersListSkeleton count={4} />
                 ) : orders.length === 0 ? (
                     <View style={styles.centerContainer}>
                         <View style={styles.emptyIcon}>
@@ -138,10 +136,6 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
         paddingTop: 60,
         gap: 12,
-    },
-    loadingText: {
-        color: palette.textSecondary,
-        fontSize: 15,
     },
     emptyIcon: {
         width: 80,

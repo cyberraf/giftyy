@@ -1,6 +1,7 @@
-import { BRAND_COLOR } from '@/constants/theme';
-import React, { ReactNode } from 'react';
-import { ActivityIndicator, Image, ImageSourcePropType, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { GIFTYY_THEME } from '@/constants/giftyy-theme';
+import React, { ReactNode, useRef } from 'react';
+import { ActivityIndicator, Image, ImageSourcePropType, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type ConversationalStepProps = {
     question: string;
@@ -45,22 +46,34 @@ export function ConversationalStep({
     loading = false,
     onSaveAndExit,
 }: ConversationalStepProps) {
+    const { bottom } = useSafeAreaInsets();
+    const scrollRef = useRef<ScrollView>(null);
+
     const handleContinue = () => {
         if (onNext) {
             onNext();
         }
     };
 
+    // Dynamic bottom padding based on safe area
+    const navBottomPadding = Math.max(bottom, Platform.OS === 'ios' ? 24 : 16) + 8;
+
     return (
-        <View style={styles.container}>
+        <KeyboardAvoidingView
+            style={styles.container}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 30}
+        >
             <ScrollView
+                ref={scrollRef}
                 style={styles.scrollView}
                 contentContainerStyle={[
                     styles.scrollContent,
-                    hideFooter && { paddingBottom: 150 }
+                    hideFooter && { paddingBottom: 40 }
                 ]}
                 showsVerticalScrollIndicator={false}
                 keyboardShouldPersistTaps="handled"
+                automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
             >
                 {/* Question Bubble */}
                 <View style={styles.questionBubble}>
@@ -81,86 +94,85 @@ export function ConversationalStep({
                 </View>
             </ScrollView>
 
-            {/* Navigation */}
+            {/* Navigation - single row, never wraps */}
             {!hideFooter && (
-                <View style={styles.navigation}>
+                <View style={[styles.navigation, { paddingBottom: navBottomPadding }]}>
                     <View style={styles.navRow}>
-                        <View style={styles.leftNavGroup}>
-                            {!isFirstStep && onBack && (
-                                <TouchableOpacity
-                                    style={styles.backButton}
-                                    onPress={onBack}
-                                >
-                                    <Text style={styles.backButtonText}>Back</Text>
-                                </TouchableOpacity>
-                            )}
+                        {/* Back button */}
+                        {!isFirstStep && onBack ? (
+                            <TouchableOpacity
+                                style={styles.backButton}
+                                onPress={onBack}
+                            >
+                                <Text style={styles.backButtonText} numberOfLines={1}>Back</Text>
+                            </TouchableOpacity>
+                        ) : <View style={{ width: 4 }} />}
+
+                        {/* Center: Save & Exit + Skip */}
+                        <View style={styles.centerGroup}>
                             {onSaveAndExit && (
                                 <TouchableOpacity
                                     style={styles.saveButton}
                                     onPress={onSaveAndExit}
                                 >
-                                    <Text style={styles.saveButtonText}>Save & Exit</Text>
+                                    <Text style={styles.saveButtonText} numberOfLines={1}>Save</Text>
                                 </TouchableOpacity>
                             )}
-                        </View>
-
-                        <View style={styles.spacer} />
-
-                        <View style={styles.rightNavGroup}>
                             {!required && onSkip && (
                                 <TouchableOpacity
                                     style={styles.skipButton}
                                     onPress={onSkip}
                                 >
-                                    <Text style={styles.skipButtonText}>Skip</Text>
+                                    <Text style={styles.skipButtonText} numberOfLines={1}>Skip</Text>
                                 </TouchableOpacity>
                             )}
-
-                            <TouchableOpacity
-                                style={[styles.continueButton, loading && styles.disabledButton]}
-                                onPress={handleContinue}
-                                disabled={loading}
-                            >
-                                {loading ? (
-                                    <ActivityIndicator size="small" color="#FFFFFF" />
-                                ) : (
-                                    <Text style={styles.continueButtonText}>
-                                        {nextLabel || (isLastStep ? 'Finish' : 'Continue')}
-                                    </Text>
-                                )}
-                            </TouchableOpacity>
                         </View>
+
+                        {/* Continue button */}
+                        <TouchableOpacity
+                            style={[styles.continueButton, loading && styles.disabledButton]}
+                            onPress={handleContinue}
+                            disabled={loading}
+                        >
+                            {loading ? (
+                                <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                                <Text style={styles.continueButtonText} numberOfLines={1}>
+                                    {nextLabel || (isLastStep ? 'Finish' : 'Continue')}
+                                </Text>
+                            )}
+                        </TouchableOpacity>
                     </View>
                 </View>
             )}
-        </View>
+        </KeyboardAvoidingView>
     );
 }
 
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#F8F9FA',
+        backgroundColor: GIFTYY_THEME.colors.cream,
     },
     scrollView: {
         flex: 1,
     },
     scrollContent: {
         padding: 20,
-        paddingTop: 32,
-        paddingBottom: 200,
+        paddingTop: 24,
+        paddingBottom: 120,
     },
     questionBubble: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 16,
+        borderRadius: 20,
         padding: 24,
         marginBottom: 24,
         borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.06)',
+        borderColor: 'rgba(0,0,0,0.04)',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.04,
-        shadowRadius: 8,
+        shadowOpacity: 0.03,
+        shadowRadius: 12,
         elevation: 2,
     },
     emoji: {
@@ -174,104 +186,96 @@ const styles = StyleSheet.create({
         borderRadius: 18,
     },
     question: {
-        fontSize: 28,
+        fontSize: 26,
         fontWeight: '800',
-        color: '#1F2937',
-        lineHeight: 34,
+        color: GIFTYY_THEME.colors.gray900,
+        lineHeight: 32,
         marginBottom: 8,
         letterSpacing: -0.5,
     },
     optional: {
         fontSize: 14,
-        color: '#9CA3AF',
+        color: GIFTYY_THEME.colors.gray400,
         marginTop: 12,
         fontWeight: '600',
     },
     description: {
-        fontSize: 16,
-        color: '#6B7280',
-        lineHeight: 24,
+        fontSize: 15,
+        color: GIFTYY_THEME.colors.gray500,
+        lineHeight: 22,
         marginTop: 4,
     },
     answerArea: {
         flex: 1,
     },
     navigation: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
         backgroundColor: '#FFFFFF',
-        paddingHorizontal: 16,
-        paddingVertical: 16,
-        paddingBottom: Platform.OS === 'ios' ? 80 : 64, // Increased to sit above tab bar
+        paddingHorizontal: 12,
+        paddingTop: 10,
         borderTopWidth: 1,
         borderTopColor: 'rgba(0,0,0,0.06)',
     },
     navRow: {
         flexDirection: 'row',
         alignItems: 'center',
-        flexWrap: 'wrap',
         justifyContent: 'space-between',
-        gap: 12,
+        flexWrap: 'nowrap',
     },
-    leftNavGroup: {
+    centerGroup: {
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-    },
-    rightNavGroup: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-    },
-    spacer: {
-        flexGrow: 1,
+        justifyContent: 'center',
+        flex: 1,
+        flexShrink: 1,
+        gap: 2,
     },
     backButton: {
-        paddingVertical: 12,
-        paddingHorizontal: 20,
-        borderRadius: 30,
-        backgroundColor: '#374151',
+        paddingVertical: 10,
+        paddingHorizontal: 14,
+        borderRadius: 20,
+        backgroundColor: GIFTYY_THEME.colors.gray800,
+        flexShrink: 0,
     },
     backButtonText: {
-        fontSize: 14,
+        fontSize: 13,
         color: '#FFFFFF',
         fontWeight: '600',
     },
     saveButton: {
-        paddingVertical: 12,
+        paddingVertical: 10,
         paddingHorizontal: 8,
+        flexShrink: 1,
     },
     saveButtonText: {
-        fontSize: 14,
-        color: BRAND_COLOR,
+        fontSize: 13,
+        color: GIFTYY_THEME.colors.primary,
         fontWeight: '700',
     },
     skipButton: {
-        paddingVertical: 12,
-        paddingHorizontal: 16,
+        paddingVertical: 10,
+        paddingHorizontal: 8,
+        flexShrink: 1,
     },
     skipButtonText: {
-        fontSize: 14,
-        color: '#9CA3AF',
+        fontSize: 13,
+        color: GIFTYY_THEME.colors.gray400,
         fontWeight: '500',
     },
     continueButton: {
-        backgroundColor: BRAND_COLOR,
-        paddingVertical: 14,
-        paddingHorizontal: 20,
-        borderRadius: 30,
-        minWidth: 120,
+        backgroundColor: GIFTYY_THEME.colors.primary,
+        paddingVertical: 10,
+        paddingHorizontal: 18,
+        borderRadius: 20,
         alignItems: 'center',
-        shadowColor: BRAND_COLOR,
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
+        flexShrink: 0,
+        shadowColor: GIFTYY_THEME.colors.primary,
+        shadowOffset: { width: 0, height: 3 },
+        shadowOpacity: 0.25,
+        shadowRadius: 6,
         elevation: 4,
     },
     continueButtonText: {
-        fontSize: 15,
+        fontSize: 13,
         fontWeight: '700',
         color: '#FFFFFF',
     },

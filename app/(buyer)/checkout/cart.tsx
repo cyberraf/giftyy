@@ -2,6 +2,7 @@ import BrandButton from '@/components/BrandButton';
 import StepBar from '@/components/StepBar';
 import { useCart } from '@/contexts/CartContext';
 import { parsePrice } from '@/lib/utils/currency';
+import { safeGoBack } from '@/lib/utils/navigation';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { FlatList, Image, Pressable, StyleSheet, Text, View } from 'react-native';
@@ -33,7 +34,7 @@ export default function CheckoutCart() {
                 />
                 <View style={{ height: 12 }} />
                 <BrandButton title="Proceed to recipient details" onPress={() => router.push('/(buyer)/checkout/recipient')} />
-                <Pressable style={{ marginTop: 10, alignSelf: 'center' }} onPress={() => router.back()}>
+                <Pressable style={{ marginTop: 10, alignSelf: 'center' }} onPress={() => safeGoBack(router, '/(buyer)/(tabs)/shop')}>
                     <Text style={{ color: '#2563eb', fontWeight: '700' }}>Back to shopping</Text>
                 </Pressable>
             </View>

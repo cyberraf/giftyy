@@ -47,7 +47,7 @@ import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 
-const BRAND_COLOR = '#E07B39';
+const BRAND_COLOR = '#f75507';
 /** Invite link - Universal Links open app when installed; otherwise users get web fallback. */
 const INVITE_BASE_URL = 'https://giftyy.store/invite';
 

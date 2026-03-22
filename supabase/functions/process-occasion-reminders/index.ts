@@ -1,5 +1,22 @@
 // process-occasion-reminders/index.ts
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// Inlined from _shared/auth.ts (dashboard deployment doesn't bundle _shared/)
+function verifyServiceRole(req: Request): { authorized: boolean; error?: string } {
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader) return { authorized: false, error: 'Missing Authorization header' }
+  try {
+    const token = authHeader.replace('Bearer ', '')
+    const parts = token.split('.')
+    if (parts.length !== 3) return { authorized: false, error: 'Invalid token format' }
+    const payload = JSON.parse(atob(parts[1]))
+    if (payload.role !== 'service_role') return { authorized: false, error: 'Forbidden: service_role required' }
+    return { authorized: true }
+  } catch { return { authorized: false, error: 'Invalid authorization token' } }
+}
+
+function unauthorizedResponse(message: string, corsHeaders: Record<string, string>, status = 401): Response {
+  return new Response(JSON.stringify({ error: message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status })
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,9 +29,15 @@ Deno.serve(async (req) => {
     return new Response('ok', { headers: corsHeaders })
   }
 
+  // Verify caller has service_role authorization (scheduled/internal calls only)
+  const { authorized, error: authError } = verifyServiceRole(req)
+  if (!authorized) {
+    return unauthorizedResponse(authError || 'Forbidden', corsHeaders, 403)
+  }
+
   const supabaseUrl = Deno.env.get('SUPABASE_URL') || '';
   const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-  
+
   const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
   try {
@@ -98,14 +121,14 @@ Deno.serve(async (req) => {
 
             // 3. Create In-App Notification
             const { error: notifyError } = await supabase
-              .from('user_notifications')
+              .from('notifications')
               .insert({
                 user_id,
                 title: title,
                 body: message,
-                metadata: {
+                type: 'occasion_reminder',
+                data: {
                   occasion_id: occ.id,
-                  type: 'occasion_reminder',
                   days_before: daysBefore
                 }
               });
@@ -129,6 +152,7 @@ Deno.serve(async (req) => {
                   userId: user_id,
                   title: title,
                   body: message,
+                  categoryId: 'occasion_reminder',
                   data: {
                     occasionId: occ.id,
                     type: 'occasion_reminder'

@@ -15,7 +15,6 @@ export default function BuyerTabsLayout() {
 			<Tabs.Screen name="shop" options={{ title: t('navigation.shop') }} />
 			<Tabs.Screen name="cart" options={{ title: t('navigation.cart') }} />
 			<Tabs.Screen name="memory" options={{ title: t('navigation.memories') }} />
-			<Tabs.Screen name="profile" options={{ title: t('navigation.profile') }} />
 			<Tabs.Screen name="search" options={{ href: null }} />
 			<Tabs.Screen name="product/[id]" options={{ href: null }} />
 		</Tabs>

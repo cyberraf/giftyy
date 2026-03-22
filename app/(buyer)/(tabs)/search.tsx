@@ -14,10 +14,13 @@ import { useCategories } from '@/contexts/CategoriesContext';
 import { useProducts } from '@/contexts/ProductsContext';
 import { getVendorsInfo } from '@/lib/vendor-utils';
 import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { trackSearch } from '@/lib/analytics';
+import { addRecentSearch, getRecentSearches, removeRecentSearch, clearRecentSearches } from '@/lib/utils/searchHistory';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	Dimensions,
 	FlatList,
+	Pressable,
 	RefreshControl,
 	StyleSheet,
 	Text,
@@ -60,6 +63,12 @@ export default function SearchResultsScreen() {
 	const [showFilters, setShowFilters] = useState(false);
 	const [refreshing, setRefreshing] = useState(false);
 	const [vendorsMap, setVendorsMap] = useState<Map<string, any>>(new Map());
+	const [recentSearches, setRecentSearches] = useState<string[]>([]);
+
+	// Load recent searches on mount
+	useEffect(() => {
+		getRecentSearches().then(setRecentSearches);
+	}, []);
 
 	// Initialize filters from URL params
 	const [filters, setFilters] = useState<FilterState>(() => {
@@ -164,6 +173,18 @@ export default function SearchResultsScreen() {
 		return sorted;
 	}, [products, searchQuery, filters, vendorsMap]);
 
+	// Track search queries (debounced)
+	const searchTimerRef = useRef<ReturnType<typeof setTimeout>>();
+	useEffect(() => {
+		if (!searchQuery.trim()) return;
+		if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+		searchTimerRef.current = setTimeout(() => {
+			trackSearch(searchQuery.trim(), filteredAndSortedProducts.length);
+			addRecentSearch(searchQuery.trim()).then(() => getRecentSearches().then(setRecentSearches));
+		}, 1000);
+		return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
+	}, [searchQuery, filteredAndSortedProducts.length]);
+
 	// Get applied filter chips
 	const appliedFilterChips = useMemo(() => {
 		const chips: Array<{ id: string; label: string; type: string }> = [];
@@ -219,19 +240,10 @@ export default function SearchResultsScreen() {
 		});
 	}, []);
 
-	// Parse product images
-	const parseProductImage = (product: any) => {
-		if (!product.imageUrl) return undefined;
-		try {
-			const parsed = JSON.parse(product.imageUrl);
-			return Array.isArray(parsed) ? parsed[0] : product.imageUrl;
-		} catch {
-			return product.imageUrl;
-		}
-	};
+
 
 	const renderProduct = ({ item, index }: { item: any; index: number }) => {
-		const imageUrl = parseProductImage(item);
+		const imageUrl = item.imageUrl;
 		const vendor = item.vendorId ? vendorsMap.get(item.vendorId) : undefined;
 		const productPrice = typeof item.price === 'number' ? item.price : parseFloat(String(item.price).replace('$', '')) || 0;
 
@@ -283,6 +295,35 @@ export default function SearchResultsScreen() {
 				onFilterPress={() => setShowFilters(true)}
 			/>
 
+			{/* Recent Searches */}
+			{!searchQuery.trim() && recentSearches.length > 0 && (
+				<View style={styles.recentSection}>
+					<View style={styles.recentHeader}>
+						<Text style={styles.recentTitle}>{t('search.recent_title', 'Recent Searches')}</Text>
+						<Pressable onPress={() => { clearRecentSearches(); setRecentSearches([]); }}>
+							<Text style={styles.recentClear}>{t('search.recent_clear', 'Clear')}</Text>
+						</Pressable>
+					</View>
+					{recentSearches.slice(0, 5).map((term) => (
+						<Pressable
+							key={term}
+							style={styles.recentItem}
+							onPress={() => setSearchQuery(term)}
+						>
+							<Text style={styles.recentItemText}>{term}</Text>
+							<Pressable
+								hitSlop={8}
+								onPress={() => {
+									removeRecentSearch(term).then(() => getRecentSearches().then(setRecentSearches));
+								}}
+							>
+								<Text style={styles.recentRemove}>×</Text>
+							</Pressable>
+						</Pressable>
+					))}
+				</View>
+			)}
+
 			{/* Results Count */}
 			<View style={styles.resultsHeader}>
 				<Text style={styles.resultsText}>
@@ -312,6 +353,10 @@ export default function SearchResultsScreen() {
 					]}
 					columnWrapperStyle={styles.row}
 					showsVerticalScrollIndicator={false}
+					maxToRenderPerBatch={12}
+					windowSize={7}
+					removeClippedSubviews={true}
+					initialNumToRender={9}
 					refreshControl={
 						<RefreshControl
 							refreshing={refreshing}
@@ -347,6 +392,43 @@ const styles = StyleSheet.create({
 		backgroundColor: 'transparent',
 		borderBottomWidth: 1,
 		borderBottomColor: GIFTYY_THEME.colors.gray200,
+	},
+	recentSection: {
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
+		paddingTop: GIFTYY_THEME.spacing.md,
+	},
+	recentHeader: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+		marginBottom: GIFTYY_THEME.spacing.sm,
+	},
+	recentTitle: {
+		fontSize: GIFTYY_THEME.typography.sizes.base,
+		fontWeight: GIFTYY_THEME.typography.weights.bold,
+		color: GIFTYY_THEME.colors.gray800,
+	},
+	recentClear: {
+		fontSize: GIFTYY_THEME.typography.sizes.sm,
+		color: GIFTYY_THEME.colors.primary,
+		fontWeight: GIFTYY_THEME.typography.weights.semibold,
+	},
+	recentItem: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+		paddingVertical: 10,
+		borderBottomWidth: 1,
+		borderBottomColor: GIFTYY_THEME.colors.gray100,
+	},
+	recentItemText: {
+		fontSize: GIFTYY_THEME.typography.sizes.base,
+		color: GIFTYY_THEME.colors.gray700,
+	},
+	recentRemove: {
+		fontSize: 20,
+		color: GIFTYY_THEME.colors.gray400,
+		paddingHorizontal: 8,
 	},
 	resultsHeader: {
 		paddingHorizontal: GIFTYY_THEME.spacing.lg,

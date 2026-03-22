@@ -15,6 +15,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { hapticMedium } from '@/lib/utils/haptics';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -45,6 +46,7 @@ export function StickyBottomBar({
 	}));
 
 	const handleAddToCartPressIn = () => {
+		hapticMedium();
 		addToCartScale.value = withSpring(0.95, { damping: 15, stiffness: 300 });
 	};
 

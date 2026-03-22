@@ -3,7 +3,7 @@
 import { GIFTYY_THEME } from './giftyy-theme';
 
 export const BRAND_COLOR = GIFTYY_THEME.colors.primary;
-export const BRAND_FONT = GIFTYY_THEME.typography.brandFont;
+export const BRAND_FONT = GIFTYY_THEME.typography.fontFamily;
 
 /**
  * Below are the colors that are used in the app. The colors are defined in the light and dark mode.

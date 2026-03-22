@@ -16,13 +16,13 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type DealCategory = 'flash' | 'top-picks' | 'seasonal' | 'vendor-specials' | 'under-20' | 'last-chance';
 
-const CATEGORIES: { id: DealCategory; label: string; icon: string }[] = [
-	{ id: 'flash', label: 'Flash Deals', icon: 'bolt.fill' },
-	{ id: 'top-picks', label: 'Top Picks', icon: 'star.fill' },
-	{ id: 'seasonal', label: 'Seasonal Gifts', icon: 'snowflake' },
-	{ id: 'vendor-specials', label: 'Vendor Specials', icon: 'storefront.fill' },
-	{ id: 'under-20', label: 'Under $20', icon: 'dollarsign.circle.fill' },
-	{ id: 'last-chance', label: 'Last Chance', icon: 'clock.fill' },
+const CATEGORIES: { id: DealCategory; label: string }[] = [
+	{ id: 'flash', label: 'Flash Deals' },
+	{ id: 'top-picks', label: 'Top Picks' },
+	{ id: 'seasonal', label: 'Seasonal' },
+	{ id: 'vendor-specials', label: 'Vendors' },
+	{ id: 'under-20', label: 'Under $20' },
+	{ id: 'last-chance', label: 'Last Chance' },
 ];
 
 type Props = {
@@ -35,18 +35,26 @@ export function DealCategoryTabs({ activeCategory, onCategoryChange }: Props) {
 	const indicatorPosition = useSharedValue(0);
 	const indicatorWidth = useSharedValue(0);
 	
+	// Track tab widths for accurate indicator positioning
+	const [tabWidths, setTabWidths] = React.useState<number[]>(new Array(CATEGORIES.length).fill(0));
+	
 	useEffect(() => {
-		// Calculate indicator position based on active tab
-		const tabWidth = SCREEN_WIDTH / 3; // Approximate width for each tab
-		indicatorPosition.value = withSpring(activeIndex * tabWidth, {
-			damping: 20,
-			stiffness: 150,
-		});
-		indicatorWidth.value = withSpring(tabWidth * 0.9, {
-			damping: 20,
-			stiffness: 150,
-		});
-	}, [activeCategory, activeIndex]);
+		if (tabWidths[activeIndex] > 0) {
+			let offset = 0;
+			for (let i = 0; i < activeIndex; i++) {
+				offset += tabWidths[i] + 16; // 16 is the marginRight
+			}
+			
+			indicatorPosition.value = withSpring(offset, {
+				damping: 20,
+				stiffness: 150,
+			});
+			indicatorWidth.value = withSpring(tabWidths[activeIndex], {
+				damping: 20,
+				stiffness: 150,
+			});
+		}
+	}, [activeCategory, activeIndex, tabWidths]);
 	
 	const indicatorStyle = useAnimatedStyle(() => ({
 		transform: [{ translateX: indicatorPosition.value }],
@@ -66,70 +74,64 @@ export function DealCategoryTabs({ activeCategory, onCategoryChange }: Props) {
 						<Pressable
 							key={category.id}
 							onPress={() => onCategoryChange(category.id)}
-							style={[styles.tab, isActive && styles.tabActive]}
+							onLayout={(e) => {
+								const { width } = e.nativeEvent.layout;
+								const newWidths = [...tabWidths];
+								newWidths[index] = width;
+								setTabWidths(newWidths);
+							}}
+							style={styles.tab}
 						>
 							<Text style={[styles.tabText, isActive && styles.tabTextActive]}>
 								{category.label}
 							</Text>
-							{isActive && <View style={styles.activeIndicator} />}
 						</Pressable>
 					);
 				})}
-			</ScrollView>
-			{/* Animated Underline */}
-			<View style={styles.underlineContainer}>
+				{/* Animated Underline inside the ScrollView to move with tabs */}
 				<Animated.View style={[styles.animatedUnderline, indicatorStyle]} />
-			</View>
+			</ScrollView>
+			<View style={styles.separator} />
 		</View>
 	);
 }
 
 const styles = StyleSheet.create({
 	container: {
-		marginBottom: GIFTYY_THEME.spacing.md,
+		marginBottom: GIFTYY_THEME.spacing.lg,
+		backgroundColor: GIFTYY_THEME.colors.white,
 	},
 	scrollContent: {
-		paddingHorizontal: GIFTYY_THEME.spacing.md,
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
+		paddingBottom: 12,
+		position: 'relative',
 	},
 	tab: {
-		paddingHorizontal: 16,
-		paddingVertical: 10,
-		marginRight: 8,
-		borderRadius: GIFTYY_THEME.radius.full,
-		backgroundColor: GIFTYY_THEME.colors.gray100,
-	},
-	tabActive: {
-		backgroundColor: GIFTYY_THEME.colors.cream,
+		marginRight: 24,
+		paddingVertical: 8,
 	},
 	tabText: {
-		fontSize: GIFTYY_THEME.typography.sizes.sm,
-		fontWeight: GIFTYY_THEME.typography.weights.semibold,
-		color: GIFTYY_THEME.colors.gray600,
+		fontSize: GIFTYY_THEME.typography.sizes.base,
+		fontWeight: GIFTYY_THEME.typography.weights.medium,
+		color: GIFTYY_THEME.colors.gray500,
+		letterSpacing: 0.2,
 	},
 	tabTextActive: {
 		color: GIFTYY_THEME.colors.primary,
 		fontWeight: GIFTYY_THEME.typography.weights.bold,
 	},
-	activeIndicator: {
-		position: 'absolute',
-		bottom: -2,
-		left: 0,
-		right: 0,
-		height: 2,
-		backgroundColor: GIFTYY_THEME.colors.primary,
-		borderRadius: 1,
-	},
-	underlineContainer: {
-		height: 2,
-		backgroundColor: GIFTYY_THEME.colors.gray200,
-		marginTop: 4,
-		position: 'relative',
-	},
 	animatedUnderline: {
-		height: 2,
+		height: 3,
 		backgroundColor: GIFTYY_THEME.colors.primary,
-		borderRadius: 1,
+		borderRadius: 1.5,
 		position: 'absolute',
+		bottom: 8,
+		left: GIFTYY_THEME.spacing.lg,
+	},
+	separator: {
+		height: 1,
+		backgroundColor: GIFTYY_THEME.colors.gray100,
+		marginHorizontal: GIFTYY_THEME.spacing.lg,
 	},
 });
 

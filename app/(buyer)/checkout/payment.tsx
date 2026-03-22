@@ -12,6 +12,7 @@ import { calculateVendorShippingByZone } from '@/lib/shipping-utils';
 import { SafeCardField, useSafeStripe } from '@/lib/stripe-safe';
 import { supabase } from '@/lib/supabase';
 import { parsePrice } from '@/lib/utils/currency';
+import { safeGoBack } from '@/lib/utils/navigation';
 import { useRouter } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -381,8 +382,7 @@ export default function PaymentScreen() {
             });
         } catch (err) {
             console.error('Unexpected error during payment:', err);
-            // Still navigate to confirmation
-            router.replace('/(buyer)/checkout/confirmation');
+            alert(t('checkout.payment.alerts.payment_failed'), t('checkout.payment.alerts.payment_failed_msg'));
         } finally {
             setLoading(false);
         }
@@ -415,7 +415,10 @@ export default function PaymentScreen() {
                             isCalculatingShipping={isCalculatingShipping}
                         />
 
-                         <View style={styles.formCard}>
+                         <View
+                            style={[styles.formCard, loading && { opacity: 0.7 }]}
+                            pointerEvents={loading ? 'none' : 'auto'}
+                        >
                             <View style={styles.secureBadge}>
                                 <Text style={{ fontSize: GIFTYY_THEME.typography.sizes.sm }}>🔒</Text>
                                 <Text style={styles.secureText}>{t('checkout.payment.secure_badge')}</Text>
@@ -426,6 +429,7 @@ export default function PaymentScreen() {
                                 value={name}
                                 onChangeText={setName}
                                 autoComplete="name"
+                                editable={!loading}
                             />
  
                             <View style={styles.inputGroup}>
@@ -433,6 +437,7 @@ export default function PaymentScreen() {
                                 <SafeCardField
                                     postalCodeEnabled={false}
                                     onCardChange={(details: any) => setCardDetails(details)}
+                                    disabled={loading}
                                     style={styles.cardField}
                                     cardStyle={{
                                         backgroundColor: '#FFFFFF',
@@ -453,8 +458,9 @@ export default function PaymentScreen() {
                 <View style={[styles.stickyBar, { bottom: bottom > 0 ? bottom + 8 : 24 }]}>
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                          <Pressable
-                            style={{ paddingVertical: 12, paddingRight: 16 }}
-                            onPress={() => router.back()}
+                            style={{ paddingVertical: 12, paddingRight: 16, opacity: loading ? 0.5 : 1 }}
+                            onPress={() => safeGoBack(router, '/(buyer)/checkout/cart')}
+                            disabled={loading}
                         >
                             <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 13 }}>{t('checkout.common.back')}</Text>
                         </Pressable>
@@ -467,7 +473,7 @@ export default function PaymentScreen() {
                                 <ActivityIndicator color="#fff" />
                              ) : (
                                 <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>
-                                    {t('checkout.payment.pay_btn', { amount: formatCurrency(total) })}
+                                    Checkout
                                 </Text>
                             )}
                         </Pressable>

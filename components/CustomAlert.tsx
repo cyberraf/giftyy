@@ -25,9 +25,13 @@ const AnimatedBlurView = Animated.createAnimatedComponent(BlurView);
 export default function CustomAlert({ visible, title, message, buttons = [], onDismiss }: CustomAlertProps) {
 	const scaleAnim = React.useRef(new Animated.Value(0.9)).current;
 	const opacityAnim = React.useRef(new Animated.Value(0)).current;
+	// Track whether the Modal should be mounted — stays true during fade-out,
+	// then flips to false only after the exit animation finishes.
+	const [modalVisible, setModalVisible] = React.useState(false);
 
 	React.useEffect(() => {
 		if (visible) {
+			setModalVisible(true);
 			Animated.parallel([
 				Animated.spring(scaleAnim, {
 					toValue: 1,
@@ -53,7 +57,11 @@ export default function CustomAlert({ visible, title, message, buttons = [], onD
 					duration: 200,
 					useNativeDriver: true,
 				}),
-			]).start();
+			]).start(({ finished }) => {
+				if (finished) {
+					setModalVisible(false);
+				}
+			});
 		}
 	}, [visible, scaleAnim, opacityAnim]);
 
@@ -69,13 +77,11 @@ export default function CustomAlert({ visible, title, message, buttons = [], onD
 	const defaultButtons: AlertButton[] = buttons.length > 0 ? buttons : [{ text: 'OK', onPress: onDismiss }];
 	const isVerticalLayout = defaultButtons.length > 2;
 
-	// @ts-ignore - access private value for conditional rendering during fade out
-	const currentOpacity = opacityAnim._value;
-	if (!visible && currentOpacity === 0) return null;
+	if (!modalVisible) return null;
 
 	return (
 		<Modal
-			visible={visible || currentOpacity > 0}
+			visible={modalVisible}
 			transparent
 			animationType="none"
 			onRequestClose={onDismiss}

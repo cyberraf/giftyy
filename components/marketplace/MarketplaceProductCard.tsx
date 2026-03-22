@@ -8,8 +8,9 @@ import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { useCart } from '@/contexts/CartContext';
 import { useWishlist } from '@/contexts/WishlistContext';
 import * as Haptics from 'expo-haptics';
+import { OptimizedImage } from '@/components/OptimizedImage';
 import React, { memo, useState } from 'react';
-import { Dimensions, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
 	useAnimatedStyle,
 	useSharedValue,
@@ -115,11 +116,14 @@ export const MarketplaceProductCard = memo(({
 			onPressIn={handlePressIn}
 			onPressOut={handlePressOut}
 			style={[styles.card, animatedCardStyle, width ? { width } : {}]}
+			accessibilityRole="button"
+			accessibilityLabel={`${name}, $${displayPrice.toFixed(2)}${discountPercentage > 0 ? `, ${discountPercentage}% off` : ''}${vendorName ? `, by ${vendorName}` : ''}`}
+			accessibilityHint="View product details"
 		>
 			{/* Product Image */}
 			<View style={styles.imageContainer}>
 				{imageUri ? (
-					<Image source={{ uri: imageUri }} style={styles.image} resizeMode="cover" />
+					<OptimizedImage source={{ uri: imageUri }} style={styles.image} contentFit="cover" />
 				) : (
 					<View style={styles.imagePlaceholder}>
 						<IconSymbol name="photo" size={24} color={GIFTYY_THEME.colors.gray300} />
@@ -139,6 +143,8 @@ export const MarketplaceProductCard = memo(({
 						onPress={handleWishlistPress}
 						style={styles.wishlistButton}
 						hitSlop={8}
+						accessibilityRole="button"
+						accessibilityLabel={isWishlist ? 'Remove from wishlist' : 'Add to wishlist'}
 					>
 						<Animated.View style={animatedHeartStyle}>
 							<IconSymbol

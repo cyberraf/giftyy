@@ -10,6 +10,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useSettings } from '@/hooks/useSettings';
 import { supabase } from '@/lib/supabase';
 import { formatPhoneField } from '@/lib/utils/phone';
+import { hapticMedium, hapticSuccess, hapticError } from '@/lib/utils/haptics';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
 import * as Crypto from 'expo-crypto';
 import * as ImagePicker from 'expo-image-picker';
@@ -206,6 +207,7 @@ export default function ProfilePreferencesScreen() {
             return;
         }
         
+        hapticMedium();
         setSaving(true);
         try {
             const phoneDigits = profile.phone.replace(/\D/g, '');
@@ -222,8 +224,10 @@ export default function ProfilePreferencesScreen() {
             }), 45000); // 45s timeout
 
             if (error) {
+                hapticError();
                 alert('Error', error.message);
             } else {
+                hapticSuccess();
                 setShowSuccessModal(true);
                 setHasChanges(false);
             }
@@ -358,16 +362,43 @@ export default function ProfilePreferencesScreen() {
                     <View style={styles.modalContent}>
                         <Text style={styles.modalTitle}>Change Password</Text>
                         <TextInput value={newPassword} onChangeText={setNewPassword} placeholder="New Password" style={styles.modalInput} secureTextEntry={!showNewPassword} />
+                        {/* Password Strength Meter */}
+                        {newPassword.length > 0 && (() => {
+                            let score = 0;
+                            if (newPassword.length >= 6) score++;
+                            if (newPassword.length >= 10) score++;
+                            if (/[A-Z]/.test(newPassword)) score++;
+                            if (/[0-9]/.test(newPassword)) score++;
+                            if (/[^A-Za-z0-9]/.test(newPassword)) score++;
+                            const labels = ['Very Weak', 'Weak', 'Fair', 'Good', 'Strong'];
+                            const colors = [GIFTYY_THEME.colors.error, '#f59e0b', '#f59e0b', GIFTYY_THEME.colors.success, GIFTYY_THEME.colors.success];
+                            const level = Math.min(score, 4);
+                            return (
+                                <View style={{ marginTop: -8, marginBottom: 12 }}>
+                                    <View style={{ flexDirection: 'row', gap: 4, marginBottom: 4 }}>
+                                        {[0, 1, 2, 3, 4].map(i => (
+                                            <View key={i} style={{ flex: 1, height: 4, borderRadius: 2, backgroundColor: i <= level ? colors[level] : GIFTYY_THEME.colors.gray200 }} />
+                                        ))}
+                                    </View>
+                                    <Text style={{ fontSize: 12, color: colors[level], fontWeight: '600' }}>{labels[level]}</Text>
+                                </View>
+                            );
+                        })()}
                         <TextInput value={confirmNewPassword} onChangeText={setConfirmNewPassword} placeholder="Confirm" style={styles.modalInput} secureTextEntry={!showConfirmNewPassword} />
+                        {confirmNewPassword.length > 0 && newPassword !== confirmNewPassword && (
+                            <Text style={{ fontSize: 12, color: GIFTYY_THEME.colors.error, marginTop: -8, marginBottom: 8 }}>Passwords don't match</Text>
+                        )}
                         <View style={styles.modalButtons}>
                             <Pressable style={styles.modalButtonCancel} onPress={() => setChangePwdModalVisible(false)}><Text>Cancel</Text></Pressable>
                             <Pressable style={[styles.modalButton, { backgroundColor: GIFTYY_THEME.colors.primary }]} onPress={async () => {
-                                if (newPassword !== confirmNewPassword) return alert('Error', 'Mismatch');
+                                if (newPassword.length < 6) return alert('Error', 'Password must be at least 6 characters');
+                                if (newPassword !== confirmNewPassword) return alert('Error', 'Passwords don\'t match');
+                                hapticMedium();
                                 setChangingPassword(true);
                                 const { error } = await withTimeout(supabase.auth.updateUser({ password: newPassword }), 45000);
                                 setChangingPassword(false);
-                                if (error) alert('Error', error.message);
-                                else setChangePwdModalVisible(false);
+                                if (error) { hapticError(); alert('Error', error.message); }
+                                else { hapticSuccess(); setChangePwdModalVisible(false); setNewPassword(''); setConfirmNewPassword(''); }
                             }}>{changingPassword ? <ActivityIndicator color="#fff" /> : <Text style={{ color: '#fff' }}>Update</Text>}</Pressable>
                         </View>
                     </View>

@@ -1,116 +1,92 @@
-import { ConversationalFormWizard } from '@/components/forms/ConversationalFormWizard';
-import { ConversationalStep } from '@/components/forms/ConversationalStep';
-import { BRAND_COLOR } from '@/constants/theme';
+import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { useAlert } from '@/contexts/AlertContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { checkThrottle, resetThrottle } from '@/lib/auth/throttle';
+import { hapticMedium, hapticSuccess, hapticError } from '@/lib/utils/haptics';
+import { scale, normalizeFont } from '@/utils/responsive';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import React, { useEffect, useRef, useState } from 'react';
+import {
+	ActivityIndicator,
+	Image,
+	KeyboardAvoidingView,
+	Linking,
+	Platform,
+	Pressable,
+	ScrollView,
+	StyleSheet,
+	Text,
+	TextInput,
+	View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-function SocialFooter() {
-	return (
-		<View style={styles.footer}>
-			<Text style={styles.socialText}>Follow us</Text>
-			<View style={styles.socialIcons}>
-				<Pressable
-					style={styles.socialButton}
-					onPress={() => Linking.openURL('https://www.instagram.com/giftyy_llc')}
-				>
-					<FontAwesome5 name="instagram" size={18} color="#E4405F" />
-				</Pressable>
-				<Pressable
-					style={styles.socialButton}
-					onPress={() => Linking.openURL('https://www.tiktok.com/@giftyy_llc')}
-				>
-					<FontAwesome5 name="tiktok" size={18} color="#000000" />
-				</Pressable>
-				<Pressable
-					style={styles.socialButton}
-					onPress={() => Linking.openURL('https://linkedin.com/company/giftyy-store')}
-				>
-					<FontAwesome5 name="linkedin" size={18} color="#0A66C2" />
-				</Pressable>
-			</View>
-		</View>
-	);
-}
-
-function ForgotPasswordStep({ formData, updateFormData, onNext, onBack, loading }: any) {
-	const { alert } = useAlert();
-
-	const handleNext = () => {
-		const email = formData.email?.trim() || '';
-		if (!email) {
-			alert('Error', 'Please enter your email address');
-			return;
-		}
-		if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-			alert('Error', 'Please enter a valid email address');
-			return;
-		}
-		onNext();
-	};
-
-	return (
-		<ConversationalStep
-			question="Reset your password"
-			description="Enter your email address and we'll send you a link to reset your password"
-			avatarSource={require('@/assets/images/giftyy.png')}
-			onNext={handleNext}
-			onBack={onBack}
-			loading={loading}
-			nextLabel="Send Reset Link"
-		>
-			<View style={styles.inputWrapper}>
-				<View style={styles.inputContainer}>
-					<MaterialIcons name="email" size={24} color="#9ba1a6" style={styles.inputIcon} />
-					<TextInput
-						placeholder="Email address"
-						placeholderTextColor="#9ba1a6"
-						autoCapitalize="none"
-						keyboardType="email-address"
-						value={formData.email || ''}
-						onChangeText={(text) => updateFormData({ email: text })}
-						style={styles.input}
-						editable={!loading}
-						autoFocus
-					/>
-				</View>
-			</View>
-
-			<SocialFooter />
-		</ConversationalStep>
-	);
-}
+const T = GIFTYY_THEME;
 
 export default function ForgotPasswordScreen() {
-	const [email, setEmail] = useState('');
-	const [loading, setLoading] = useState(false);
-	const [emailSent, setEmailSent] = useState(false);
 	const { resetPasswordForEmail } = useAuth();
 	const { alert } = useAlert();
 	const router = useRouter();
 	const insets = useSafeAreaInsets();
 
-	const handleResetPassword = async (dataOrEmail: any) => {
-		const resetEmail = (typeof dataOrEmail === 'string' ? dataOrEmail : dataOrEmail.email)?.trim();
-		setEmail(resetEmail); // Save in case of resend
+	const [email, setEmail] = useState('');
+	const [loading, setLoading] = useState(false);
+	const [emailSent, setEmailSent] = useState(false);
+	const [resendCooldown, setResendCooldown] = useState(0);
+	const cooldownRef = useRef<ReturnType<typeof setInterval>>();
 
+	useEffect(() => {
+		return () => { if (cooldownRef.current) clearInterval(cooldownRef.current); };
+	}, []);
+
+	const startCooldown = (seconds: number) => {
+		setResendCooldown(seconds);
+		if (cooldownRef.current) clearInterval(cooldownRef.current);
+		cooldownRef.current = setInterval(() => {
+			setResendCooldown(prev => {
+				if (prev <= 1) { clearInterval(cooldownRef.current!); return 0; }
+				return prev - 1;
+			});
+		}, 1000);
+	};
+
+	const handleResetPassword = async () => {
+		const trimmedEmail = email.trim();
+		if (!trimmedEmail) {
+			alert('Error', 'Please enter your email address');
+			return;
+		}
+		if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+			alert('Error', 'Please enter a valid email address');
+			return;
+		}
+
+		const throttle = checkThrottle('password_reset');
+		if (!throttle.allowed) {
+			alert('Too Many Attempts', `Please wait ${throttle.retryAfterSeconds} seconds before trying again.`);
+			return;
+		}
+
+		hapticMedium();
 		setLoading(true);
-		const { error } = await resetPasswordForEmail(resetEmail);
+		const { error } = await resetPasswordForEmail(trimmedEmail);
 		setLoading(false);
 
 		if (error) {
+			hapticError();
 			alert('Error', error.message || 'Unable to send password reset email. Please try again.');
 		} else {
+			hapticSuccess();
+			resetThrottle('password_reset');
 			setEmailSent(true);
+			startCooldown(60);
 		}
 	};
 
-	const handleCancel = () => {
+	const handleBack = () => {
 		if (router.canGoBack()) {
 			router.back();
 		} else {
@@ -118,64 +94,225 @@ export default function ForgotPasswordScreen() {
 		}
 	};
 
+	// Success state — email sent
 	if (emailSent) {
 		return (
-			<View style={[styles.container, { paddingTop: insets.top }]}>
+			<View style={styles.container}>
+				<LinearGradient
+					colors={['#fff5f0', '#ffffff', '#ffffff']}
+					locations={[0, 0.35, 1]}
+					style={StyleSheet.absoluteFill}
+				/>
 				<ScrollView
-					contentContainerStyle={styles.successContainer}
+					contentContainerStyle={[
+						styles.scrollContent,
+						{ paddingTop: insets.top + scale(40), paddingBottom: insets.bottom + scale(24) },
+					]}
 					showsVerticalScrollIndicator={false}
 				>
-					<View style={styles.successCard}>
+					{/* Logo & Brand */}
+					<View style={styles.brandSection}>
+						<Image
+							source={require('@/assets/images/giftyy.png')}
+							style={styles.logo}
+							resizeMode="contain"
+						/>
+						<Text style={styles.tagline}>Giftyy</Text>
+					</View>
+
+					{/* Success Card */}
+					<View style={styles.card}>
 						<View style={styles.successIconWrapper}>
-							<View style={styles.successIconInner}>
-								<MaterialIcons name="mark-email-read" size={40} color="#10B981" />
-							</View>
+							<Ionicons name="mail-open-outline" size={scale(36)} color={T.colors.success} />
 						</View>
 
-						<Text style={styles.successTitle}>Check your email</Text>
-
-						<Text style={styles.successDescription}>
+						<Text style={styles.cardTitle}>Check your email</Text>
+						<Text style={styles.cardSubtitle}>
 							We've sent a password reset link to{'\n'}
-							<Text style={styles.highlightText}>{email}</Text>
+							<Text style={styles.emailHighlight}>{email.trim()}</Text>
 						</Text>
 
 						<View style={styles.infoBox}>
-							<MaterialIcons name="info-outline" size={20} color="#F59E0B" style={{ marginTop: 2 }} />
+							<Ionicons name="information-circle-outline" size={scale(20)} color="#92400E" />
 							<Text style={styles.infoText}>
 								Click the link in the email to reset your password. The link will expire in 1 hour.
 							</Text>
 						</View>
 
+						{/* Back to Sign In */}
 						<Pressable
-							style={styles.primaryButton}
+							style={({ pressed }) => [
+								styles.primaryButton,
+								pressed && styles.primaryButtonPressed,
+							]}
 							onPress={() => router.replace('/(auth)/login')}
 						>
 							<Text style={styles.primaryButtonText}>Back to Sign In</Text>
 						</Pressable>
 
+						{/* Resend */}
 						<Pressable
-							style={styles.resendButtonInline}
-							onPress={() => handleResetPassword(email)}
+							onPress={() => {
+								if (resendCooldown > 0) return;
+								setEmailSent(false);
+								handleResetPassword();
+							}}
+							hitSlop={8}
+							disabled={resendCooldown > 0}
 						>
-							<Text style={styles.resendTextInline}>Didn't receive the email? Resend</Text>
+							<Text style={[styles.resendText, resendCooldown > 0 && { color: T.colors.gray400 }]}>
+								{resendCooldown > 0
+									? `Resend available in ${resendCooldown}s`
+									: "Didn't receive the email? Resend"}
+							</Text>
 						</Pressable>
 					</View>
 
-					<SocialFooter />
+					{/* Social Links */}
+					<View style={styles.socialSection}>
+						<Text style={styles.socialLabel}>Follow us</Text>
+						<View style={styles.socialIcons}>
+							<Pressable
+								style={styles.socialButton}
+								onPress={() => Linking.openURL('https://www.instagram.com/giftyy_llc')}
+							>
+								<FontAwesome5 name="instagram" size={scale(16)} color="#E4405F" />
+							</Pressable>
+							<Pressable
+								style={styles.socialButton}
+								onPress={() => Linking.openURL('https://www.tiktok.com/@giftyy_llc')}
+							>
+								<FontAwesome5 name="tiktok" size={scale(16)} color="#000000" />
+							</Pressable>
+							<Pressable
+								style={styles.socialButton}
+								onPress={() => Linking.openURL('https://linkedin.com/company/giftyy-store')}
+							>
+								<FontAwesome5 name="linkedin" size={scale(16)} color="#0A66C2" />
+							</Pressable>
+						</View>
+					</View>
 				</ScrollView>
 			</View>
 		);
 	}
 
+	// Default state — enter email
 	return (
-		<View style={[styles.container, { paddingTop: insets.top }]}>
-			<ConversationalFormWizard
-				onComplete={handleResetPassword}
-				onCancel={handleCancel}
-				hideProgress
+		<View style={styles.container}>
+			<LinearGradient
+				colors={['#fff5f0', '#ffffff', '#ffffff']}
+				locations={[0, 0.35, 1]}
+				style={StyleSheet.absoluteFill}
+			/>
+
+			<KeyboardAvoidingView
+				style={styles.flex}
+				behavior={Platform.OS === 'ios' ? 'padding' : undefined}
 			>
-				<ForgotPasswordStep loading={loading} />
-			</ConversationalFormWizard>
+				<ScrollView
+					contentContainerStyle={[
+						styles.scrollContent,
+						{ paddingTop: insets.top + scale(40), paddingBottom: insets.bottom + scale(24) },
+					]}
+					keyboardShouldPersistTaps="handled"
+					showsVerticalScrollIndicator={false}
+				>
+					{/* Logo & Brand */}
+					<View style={styles.brandSection}>
+						<Image
+							source={require('@/assets/images/giftyy.png')}
+							style={styles.logo}
+							resizeMode="contain"
+						/>
+						<Text style={styles.tagline}>Giftyy</Text>
+					</View>
+
+					{/* Form Card */}
+					<View style={styles.card}>
+						<Text style={styles.cardTitle}>Reset your password</Text>
+						<Text style={styles.cardSubtitle}>
+							Enter your email address and we'll send you a link to reset your password
+						</Text>
+
+						{/* Email */}
+						<View style={styles.fieldGroup}>
+							<Text style={styles.label}>Email</Text>
+							<View style={[styles.inputContainer, loading && styles.inputDisabled]}>
+								<Ionicons name="mail-outline" size={scale(20)} color={T.colors.gray400} />
+								<TextInput
+									placeholder="you@example.com"
+									placeholderTextColor={T.colors.gray400}
+									autoCapitalize="none"
+									keyboardType="email-address"
+									autoComplete="email"
+									textContentType="emailAddress"
+									returnKeyType="go"
+									value={email}
+									onChangeText={setEmail}
+									onSubmitEditing={handleResetPassword}
+									style={styles.input}
+									editable={!loading}
+									autoFocus
+									accessibilityLabel="Email address"
+								/>
+							</View>
+						</View>
+
+						{/* Send Reset Link Button */}
+						<Pressable
+							style={({ pressed }) => [
+								styles.primaryButton,
+								pressed && styles.primaryButtonPressed,
+								loading && styles.primaryButtonDisabled,
+							]}
+							onPress={handleResetPassword}
+							disabled={loading}
+							accessibilityRole="button"
+							accessibilityLabel="Send password reset link"
+							accessibilityState={{ disabled: loading, busy: loading }}
+						>
+							{loading ? (
+								<ActivityIndicator color="#fff" size="small" />
+							) : (
+								<Text style={styles.primaryButtonText}>Send Reset Link</Text>
+							)}
+						</Pressable>
+					</View>
+
+					{/* Back to Sign In */}
+					<View style={styles.backRow}>
+						<Pressable onPress={handleBack} hitSlop={8}>
+							<Text style={styles.backLink}>Back to Sign In</Text>
+						</Pressable>
+					</View>
+
+					{/* Social Links */}
+					<View style={styles.socialSection}>
+						<Text style={styles.socialLabel}>Follow us</Text>
+						<View style={styles.socialIcons}>
+							<Pressable
+								style={styles.socialButton}
+								onPress={() => Linking.openURL('https://www.instagram.com/giftyy_llc')}
+							>
+								<FontAwesome5 name="instagram" size={scale(16)} color="#E4405F" />
+							</Pressable>
+							<Pressable
+								style={styles.socialButton}
+								onPress={() => Linking.openURL('https://www.tiktok.com/@giftyy_llc')}
+							>
+								<FontAwesome5 name="tiktok" size={scale(16)} color="#000000" />
+							</Pressable>
+							<Pressable
+								style={styles.socialButton}
+								onPress={() => Linking.openURL('https://linkedin.com/company/giftyy-store')}
+							>
+								<FontAwesome5 name="linkedin" size={scale(16)} color="#0A66C2" />
+							</Pressable>
+						</View>
+					</View>
+				</ScrollView>
+			</KeyboardAvoidingView>
 		</View>
 	);
 }
@@ -183,186 +320,185 @@ export default function ForgotPasswordScreen() {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: '#F8F9FA',
+		backgroundColor: '#ffffff',
 	},
-	inputWrapper: {
-		marginTop: 10,
+	flex: {
+		flex: 1,
+	},
+	scrollContent: {
+		flexGrow: 1,
+		paddingHorizontal: T.spacing['2xl'],
+	},
+
+	// Brand
+	brandSection: {
+		alignItems: 'center',
+		marginBottom: T.spacing['3xl'],
+	},
+	logo: {
+		width: scale(100),
+		height: scale(100),
+	},
+	tagline: {
+		marginTop: scale(6),
+		fontSize: T.typography.sizes['2xl'],
+		color: T.colors.primary,
+		fontWeight: T.typography.weights.extrabold,
+	},
+
+	// Card
+	card: {
+		backgroundColor: '#ffffff',
+		borderRadius: T.radius.xl,
+		padding: T.spacing['2xl'],
+		borderWidth: 1,
+		borderColor: T.colors.gray200,
+		...T.shadows.md,
+	},
+	cardTitle: {
+		fontSize: T.typography.sizes['2xl'],
+		fontWeight: T.typography.weights.bold,
+		color: T.colors.gray900,
+		marginBottom: T.spacing.xs,
+	},
+	cardSubtitle: {
+		fontSize: normalizeFont(15),
+		color: T.colors.gray500,
+		marginBottom: T.spacing['2xl'],
+		lineHeight: normalizeFont(22),
+	},
+
+	// Fields
+	fieldGroup: {
+		marginBottom: scale(18),
+	},
+	label: {
+		fontSize: T.typography.sizes.base,
+		fontWeight: T.typography.weights.semibold,
+		color: T.colors.gray700,
+		marginBottom: T.spacing.sm,
 	},
 	inputContainer: {
 		flexDirection: 'row',
 		alignItems: 'center',
-		backgroundColor: '#FFFFFF',
-		borderWidth: 2,
-		borderColor: '#E5E7EB',
-		borderRadius: 16,
-		paddingHorizontal: 16,
-		paddingVertical: 4,
-		shadowColor: '#000',
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.03,
-		shadowRadius: 4,
-		elevation: 1,
+		backgroundColor: T.colors.gray50,
+		borderWidth: 1.5,
+		borderColor: T.colors.gray200,
+		borderRadius: scale(14),
+		paddingHorizontal: scale(14),
+		gap: scale(10),
 	},
-	inputIcon: {
-		marginRight: 12,
+	inputDisabled: {
+		opacity: 0.6,
 	},
 	input: {
 		flex: 1,
-		paddingVertical: 14,
-		fontSize: 18,
-		color: '#1F2937',
-		fontWeight: '500',
+		paddingVertical: scale(14),
+		fontSize: T.typography.sizes.md,
+		color: T.colors.gray900,
+		fontWeight: T.typography.weights.normal,
 	},
-	footer: {
+
+	// Primary Button
+	primaryButton: {
+		backgroundColor: T.colors.primary,
+		borderRadius: scale(14),
+		paddingVertical: T.spacing.lg,
 		alignItems: 'center',
-		paddingTop: 32,
-		paddingBottom: 24,
-		backgroundColor: 'transparent',
+		justifyContent: 'center',
+		marginTop: scale(6),
+		...T.shadows.sm,
 	},
-	socialText: {
-		fontSize: 14,
-		color: '#6B7280',
-		marginBottom: 16,
-		fontWeight: '500',
+	primaryButtonPressed: {
+		backgroundColor: T.colors.primaryDark,
+	},
+	primaryButtonDisabled: {
+		opacity: 0.7,
+	},
+	primaryButtonText: {
+		color: '#ffffff',
+		fontSize: T.typography.sizes.md,
+		fontWeight: T.typography.weights.bold,
+		letterSpacing: 0.3,
+	},
+
+	// Back link
+	backRow: {
+		alignItems: 'center',
+		marginTop: scale(28),
+	},
+	backLink: {
+		fontSize: normalizeFont(15),
+		fontWeight: T.typography.weights.bold,
+		color: T.colors.primary,
+	},
+
+	// Success state
+	successIconWrapper: {
+		width: scale(72),
+		height: scale(72),
+		borderRadius: scale(36),
+		backgroundColor: '#ecfdf5',
+		alignItems: 'center',
+		justifyContent: 'center',
+		alignSelf: 'center',
+		marginBottom: T.spacing.xl,
+	},
+	emailHighlight: {
+		color: T.colors.gray900,
+		fontWeight: T.typography.weights.bold,
+	},
+	infoBox: {
+		flexDirection: 'row',
+		backgroundColor: '#fef3c7',
+		padding: scale(14),
+		borderRadius: T.radius.md,
+		alignItems: 'center',
+		gap: scale(10),
+		marginBottom: T.spacing['2xl'],
+		borderWidth: 1,
+		borderColor: '#fde68a',
+	},
+	infoText: {
+		flex: 1,
+		fontSize: T.typography.sizes.sm,
+		color: '#92400E',
+		lineHeight: normalizeFont(19),
+		fontWeight: T.typography.weights.medium,
+	},
+	resendText: {
+		fontSize: T.typography.sizes.base,
+		fontWeight: T.typography.weights.semibold,
+		color: T.colors.primary,
+		textAlign: 'center',
+	},
+
+	// Socials
+	socialSection: {
+		alignItems: 'center',
+		marginTop: T.spacing['3xl'],
+		paddingBottom: T.spacing.sm,
+	},
+	socialLabel: {
+		fontSize: T.typography.sizes.sm,
+		color: T.colors.gray400,
+		fontWeight: T.typography.weights.medium,
+		marginBottom: T.spacing.md,
 	},
 	socialIcons: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'center',
-		gap: 20,
+		gap: T.spacing.lg,
 	},
 	socialButton: {
-		width: 36,
-		height: 36,
-		borderRadius: 18,
-		backgroundColor: '#F9FAFB',
+		width: scale(38),
+		height: scale(38),
+		borderRadius: scale(19),
+		backgroundColor: '#ffffff',
 		borderWidth: 1,
-		borderColor: '#E5E7EB',
+		borderColor: T.colors.gray200,
 		alignItems: 'center',
 		justifyContent: 'center',
-		shadowColor: '#000',
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.05,
-		shadowRadius: 4,
-		elevation: 2,
-	},
-	resendContainer: {
-		marginTop: 16,
-		alignItems: 'flex-start',
-	},
-	resendButton: {
-		paddingVertical: 8,
-		paddingHorizontal: 8,
-	},
-	resendText: {
-		fontSize: 15,
-		color: 'transparent', // Used to exist but not in new UI
-		fontWeight: '600',
-	},
-	successContainer: {
-		flex: 1,
-		paddingHorizontal: 24,
-		justifyContent: 'center',
-		paddingBottom: 40,
-	},
-	successCard: {
-		backgroundColor: '#FFFFFF',
-		borderRadius: 24,
-		padding: 32,
-		alignItems: 'center',
-		shadowColor: '#000',
-		shadowOffset: { width: 0, height: 10 },
-		shadowOpacity: 0.05,
-		shadowRadius: 20,
-		elevation: 4,
-		borderWidth: 1,
-		borderColor: 'rgba(0,0,0,0.03)',
-		marginBottom: 32,
-	},
-	successIconWrapper: {
-		width: 80,
-		height: 80,
-		borderRadius: 40,
-		backgroundColor: '#ECFDF5',
-		alignItems: 'center',
-		justifyContent: 'center',
-		marginBottom: 24,
-		shadowColor: '#10B981',
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.1,
-		shadowRadius: 12,
-		elevation: 2,
-	},
-	successIconInner: {
-		width: 64,
-		height: 64,
-		borderRadius: 32,
-		backgroundColor: '#D1FAE5',
-		alignItems: 'center',
-		justifyContent: 'center',
-	},
-	successTitle: {
-		fontSize: 28,
-		fontWeight: '800',
-		color: '#111827',
-		marginBottom: 12,
-		letterSpacing: -0.5,
-		textAlign: 'center',
-	},
-	successDescription: {
-		fontSize: 16,
-		color: '#4B5563',
-		textAlign: 'center',
-		lineHeight: 24,
-		marginBottom: 24,
-	},
-	highlightText: {
-		color: '#111827',
-		fontWeight: '700',
-	},
-	infoBox: {
-		flexDirection: 'row',
-		backgroundColor: '#FEF3C7',
-		padding: 16,
-		borderRadius: 12,
-		alignItems: 'center',
-		marginBottom: 32,
-		borderWidth: 1,
-		borderColor: '#FDE68A',
-	},
-	infoText: {
-		flex: 1,
-		marginLeft: 12,
-		fontSize: 14,
-		color: '#92400E',
-		lineHeight: 20,
-		fontWeight: '500',
-	},
-	primaryButton: {
-		width: '100%',
-		height: 56,
-		backgroundColor: BRAND_COLOR,
-		borderRadius: 16,
-		alignItems: 'center',
-		justifyContent: 'center',
-		shadowColor: BRAND_COLOR,
-		shadowOffset: { width: 0, height: 4 },
-		shadowOpacity: 0.2,
-		shadowRadius: 8,
-		elevation: 3,
-		marginBottom: 24,
-	},
-	primaryButtonText: {
-		color: '#FFFFFF',
-		fontSize: 16,
-		fontWeight: '700',
-	},
-	resendButtonInline: {
-		paddingVertical: 8,
-	},
-	resendTextInline: {
-		fontSize: 15,
-		color: BRAND_COLOR,
-		fontWeight: '600',
 	},
 });

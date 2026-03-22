@@ -6,6 +6,7 @@
 // - Bundle category matching
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { verifyServiceRole, unauthorizedResponse } from '../_shared/auth.ts';
 
 // CORS headers
 const corsHeaders = {
@@ -57,6 +58,12 @@ Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+
+  // Verify caller has service_role authorization (admin/batch only)
+  const { authorized, error: authError } = verifyServiceRole(req);
+  if (!authorized) {
+    return unauthorizedResponse(authError || 'Forbidden', corsHeaders, 403);
   }
 
   try {

@@ -1026,7 +1026,7 @@ export function Step13_Summary({ formData, updateFormData, isSelf, ...props }: S
     );
 }
 
-const BRAND_COLOR = '#E07B39';
+const BRAND_COLOR = '#f75507';
 
 const styles = StyleSheet.create({
     notesContainer: {

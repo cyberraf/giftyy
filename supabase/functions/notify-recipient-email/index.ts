@@ -1,4 +1,6 @@
 // @ts-nocheck
+import { verifyServiceRole, unauthorizedResponse } from '../_shared/auth.ts';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -23,6 +25,12 @@ type NotifyPayload = {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+
+  // Verify caller has service_role authorization (internal calls only)
+  const { authorized, error: authError } = verifyServiceRole(req);
+  if (!authorized) {
+    return unauthorizedResponse(authError || 'Forbidden', corsHeaders, 403);
   }
 
   if (!RESEND_API_KEY) {

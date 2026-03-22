@@ -4,7 +4,7 @@
  * Designed to feel energetic, visually colorful, and irresistible
  */
 
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
 	Dimensions,
@@ -38,9 +38,10 @@ import { useProducts } from '@/contexts/ProductsContext';
 import { getVendorsInfo, type VendorInfo } from '@/lib/vendor-utils';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-// 3-column grid card width (matches styles.scrollContent padding + the 12px inter-card spacing used in the grid)
 const GRID_GAP = 12;
 const CARD_WIDTH = (SCREEN_WIDTH - (GIFTYY_THEME.spacing.lg * 2) - (GRID_GAP * 2)) / 3;
+// 2-column grid for Lightning Deals (Flash Deals)
+const LIGHTNING_CARD_WIDTH = (SCREEN_WIDTH - (GIFTYY_THEME.spacing.lg * 2) - GRID_GAP) / 2;
 
 type DealCategory = 'flash' | 'top-picks' | 'seasonal' | 'vendor-specials' | 'under-20' | 'last-chance';
 type SortOption = 'discount-high' | 'discount-low' | 'price-low' | 'price-high' | 'name-asc' | 'name-desc';
@@ -56,6 +57,7 @@ type FilterState = {
 export default function DealsScreen() {
 	const { top, bottom } = useSafeAreaInsets();
 	const router = useRouter();
+	const pathname = usePathname();
 	const { setVisible } = useBottomBarVisibility();
 
 	// Contexts
@@ -276,61 +278,13 @@ export default function DealsScreen() {
 		}
 	}, [refreshProducts]);
 
-	const headerPaddingTop = top + 72;
-	// Calculate responsive header height: original base (110) + safe area top
-	// Original was 110px (for devices without notch), now adapts to safe area
-	const headerHeight = 110 + top + 72;
-
 	return (
 		<View style={styles.container}>
-			{/* Header */}
-			<Animated.View
-				entering={FadeInDown.duration(300)}
-				style={[
-					styles.header,
-					{
-						paddingTop: headerPaddingTop,
-					},
-				]}
-			>
-				<View style={styles.headerContent}>
-					<View style={styles.headerLeft}>
-						<Pressable onPress={() => router.back()} style={styles.backButton}>
-							<IconSymbol
-								name="chevron.left"
-								size={24}
-								color={GIFTYY_THEME.colors.gray700}
-							/>
-						</Pressable>
-						<View style={styles.headerTextContainer}>
-							<Text style={styles.headerTitle}>Deals & Specials 🎉</Text>
-							<Text style={styles.headerSubtitle}>
-								Save big on trending gifts and limited-time offers
-							</Text>
-						</View>
-					</View>
-					<Pressable
-						onPress={() => setShowFilters(true)}
-						style={styles.filterButton}
-					>
-						<IconSymbol name="slider.horizontal.3" size={22} color={GIFTYY_THEME.colors.gray700} />
-						{(filters.minPrice !== null || filters.maxPrice !== null || filters.minDiscount !== null || filters.sortBy !== 'discount-high') && (
-							<View style={styles.filterBadge}>
-								<Text style={styles.filterBadgeText}>
-									{[filters.minPrice !== null || filters.maxPrice !== null, filters.minDiscount !== null, filters.sortBy !== 'discount-high'].filter(Boolean).length}
-								</Text>
-							</View>
-						)}
-					</Pressable>
-				</View>
-			</Animated.View>
-			{/* Main Content */}
 			<ScrollView
 				style={styles.scrollView}
 				contentContainerStyle={[
 					styles.scrollContent,
 					{
-						paddingTop: headerHeight + GIFTYY_THEME.spacing.sm, // Responsive padding based on header height
 						paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 24
 					},
 				]}
@@ -344,6 +298,40 @@ export default function DealsScreen() {
 					/>
 				}
 			>
+				{/* Header - Now inside ScrollView */}
+				<Animated.View
+					style={[
+						styles.header,
+						{
+							paddingTop: top + 80, // Increased to clear global header (back button, cart)
+						},
+					]}
+				>
+					<View style={styles.headerContent}>
+						<View style={styles.headerLeft}>
+							{/* Back is GlobalHeader — spacer keeps title aligned with filter */}
+							<View style={styles.backButton} />
+							<View style={styles.headerTextContainer}>
+								<Text style={styles.headerTitle}>Deals</Text>
+							</View>
+						</View>
+						<Pressable
+							onPress={() => setShowFilters(true)}
+							style={styles.filterButton}
+						>
+							<IconSymbol name="slider.horizontal.3" size={22} color={GIFTYY_THEME.colors.gray700} />
+							{(filters.minPrice !== null || filters.maxPrice !== null || filters.minDiscount !== null || filters.sortBy !== 'discount-high') && (
+								<View style={styles.filterBadge}>
+									<Text style={styles.filterBadgeText}>
+										{[filters.minPrice !== null || filters.maxPrice !== null, filters.minDiscount !== null, filters.sortBy !== 'discount-high'].filter(Boolean).length}
+									</Text>
+								</View>
+							)}
+						</Pressable>
+					</View>
+				</Animated.View>
+
+				{/* Main Content */}
 				{loading && products.length === 0 ? (
 					<View style={styles.loadingContainer}>
 						<Text style={styles.loadingText}>Loading amazing deals...</Text>
@@ -364,49 +352,46 @@ export default function DealsScreen() {
 					</View>
 				) : (
 					<>
-						{/* Deal Category Tabs */}
-						<DealCategoryTabs
-							activeCategory={activeCategory}
-							onCategoryChange={setActiveCategory}
-						/>
+						{/* Deal Category Tabs - Removed per user request */}
 
-						{/* Show other sections only when no filters are active */}
+						{/* Show other sections only when no search or advanced filters are active */}
 						{!hasActiveFilters && (
 							<>
 								{/* Lightning Deals Section */}
 								{lightningDeals.length > 0 && (
-									<Animated.View entering={FadeInUp.duration(400).delay(200)}>
+									<View>
 										<View style={styles.sectionHeader}>
-											<IconSymbol name="bolt.fill" size={20} color={GIFTYY_THEME.colors.error} />
-											<Text style={styles.sectionTitle}>Lightning Deals ⚡</Text>
+											<View style={styles.sectionTitleContainer}>
+												<IconSymbol name="bolt.fill" size={20} color={GIFTYY_THEME.colors.primary} />
+												<Text style={styles.sectionTitle}>Lightning Deals</Text>
+											</View>
 										</View>
-										<ScrollView
-											horizontal
-											showsHorizontalScrollIndicator={false}
-											contentContainerStyle={styles.lightningDealsContainer}
-										>
-											{lightningDeals.map((deal, index) => (
+										<View style={styles.lightningGrid}>
+											{lightningDeals.slice(0, 6).map((deal, index) => (
 												<LightningDealCard
 													key={deal.id}
 													product={deal}
 													stockClaimed={deal.stockClaimed || 0}
 													totalStock={deal.totalStock || 100}
+													width={LIGHTNING_CARD_WIDTH}
 													onPress={() => router.push({
 														pathname: '/(buyer)/(tabs)/product/[id]',
-														params: { id: deal.id },
-													})}
+														params: { id: deal.id, returnTo: pathname },
+													} as any)}
 												/>
 											))}
-										</ScrollView>
-									</Animated.View>
+										</View>
+									</View>
 								)}
 
 								{/* Vendor Promotions */}
 								{vendorPromotions.length > 0 && (
-									<Animated.View entering={FadeInUp.duration(400).delay(300)}>
+									<View>
 										<View style={styles.sectionHeader}>
-											<IconSymbol name="storefront.fill" size={20} color={GIFTYY_THEME.colors.primary} />
-											<Text style={styles.sectionTitle}>Vendor Specials</Text>
+											<View style={styles.sectionTitleContainer}>
+												<IconSymbol name="storefront.fill" size={20} color={GIFTYY_THEME.colors.primary} />
+												<Text style={styles.sectionTitle}>Vendor Specials</Text>
+											</View>
 										</View>
 										<ScrollView
 											horizontal
@@ -421,28 +406,29 @@ export default function DealsScreen() {
 													productCount={promo.products.length}
 													onPress={() => router.push({
 														pathname: '/(buyer)/vendor/[id]',
-														params: { id: promo.vendor!.id },
-													})}
+														params: { id: promo.vendor!.id, returnTo: pathname },
+													} as any)}
 												/>
 											))}
 										</ScrollView>
-									</Animated.View>
+									</View>
 								)}
 
 								{/* Trending Right Now Grid (3 columns) */}
 								{filteredDeals.length > 0 && (
-									<Animated.View entering={FadeInUp.duration(400).delay(400)}>
+									<View>
 										<View style={styles.sectionHeader}>
-											<IconSymbol name="flame.fill" size={20} color={GIFTYY_THEME.colors.error} />
-											<Text style={styles.sectionTitle}>Trending Right Now</Text>
+											<View style={styles.sectionTitleContainer}>
+												<IconSymbol name="flame.fill" size={18} color={GIFTYY_THEME.colors.primary} />
+												<Text style={styles.sectionTitle}>Trending Now</Text>
+											</View>
 										</View>
 										<View style={styles.dealsGrid}>
 											{filteredDeals.slice(0, 12).map((product, index) => {
 												const isLastInRow = (index + 1) % 3 === 0;
 												return (
-													<Animated.View
+													<View
 														key={`${product.id}-trending`}
-														entering={FadeInUp.duration(400).delay(500 + index * 40)}
 														style={{
 															marginRight: isLastInRow ? 0 : 12,
 															marginBottom: 12,
@@ -459,16 +445,16 @@ export default function DealsScreen() {
 															onPress={() =>
 																router.push({
 																	pathname: '/(buyer)/(tabs)/product/[id]',
-																	params: { id: product.id },
-																})
+																	params: { id: product.id, returnTo: pathname },
+																} as any)
 															}
 															width={CARD_WIDTH}
 														/>
-													</Animated.View>
+													</View>
 												);
 											})}
 										</View>
-									</Animated.View>
+									</View>
 								)}
 							</>
 						)}
@@ -478,16 +464,16 @@ export default function DealsScreen() {
 							<Animated.View entering={FadeInUp.duration(400).delay(hasActiveFilters ? 100 : 500)}>
 								<View style={styles.sectionHeader}>
 									<View style={styles.sectionTitleContainer}>
-										<IconSymbol name="tag.fill" size={20} color={GIFTYY_THEME.colors.primary} />
+										<IconSymbol name="tag.fill" size={18} color={GIFTYY_THEME.colors.primary} />
 										<Text style={styles.sectionTitle}>
 											{hasActiveFilters
 												? 'Filtered Deals'
-												: activeCategory === 'flash' ? 'All Flash Deals' :
-													activeCategory === 'top-picks' ? 'Top Picks for You' :
-														activeCategory === 'seasonal' ? 'Seasonal Gifts' :
-															activeCategory === 'vendor-specials' ? 'Vendor Specials' :
-																activeCategory === 'under-20' ? 'Deals Under $20' :
-																	'Last Chance Deals'}
+												: activeCategory === 'flash' ? 'All Offers' :
+													activeCategory === 'top-picks' ? 'Curated for You' :
+														activeCategory === 'seasonal' ? 'Seasonal Collection' :
+															activeCategory === 'vendor-specials' ? 'Vendor Boutique' :
+																activeCategory === 'under-20' ? 'Gifts Under $20' :
+																	'Final Offers'}
 										</Text>
 									</View>
 									<Text style={styles.dealsCount}>{filteredDeals.length} {filteredDeals.length === 1 ? 'deal' : 'deals'}</Text>
@@ -514,8 +500,8 @@ export default function DealsScreen() {
 													vendorName={product.vendorId ? vendorsMap.get(product.vendorId)?.storeName : undefined}
 													onPress={() => router.push({
 														pathname: '/(buyer)/(tabs)/product/[id]',
-														params: { id: product.id },
-													})}
+														params: { id: product.id, returnTo: pathname },
+													} as any)}
 													width={CARD_WIDTH}
 												/>
 											</Animated.View>
@@ -743,17 +729,11 @@ const styles = StyleSheet.create({
 		backgroundColor: GIFTYY_THEME.colors.background,
 	},
 	header: {
-		position: 'absolute',
-		top: 0,
-		left: 0,
-		right: 0,
-		zIndex: 20,
 		backgroundColor: GIFTYY_THEME.colors.white,
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
+		paddingBottom: 16,
 		borderBottomWidth: 1,
 		borderBottomColor: GIFTYY_THEME.colors.gray200,
-		paddingHorizontal: GIFTYY_THEME.spacing.lg,
-		paddingBottom: 12,
-		...GIFTYY_THEME.shadows.sm,
 	},
 	headerContent: {
 		flexDirection: 'row',
@@ -766,22 +746,22 @@ const styles = StyleSheet.create({
 		flex: 1,
 	},
 	backButton: {
+		width: 40,
+		height: 40,
 		marginRight: 12,
-		padding: 4,
 	},
 	headerTextContainer: {
 		flex: 1,
 	},
 	headerTitle: {
-		fontSize: GIFTYY_THEME.typography.sizes['2xl'],
+		fontSize: 24,
 		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
 		color: GIFTYY_THEME.colors.gray900,
-		marginBottom: 2,
+		marginBottom: 0,
+		letterSpacing: -0.5,
 	},
 	headerSubtitle: {
-		fontSize: GIFTYY_THEME.typography.sizes.sm,
-		color: GIFTYY_THEME.colors.gray500,
-		fontWeight: GIFTYY_THEME.typography.weights.medium,
+		display: 'none',
 	},
 	filterButton: {
 		width: 40,
@@ -815,15 +795,15 @@ const styles = StyleSheet.create({
 		flex: 1,
 	},
 	scrollContent: {
-		// paddingTop is now calculated dynamically in contentContainerStyle based on header height
-		paddingHorizontal: GIFTYY_THEME.spacing.lg,
+		paddingBottom: 24,
 	},
 	sectionHeader: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'space-between',
-		marginBottom: GIFTYY_THEME.spacing.md,
-		marginTop: GIFTYY_THEME.spacing.xl,
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
+		marginBottom: 16,
+		marginTop: 32,
 	},
 	sectionTitleContainer: {
 		flexDirection: 'row',
@@ -831,26 +811,35 @@ const styles = StyleSheet.create({
 		flex: 1,
 	},
 	sectionTitle: {
-		fontSize: GIFTYY_THEME.typography.sizes.lg,
-		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+		fontSize: 16,
+		fontWeight: GIFTYY_THEME.typography.weights.bold,
 		color: GIFTYY_THEME.colors.gray900,
 		marginLeft: 8,
+		letterSpacing: -0.2,
 	},
 	dealsCount: {
 		fontSize: GIFTYY_THEME.typography.sizes.sm,
 		fontWeight: GIFTYY_THEME.typography.weights.medium,
 		color: GIFTYY_THEME.colors.gray500,
 	},
+	lightningGrid: {
+		flexDirection: 'row',
+		flexWrap: 'wrap',
+		gap: GRID_GAP,
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
+	},
 	lightningDealsContainer: {
-		paddingVertical: GIFTYY_THEME.spacing.sm,
+		display: 'none',
 	},
 	vendorPromotionsContainer: {
 		paddingVertical: GIFTYY_THEME.spacing.sm,
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
 	},
 	dealsGrid: {
 		flexDirection: 'row',
 		flexWrap: 'wrap',
 		marginTop: GIFTYY_THEME.spacing.sm,
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
 	},
 	loadingContainer: {
 		paddingVertical: 60,

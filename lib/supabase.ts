@@ -3,7 +3,9 @@ import { Platform } from 'react-native';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// Platform-specific storage adapter
+// Platform-specific storage adapter with error handling.
+// AsyncStorage can fail silently (permissions, full disk, corruption),
+// which causes refresh tokens to be lost and users to be logged out.
 function getStorageAdapter() {
 	if (Platform.OS === 'web') {
 		// Use localStorage for web
@@ -28,8 +30,32 @@ function getStorageAdapter() {
 			},
 		};
 	} else {
-		// Use standard imported AsyncStorage for React Native
-		return AsyncStorage;
+		// Wrap AsyncStorage with error handling so storage failures
+		// don't silently lose auth tokens.
+		return {
+			getItem: async (key: string): Promise<string | null> => {
+				try {
+					return await AsyncStorage.getItem(key);
+				} catch (e) {
+					console.warn('[Storage] getItem failed for', key, e);
+					return null;
+				}
+			},
+			setItem: async (key: string, value: string): Promise<void> => {
+				try {
+					await AsyncStorage.setItem(key, value);
+				} catch (e) {
+					console.error('[Storage] setItem failed for', key, e);
+				}
+			},
+			removeItem: async (key: string): Promise<void> => {
+				try {
+					await AsyncStorage.removeItem(key);
+				} catch (e) {
+					console.warn('[Storage] removeItem failed for', key, e);
+				}
+			},
+		};
 	}
 }
 

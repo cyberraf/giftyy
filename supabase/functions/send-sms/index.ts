@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import { AwsClient } from 'https://esm.sh/aws4fetch@1.0.17'
+import { verifyUserAuth, verifyServiceRole, unauthorizedResponse } from '../_shared/auth.ts'
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -13,6 +14,15 @@ Deno.serve(async (req) => {
     }
 
     try {
+        // Allow either authenticated user or service role (internal calls)
+        const { authorized: isServiceRole } = verifyServiceRole(req)
+        if (!isServiceRole) {
+            const { user, error: authError } = await verifyUserAuth(req)
+            if (!user) {
+                return unauthorizedResponse(authError || 'Unauthorized', corsHeaders)
+            }
+        }
+
         const supabaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''

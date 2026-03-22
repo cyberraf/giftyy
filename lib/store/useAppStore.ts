@@ -10,6 +10,7 @@ type AppState = {
 		sessionId: string | null;
 		text: string;
 		isExpanded: boolean;
+		sessionState: any | null;
 	} | null;
 	setHomeAiState: (state: Partial<NonNullable<AppState['homeAiState']>>) => void;
 	
@@ -39,7 +40,7 @@ export const useAppStore = create<AppState>((set) => ({
 	homeAiState: null,
 	setHomeAiState: (newState) => set((s) => ({
 		homeAiState: {
-			...(s.homeAiState || { messages: null, sessionId: null, text: '', isExpanded: false }),
+			...(s.homeAiState || { messages: null, sessionId: null, text: '', isExpanded: false, sessionState: null }),
 			...newState
 		}
 	})),

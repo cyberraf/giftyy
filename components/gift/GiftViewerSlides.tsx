@@ -1,4 +1,3 @@
-import ReactionRecorder from '@/components/gift/ReactionRecorder';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { responsiveFontSize, scale, verticalScale } from '@/utils/responsive';
@@ -6,7 +5,7 @@ import { setAudioModeAsync } from 'expo-audio';
 import { SimpleVideo } from '@/components/SimpleVideo';
 import { BlurView } from 'expo-blur';
 import { LinearGradient } from 'expo-linear-gradient';
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     ActivityIndicator,
     Dimensions,
@@ -25,6 +24,8 @@ import Animated, {
     withSpring,
     withTiming,
 } from 'react-native-reanimated';
+
+const ReactionRecorder = React.lazy(() => import('@/components/gift/ReactionRecorder'));
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.2;
@@ -493,23 +494,25 @@ export default function GiftViewerSlides({
                 ))}
             </View>
 
-            {/* Reaction Recorder overlay */}
+            {/* Reaction Recorder overlay (lazy-loaded to defer expo-camera) */}
             {userId && videoMessageId && (
-                <ReactionRecorder
-                    orderId={orderId}
-                    videoMessageId={videoMessageId}
-                    userId={userId}
-                    showPrompt={showRecordingPrompt}
-                    onReactionSaved={(url, _duration) => {
-                        setReactionUrl(url);
-                        setIsRecording(false);
-                        setShowRecordingPrompt(false);
-                    }}
-                    onDismiss={() => {
-                        setShowRecordingPrompt(false);
-                        setIsRecording(false);
-                    }}
-                />
+                <Suspense fallback={<ActivityIndicator size="large" color={GIFTYY_THEME.colors.primary} />}>
+                    <ReactionRecorder
+                        orderId={orderId}
+                        videoMessageId={videoMessageId}
+                        userId={userId}
+                        showPrompt={showRecordingPrompt}
+                        onReactionSaved={(url, _duration) => {
+                            setReactionUrl(url);
+                            setIsRecording(false);
+                            setShowRecordingPrompt(false);
+                        }}
+                        onDismiss={() => {
+                            setShowRecordingPrompt(false);
+                            setIsRecording(false);
+                        }}
+                    />
+                </Suspense>
             )}
         </View>
     );

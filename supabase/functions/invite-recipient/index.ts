@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { verifyUserAuth, unauthorizedResponse } from '../_shared/auth.ts';
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -15,6 +16,12 @@ Deno.serve(async (req) => {
     }
 
     try {
+        // Verify the caller is an authenticated user
+        const { user, error: authError } = await verifyUserAuth(req);
+        if (!user) {
+            return unauthorizedResponse(authError || 'Unauthorized', corsHeaders);
+        }
+
         const supabaseClient = createClient(
             Deno.env.get('SUPABASE_URL') ?? '',
             Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -39,7 +46,7 @@ Deno.serve(async (req) => {
             email,
             relationship,
             nickname,
-            senderId,
+            senderId: _bodySenderId, // Ignored — using authenticated user.id instead
             profileId: passedProfileId,
             address,
             apartment,
@@ -50,6 +57,9 @@ Deno.serve(async (req) => {
             isAnonymous = false,
             action = 'invite'
         } = body;
+
+        // Use the authenticated user's ID instead of trusting body-provided senderId
+        const senderId = user.id;
 
         const normalizePhone = (input: string): string | null => {
             if (!input || typeof input !== 'string' || input.trim() === '') return null

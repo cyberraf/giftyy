@@ -1,14 +1,14 @@
 import React, { useState, useCallback } from 'react';
 import { View, Text, TextInput, Pressable, StyleSheet, FlatList, ActivityIndicator, ScrollView, Alert } from 'react-native';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import { useProducts } from '@/contexts/ProductsContext';
 import { getGiftSuggestions, type GiftSuggestion, isOpenAIConfigured } from '@/lib/openai';
 import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function GiftFinderScreen() {
 	const router = useRouter();
+	const pathname = usePathname();
 	const { top } = useSafeAreaInsets();
 	const { products, loading: productsLoading } = useProducts();
 	const [prompt, setPrompt] = useState('');
@@ -51,7 +51,7 @@ export default function GiftFinderScreen() {
 
 	const handleSuggestionPress = useCallback((suggestion: GiftSuggestion) => {
 		if (suggestion.productId) {
-			router.push(`/(buyer)/(tabs)/product/${suggestion.productId}`);
+			router.push({ pathname: '/(buyer)/(tabs)/product/[id]', params: { id: suggestion.productId, returnTo: pathname } } as any);
 		} else {
 			// If no product ID, navigate to home or collections
 			router.push('/(buyer)/(tabs)');
@@ -60,10 +60,8 @@ export default function GiftFinderScreen() {
 
 	return (
 		<View style={styles.container}>
-			<View style={[styles.header, { paddingTop: top + 8 }]}>
-				<Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={12}>
-					<IconSymbol name="chevron.left" size={22} color="#1f1f1f" />
-				</Pressable>
+			<View style={[styles.header, { paddingTop: top + 56 }]}>
+				<View style={styles.backButton} />
 				<Text style={styles.headerTitle}>AI Gift Finder</Text>
 				<View style={{ width: 40 }} />
 			</View>
@@ -155,17 +153,6 @@ const styles = StyleSheet.create({
 	backButton: {
 		width: 40,
 		height: 40,
-		borderRadius: 20,
-		alignItems: 'center',
-		justifyContent: 'center',
-		backgroundColor: '#FFFFFF',
-		borderWidth: 1,
-		borderColor: '#E4E1DC',
-		shadowColor: '#000',
-		shadowOpacity: 0.05,
-		shadowRadius: 6,
-		shadowOffset: { width: 0, height: 2 },
-		elevation: 2,
 	},
 	headerTitle: {
 		fontFamily: BRAND_FONT,

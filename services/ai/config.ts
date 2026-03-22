@@ -13,7 +13,7 @@ console.log('Dotenv Load Result:', result.error ? result.error : 'Success');
 console.log('Read EXPO_PUBLIC_SUPABASE_URL directly after dotenv:', process.env.EXPO_PUBLIC_SUPABASE_URL);
 
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.EXPO_PUBLIC_SUPABASE_URL || '';
-const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.EXPO_PUBLIC_SUPABASE_SERVICE_ROLE_KEY || '';
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || process.env.EXPO_PUBLIC_OPENAI_API_KEY || '';
 
 if (!SUPABASE_URL) throw new Error('[AI Service] SUPABASE_URL is not set (read: ' + SUPABASE_URL + ')');

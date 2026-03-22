@@ -1,4 +1,15 @@
+import * as Sentry from '@sentry/react-native';
 import { configureReanimatedLogger } from 'react-native-reanimated';
+
+// Initialize Sentry for error tracking and performance monitoring
+Sentry.init({
+  dsn: process.env.EXPO_PUBLIC_SENTRY_DSN || '',
+  // Only enable in production builds
+  enabled: !__DEV__,
+  tracesSampleRate: 0.2,
+  // Capture unhandled promise rejections
+  enableAutoSessionTracking: true,
+});
 
 try {
   configureReanimatedLogger({
@@ -33,7 +44,6 @@ const AppTheme = {
 
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useFonts } from 'expo-font';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Image, KeyboardAvoidingView, Platform, Text, View } from 'react-native';
@@ -56,6 +66,11 @@ import { CheckoutProvider } from '@/lib/CheckoutContext';
 import { SafeStripeProvider } from '@/lib/stripe-safe';
 import { TourProvider } from '@/contexts/TourContext';
 import { TourOverlay } from '@/components/tour/TourOverlay';
+import { NetworkProvider } from '@/contexts/NetworkContext';
+import { initSyncManager } from '@/lib/offline/syncManager';
+import { startAnalytics, stopAnalytics, identifyUser, trackScreenView } from '@/lib/analytics';
+import { setupForegroundHandler, setupNotificationResponseHandler } from '@/lib/notifications/registerForPush';
+import { registerNotificationCategories } from '@/lib/notifications/categories';
 
 export const unstable_settings = {
   anchor: '(buyer)',
@@ -69,14 +84,9 @@ import { useTranslation } from 'react-i18next';
 import { useSettings } from '@/hooks/useSettings';
 import { SettingsProvider } from '@/contexts/SettingsContext';
 
-export default function RootLayout() {
+function RootLayout() {
   const [appReady, setAppReady] = useState(false);
   const [showLoader, setShowLoader] = useState(true);
-
-  // Load fonts
-  const [fontsLoaded, fontError] = useFonts({
-    'Cooper BT': require('@/assets/fonts/Cooper-Md-BT-Medium.ttf'),
-  });
 
   // Animation refs
   const overlayOpacity = useRef(new Animated.Value(1)).current;
@@ -89,8 +99,18 @@ export default function RootLayout() {
   // Initialize global alert system to intercept Alert.alert calls
   useEffect(() => {
     initializeGlobalAlert();
+    setupForegroundHandler();
+    registerNotificationCategories();
+    const cleanupResponseHandler = setupNotificationResponseHandler();
+    const cleanupSyncManager = initSyncManager();
+    startAnalytics();
     // Hide native splash screen once the custom animation overlay is mounted
     SplashScreen.hideAsync().catch(() => { });
+    return () => {
+      cleanupResponseHandler();
+      cleanupSyncManager();
+      stopAnalytics();
+    };
   }, []);
 
   // Splash Screen Animation Sequence
@@ -151,8 +171,7 @@ export default function RootLayout() {
 
   // Exit Animation
   useEffect(() => {
-    // Only exit when app state is ready AND fonts are loaded (or failed to load)
-    if (!appReady || (!fontsLoaded && !fontError)) return;
+    if (!appReady) return;
 
     Animated.timing(overlayOpacity, {
       toValue: 0,
@@ -162,14 +181,7 @@ export default function RootLayout() {
     }).start(() => {
       setShowLoader(false);
     });
-  }, [appReady, fontsLoaded, fontError]);
-  // Global font family setup (uses Cooper BT if added to the project)
-  useEffect(() => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const RNText: any = Text as any;
-    RNText.defaultProps = RNText.defaultProps || {};
-    RNText.defaultProps.style = [RNText.defaultProps.style, { fontFamily: 'Cooper BT' }];
-  }, []);
+  }, [appReady]);
 
   return (
     <I18nextProvider i18n={i18nInstance}>
@@ -178,6 +190,7 @@ export default function RootLayout() {
           <TourProvider>
             <AlertProvider>
               <ToastProvider>
+                <NetworkProvider>
                 <AuthProvider>
                   <SettingsProvider>
                     <LanguageSync />
@@ -220,6 +233,7 @@ export default function RootLayout() {
                   </CartProvider>
                 </SettingsProvider>
                 </AuthProvider>
+                </NetworkProvider>
               </ToastProvider>
             </AlertProvider>
           </TourProvider>
@@ -273,7 +287,6 @@ export default function RootLayout() {
                     color: '#f75507',
                     letterSpacing: -0.5,
                     textAlign: 'center',
-                    fontFamily: 'Cooper BT',
                   }}>
                   Giftyy
                 </Text>
@@ -335,10 +348,30 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, loading, isOffline } = useAuth();
   const segments = useSegments();
   const router = useRouter();
+
+  // Identify user for analytics
+  useEffect(() => {
+    identifyUser(user?.id ?? null);
+  }, [user?.id]);
+
+  // Track screen views based on route segments
+  const prevScreenRef = useRef('');
+  useEffect(() => {
+    if (loading) return;
+    const screen = segments.join('/') || 'index';
+    if (screen !== prevScreenRef.current) {
+      prevScreenRef.current = screen;
+      trackScreenView(screen);
+    }
+  }, [segments, loading]);
+
   useEffect(() => {
     if (loading) return;
 
-    if (isOffline) {
+    if (isOffline && !user) {
+      // Only redirect to offline screen if there's no authenticated user.
+      // If we have a user session, a transient network blip (e.g., returning from
+      // Chrome Custom Tabs on Android) shouldn't kick them to the offline screen.
       router.replace('/offline');
       return;
     }
@@ -347,6 +380,12 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
     const inAuthGroup = s[0] === '(auth)';
     const isIndex = s.length === 0 || s.includes('index');
     const isOfflineScreen = (segments as any).includes('offline');
+
+    // If we recovered from offline (have user now), navigate away from offline screen
+    if (isOfflineScreen && user && !isOffline) {
+      router.replace('/(buyer)/(tabs)');
+      return;
+    }
 
     if (isOfflineScreen) return;
 
@@ -361,3 +400,5 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
   return <>{children}</>;
 }
+
+export default Sentry.wrap(RootLayout);

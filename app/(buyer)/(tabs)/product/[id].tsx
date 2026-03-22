@@ -6,9 +6,10 @@
 import AddedToCartDialog from '@/components/AddedToCartDialog';
 import { AccordionSection } from '@/components/pdp/AccordionSection';
 import { ProductMediaCarousel } from '@/components/pdp/ProductMediaCarousel';
+import { ProductImagePreviewModal } from '@/components/pdp/ProductImagePreviewModal';
 import { ProductVariantsSelector } from '@/components/pdp/ProductVariantsSelector';
 import { RecommendationsCarousel } from '@/components/pdp/RecommendationsCarousel';
-import { StickyBottomBar } from '@/components/pdp/StickyBottomBar';
+// StickyBottomBar removed — Add to Cart is inline
 import { VendorInfoCard } from '@/components/pdp/VendorInfoCard';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
@@ -20,6 +21,7 @@ import { useCheckout } from '@/lib/CheckoutContext';
 import { logProductAnalyticsEvent } from '@/lib/product-analytics';
 import { supabase } from '@/lib/supabase';
 import { getVendorsInfo } from '@/lib/vendor-utils';
+import { smartBuyerBack } from '@/lib/utils/navigation';
 import { useLocalSearchParams, usePathname, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -37,11 +39,7 @@ import Animated, { FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-// Tab bar height: 68px base + safe area bottom (8-34px)
-// StickyBottomBar will sit above the tab bar (reduced height)
-const TAB_BAR_HEIGHT = 68;
-const STICKY_BAR_HEIGHT = 70; // Reduced from 80px
-const TOTAL_BOTTOM_HEIGHT = TAB_BAR_HEIGHT + STICKY_BAR_HEIGHT; // Combined height of both bars
+// Layout constants
 
 // Types (preserved from original)
 type ProductVariation = {
@@ -92,6 +90,8 @@ export default function ProductDetailsScreen() {
 	const viewLoggedRef = useRef<string | null>(null);
 	const [refreshing, setRefreshing] = useState(false);
 	const [showAdded, setShowAdded] = useState(false);
+	const [previewVisible, setPreviewVisible] = useState(false);
+	const [previewIndex, setPreviewIndex] = useState(0);
 
 	// Fetch specific product if not in context
 	useEffect(() => {
@@ -926,6 +926,28 @@ export default function ProductDetailsScreen() {
 		});
 	}, [relatedProducts]);
 
+	// Build tag chips from product metadata
+	const tagChips = useMemo(() => {
+		if (!product) return [];
+		const chips: { label: string; color: string; bg: string; icon: string }[] = [];
+		(product.occasionTags || []).forEach(tag => {
+			chips.push({ label: tag.replace(/-/g, ' '), color: GIFTYY_THEME.colors.primary, bg: GIFTYY_THEME.colors.primary + '12', icon: 'gift.fill' });
+		});
+		(product.targetAudience || []).forEach(tag => {
+			chips.push({ label: tag.replace(/-/g, ' ').replace('for ', ''), color: '#7c3aed', bg: '#7c3aed12', icon: 'person.fill' });
+		});
+		(product.giftStyleTags || []).forEach(tag => {
+			chips.push({ label: tag.replace(/-/g, ' '), color: '#0891b2', bg: '#0891b212', icon: 'sparkles' });
+		});
+		(product.interestTags || []).forEach(tag => {
+			chips.push({ label: tag.replace(/-/g, ' '), color: '#059669', bg: '#05966912', icon: 'star.fill' });
+		});
+		(product.relationshipTags || []).forEach(tag => {
+			chips.push({ label: tag.replace(/-/g, ' '), color: '#d97706', bg: '#d9770612', icon: 'heart.fill' });
+		});
+		return chips;
+	}, [product]);
+
 	// Handlers
 	const handleShare = async () => {
 		if (!product) return;
@@ -1008,7 +1030,7 @@ export default function ProductDetailsScreen() {
 	};
 
 	// Loading state
-	if (productsLoading) {
+	if (productsLoading || isFetchingLocal) {
 		return (
 			<View style={styles.loadingContainer}>
 				<ActivityIndicator size="large" color={GIFTYY_THEME.colors.primary} />
@@ -1024,7 +1046,10 @@ export default function ProductDetailsScreen() {
 				<IconSymbol name="exclamationmark.triangle" size={48} color={GIFTYY_THEME.colors.gray400} />
 				<Text style={styles.errorTitle}>Product not found</Text>
 				<Text style={styles.errorText}>The product you're looking for doesn't exist or has been removed.</Text>
-				<Pressable onPress={() => router.back()} style={styles.errorButton}>
+				<Pressable
+					onPress={() => smartBuyerBack(router, { returnTo: params.returnTo })}
+					style={styles.errorButton}
+				>
 					<Text style={styles.errorButtonText}>Go Back</Text>
 				</Pressable>
 			</View>
@@ -1046,9 +1071,9 @@ export default function ProductDetailsScreen() {
 			{/* Scrollable Content */}
 			<ScrollView
 				style={styles.scrollView}
-				contentContainerStyle={{ 
-					paddingTop: top + 72, // Clear GlobalHeader
-					paddingBottom: TOTAL_BOTTOM_HEIGHT + bottom + 32 
+				contentContainerStyle={{
+					paddingTop: top, // Overlay GlobalHeader components
+					paddingBottom: bottom + 24
 				}}
 				showsVerticalScrollIndicator={false}
 				refreshControl={
@@ -1061,7 +1086,13 @@ export default function ProductDetailsScreen() {
 				}
 			>
 				<View style={styles.carouselWrapper}>
-					<ProductMediaCarousel key={imageKey} images={imageUris} />
+					<ProductMediaCarousel
+						images={imageUris}
+						onPress={(index) => {
+							setPreviewIndex(index);
+							setPreviewVisible(true);
+						}}
+					/>
 				</View>
 
 				{/* B - Product Title & Price Block */}
@@ -1084,6 +1115,26 @@ export default function ProductDetailsScreen() {
 							</View>
 						)}
 					</View>
+					{/* Add to Cart */}
+					<Pressable
+						onPress={handleAddToCart}
+						disabled={variationsLoading || currentStock === 0}
+						style={({ pressed }) => [
+							styles.addToCartInline,
+							pressed && styles.addToCartPressed,
+							currentStock === 0 && styles.addToCartDisabled,
+						]}
+					>
+						<IconSymbol name="cart.fill" size={18} color="#FFF" />
+						<Text style={styles.addToCartInlineText}>
+							{currentStock === 0 ? 'Out of Stock' : 'Add to Cart'}
+						</Text>
+					</Pressable>
+
+					{stockStatus === 'low_stock' && (
+						<Text style={styles.stockWarningText}>Only {currentStock} left in stock!</Text>
+					)}
+
 					{/* Share & Wishlist Actions Row */}
 					<View style={styles.actionButtonsRow}>
 						<Pressable style={styles.actionBtn} onPress={handleShare}>
@@ -1102,19 +1153,24 @@ export default function ProductDetailsScreen() {
 							</Text>
 						</Pressable>
 					</View>
-					{stockStatus === 'low_stock' && (
-						<View style={styles.stockWarning}>
-							<Text style={styles.stockWarningText}>Only {currentStock} left in stock!</Text>
-						</View>
-					)}
-					{stockStatus === 'out_of_stock' && (
-						<View style={styles.stockError}>
-							<Text style={styles.stockErrorText}>Out of stock</Text>
-						</View>
-					)}
 				</Animated.View>
 
-				{/* C - Product Options / Variants (moved above vendor section) */}
+				{/* C - Tags & Occasions */}
+				{tagChips.length > 0 && (
+					<Animated.View entering={FadeInUp.duration(400).delay(120)} style={styles.tagsSection}>
+						<Text style={styles.tagsSectionTitle}>Perfect for</Text>
+						<View style={styles.tagsWrap}>
+							{tagChips.map((chip, i) => (
+								<View key={i} style={[styles.tagChip, { backgroundColor: chip.bg }]}>
+									<IconSymbol name={chip.icon as any} size={12} color={chip.color} />
+									<Text style={[styles.tagChipText, { color: chip.color }]}>{chip.label}</Text>
+								</View>
+							))}
+						</View>
+					</Animated.View>
+				)}
+
+				{/* D - Product Options / Variants (moved above vendor section) */}
 				{variationsLoading ? (
 					<Animated.View entering={FadeInUp.duration(400).delay(150)} style={styles.variationsLoadingContainer}>
 						<ActivityIndicator size="small" color={GIFTYY_THEME.colors.primary} />
@@ -1178,15 +1234,14 @@ export default function ProductDetailsScreen() {
 				)}
 			</ScrollView>
 
-			{/* I - Sticky Bottom Bar (positioned above tab bar) */}
-			<StickyBottomBar
-				price={formattedPrice}
-				originalPrice={formattedOriginalPrice}
-				onAddToCart={handleAddToCart}
+			{/* StickyBottomBar removed — Add to Cart is now inline */}
 
-				disabled={variationsLoading || currentStock === 0}
-				stockStatus={stockStatus}
-				bottomOffset={TAB_BAR_HEIGHT + bottom}
+			{/* Image Preview Modal */}
+			<ProductImagePreviewModal
+				visible={previewVisible}
+				images={imageUris}
+				initialIndex={previewIndex}
+				onClose={() => setPreviewVisible(false)}
 			/>
 
 			{/* Added to Cart Dialog */}
@@ -1302,7 +1357,8 @@ const styles = StyleSheet.create({
 	},
 	titleSection: {
 		paddingHorizontal: GIFTYY_THEME.spacing.lg,
-		paddingVertical: GIFTYY_THEME.spacing.xl,
+		paddingTop: GIFTYY_THEME.spacing.lg,
+		paddingBottom: GIFTYY_THEME.spacing.md,
 		backgroundColor: GIFTYY_THEME.colors.white,
 	},
 	titleRow: {
@@ -1400,6 +1456,70 @@ const styles = StyleSheet.create({
 	variationsErrorSubtext: {
 		fontSize: GIFTYY_THEME.typography.sizes.sm,
 		color: GIFTYY_THEME.colors.gray600,
+	},
+	tagsSection: {
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
+		paddingVertical: GIFTYY_THEME.spacing.md,
+		backgroundColor: GIFTYY_THEME.colors.white,
+		borderTopWidth: 1,
+		borderTopColor: GIFTYY_THEME.colors.gray100,
+	},
+	tagsSectionTitle: {
+		fontSize: GIFTYY_THEME.typography.sizes.sm,
+		fontWeight: GIFTYY_THEME.typography.weights.bold,
+		color: GIFTYY_THEME.colors.gray500,
+		textTransform: 'uppercase' as const,
+		letterSpacing: 0.5,
+		marginBottom: GIFTYY_THEME.spacing.sm,
+	},
+	tagsWrap: {
+		flexDirection: 'row' as const,
+		flexWrap: 'wrap' as const,
+		gap: 8,
+	},
+	tagChip: {
+		flexDirection: 'row' as const,
+		alignItems: 'center' as const,
+		gap: 5,
+		paddingVertical: 5,
+		paddingHorizontal: 10,
+		borderRadius: 999,
+	},
+	tagChipText: {
+		fontSize: GIFTYY_THEME.typography.sizes.xs,
+		fontWeight: GIFTYY_THEME.typography.weights.semibold,
+		textTransform: 'capitalize' as const,
+	},
+	addToCartInline: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'center',
+		gap: 10,
+		backgroundColor: GIFTYY_THEME.colors.primary,
+		paddingVertical: 12,
+		borderRadius: GIFTYY_THEME.radius.full,
+		marginHorizontal: GIFTYY_THEME.spacing.lg,
+		marginTop: GIFTYY_THEME.spacing.md,
+		marginBottom: GIFTYY_THEME.spacing.xs,
+		shadowColor: GIFTYY_THEME.colors.primary,
+		shadowOffset: { width: 0, height: 4 },
+		shadowOpacity: 0.3,
+		shadowRadius: 8,
+		elevation: 6,
+	},
+	addToCartPressed: {
+		opacity: 0.85,
+		transform: [{ scale: 0.97 }],
+	},
+	addToCartDisabled: {
+		backgroundColor: GIFTYY_THEME.colors.gray300,
+		shadowOpacity: 0,
+		elevation: 0,
+	},
+	addToCartInlineText: {
+		color: GIFTYY_THEME.colors.white,
+		fontSize: GIFTYY_THEME.typography.sizes.base,
+		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
 	},
 });
 

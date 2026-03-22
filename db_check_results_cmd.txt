@@ -1,0 +1,15 @@
+Checking products table...
+Total products: 466
+Active products: 400
+Active & Embedded products: 396
+Sample products:
+- Sandalwood Scented Candle for Dad: Price=26.99, Active=true, HasEmbedding=false
+- Complete Beard Grooming Kit: Price=36.99, Active=false, HasEmbedding=false
+- Cards Against Humanity: Nasty Bundle: Price=35, Active=false, HasEmbedding=false
+- Romantic Purple Butterfly Rose Gift: Price=41.99, Active=false, HasEmbedding=false
+- Cozy Wearable Blanket Hoodie: Price=42.99, Active=false, HasEmbedding=false
+- MUSICOZY Sleep Headphones with Eye Mask: Price=54.99, Active=false, HasEmbedding=false
+- Coffee Mug Warmer with Temperature Display: Price=44.99, Active=false, HasEmbedding=false
+- Waffle Knit Pajama Sets for Women: Price=39.59, Active=false, HasEmbedding=false
+- Pixel Art Bluetooth Speaker with LED Display: Price=64.99, Active=false, HasEmbedding=false
+- Cozy Fleece Throw Blanket for Home: Price=32.99, Active=false, HasEmbedding=false

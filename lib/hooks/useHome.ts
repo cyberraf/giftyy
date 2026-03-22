@@ -93,7 +93,12 @@ export function useHome(): UseHomeResult {
 	const [myPreferences, setMyPreferences] = useState<any | null>(homeDataCache?.myPreferences || null);
 
 	// Fetch current user's profile, occasions, and preferences
-	const fetchMyData = useCallback(async () => {
+	const fetchMyData = useCallback(async (forceRefresh = false) => {
+		// Skip fetch if cache is still fresh (unless forced)
+		if (!forceRefresh && homeDataCache && (Date.now() - homeDataCache.lastFetched < 1000 * 60 * 5)) {
+			setProfileLoading(false);
+			return;
+		}
 		setProfileLoading(true);
 		const { data: { user } } = await supabase.auth.getUser();
 		if (!user) {
@@ -177,6 +182,11 @@ export function useHome(): UseHomeResult {
 	//   - Occasions belonging to connected members' profiles (covers shared circle occasions)
 	useEffect(() => {
 		const fetchCircleOccasions = async () => {
+			// Skip fetch if cache is still fresh
+			if (homeDataCache && homeDataCache.circleOccasions && (Date.now() - homeDataCache.lastFetched < 1000 * 60 * 5)) {
+				setCircleOccasionsLoading(false);
+				return;
+			}
 			setCircleOccasionsLoading(true);
 			const { data: { user: currentUser } } = await supabase.auth.getUser();
 			if (!currentUser) return;
@@ -322,7 +332,9 @@ export function useHome(): UseHomeResult {
 	}, [activeRecipient]);
 
 	const refreshOccasions = async () => {
-		await Promise.all([refreshRecipients(), fetchMyData()]);
+		// Invalidate cache so fetches actually run
+		setHomeDataCache({ lastFetched: 0 });
+		await Promise.all([refreshRecipients(), fetchMyData(true)]);
 	};
 
 	// Gift suggestions for the active recipient

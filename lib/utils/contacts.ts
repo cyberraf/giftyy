@@ -51,29 +51,48 @@ export const getNormalizedContacts = async (): Promise<GiftyyContact[]> => {
         throw error;
     }
 
-    const { data } = await Contacts.getContactsAsync({
-        fields: [
-            Contacts.Fields.Emails,
-            Contacts.Fields.PhoneNumbers,
-            Contacts.Fields.Image,
-        ],
-    });
+    // Fetch contacts in pages to avoid memory crashes on large contact lists (1000+)
+    const PAGE_SIZE = 500;
+    const allContacts: GiftyyContact[] = [];
+    let pageOffset = 0;
+    let hasMore = true;
 
-    if (data.length === 0) {
-        return [];
-    }
+    while (hasMore) {
+        const { data, hasNextPage } = await Contacts.getContactsAsync({
+            fields: [
+                Contacts.Fields.FirstName,
+                Contacts.Fields.LastName,
+                Contacts.Fields.Emails,
+                Contacts.Fields.PhoneNumbers,
+            ],
+            pageSize: PAGE_SIZE,
+            pageOffset,
+        });
 
-    return data
-        .filter(contact => contact.phoneNumbers && contact.phoneNumbers.length > 0)
-        .map(contact => {
-            const primaryPhone = contact.phoneNumbers?.[0]?.number;
-            return {
+        console.log(`[Contacts] Page ${Math.floor(pageOffset / PAGE_SIZE) + 1}: fetched ${data.length} contacts`);
+
+        for (const contact of data) {
+            if (!contact.phoneNumbers || contact.phoneNumbers.length === 0) continue;
+
+            const primaryPhone = contact.phoneNumbers[0]?.number;
+            const displayName = contact.name
+                || [contact.firstName, contact.lastName].filter(Boolean).join(' ')
+                || primaryPhone
+                || 'Unknown';
+
+            allContacts.push({
                 id: contact.id,
-                name: contact.name,
+                name: displayName,
                 phone: primaryPhone ? normalizePhoneInput(primaryPhone) : undefined,
                 emails: contact.emails?.map(e => e.email).filter(Boolean) as string[],
-                imageUri: contact.image?.uri,
-                isGiftyyUser: false, // Will be updated after matching
-            };
-        });
+                isGiftyyUser: false,
+            });
+        }
+
+        hasMore = hasNextPage;
+        pageOffset += PAGE_SIZE;
+    }
+
+    console.log(`[Contacts] Total: ${allContacts.length} contacts with phone numbers`);
+    return allContacts;
 };

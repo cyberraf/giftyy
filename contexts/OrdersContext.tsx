@@ -46,6 +46,8 @@ export type Order = {
 type OrdersContextValue = {
 	orders: Order[];
 	loading: boolean;
+	loadingMore: boolean;
+	hasMore: boolean;
 	createOrder: (
 		cartItems: CartItem[],
 		recipient: Recipient,
@@ -63,9 +65,12 @@ type OrdersContextValue = {
 		vendorId?: string
 	) => Promise<{ order: Order | null; error: Error | null }>;
 	refreshOrders: () => Promise<void>;
+	loadMoreOrders: () => Promise<void>;
 	getOrderById: (id: string) => Order | undefined;
 	getOrderByCode: (code: string) => Order | undefined;
 };
+
+const ORDERS_PER_PAGE = 20;
 
 const OrdersContext = createContext<OrdersContextValue | undefined>(undefined);
 
@@ -125,71 +130,76 @@ function generateOrderCode(): string {
 export function OrdersProvider({ children }: { children: React.ReactNode }) {
 	const [orders, setOrders] = useState<Order[]>([]);
 	const [loading, setLoading] = useState(true);
+	const [loadingMore, setLoadingMore] = useState(false);
+	const [hasMore, setHasMore] = useState(true);
+	const [currentOffset, setCurrentOffset] = useState(0);
 	const { user } = useAuth();
 	const { updateVideoMessageOrderId } = useVideoMessages();
 
-	// Fetch orders from Supabase
+	// Shared helper: fetch a page of orders with their items
+	const fetchOrdersPage = useCallback(async (userId: string, limit: number, offset: number): Promise<Order[]> => {
+		const { data: ordersData, error: ordersError } = await supabase
+			.from('orders')
+			.select('*')
+			.eq('user_id', userId)
+			.order('created_at', { ascending: false })
+			.range(offset, offset + limit - 1);
+
+		if (ordersError) {
+			console.error('Error fetching orders:', ordersError);
+			return [];
+		}
+
+		if (!ordersData || ordersData.length === 0) return [];
+
+		// Fetch order items for this page of orders
+		const orderIds = ordersData.map((o) => o.id);
+		const { data: itemsData, error: itemsError } = await supabase
+			.from('order_items')
+			.select('*')
+			.in('order_id', orderIds);
+
+		if (itemsError) {
+			console.error('Error fetching order items:', itemsError);
+			return [];
+		}
+
+		// Group items by order_id
+		const itemsByOrderId = new Map<string, any[]>();
+		(itemsData || []).forEach((item) => {
+			const orderId = item.order_id;
+			if (!itemsByOrderId.has(orderId)) {
+				itemsByOrderId.set(orderId, []);
+			}
+			itemsByOrderId.get(orderId)!.push(item);
+		});
+
+		return ordersData.map((order) =>
+			dbRowToOrder(order, itemsByOrderId.get(order.id) || [])
+		);
+	}, []);
+
+	// Fetch first page of orders (replaces existing list)
 	const refreshOrders = useCallback(async () => {
 		if (!user) {
 			setOrders([]);
 			setLoading(false);
+			setHasMore(false);
 			return;
 		}
 
 		try {
 			setLoading(true);
-			// Fetch orders with their items
-			const { data: ordersData, error: ordersError } = await supabase
-				.from('orders')
-				.select('*')
-				.eq('user_id', user.id)
-				.order('created_at', { ascending: false });
-
-			if (ordersError) {
-				console.error('Error fetching orders:', ordersError);
-				return;
-			}
-
-			if (!ordersData || ordersData.length === 0) {
-				setOrders([]);
-				setLoading(false);
-				return;
-			}
-
-			// Fetch order items for all orders
-			const orderIds = ordersData.map((o) => o.id);
-			const { data: itemsData, error: itemsError } = await supabase
-				.from('order_items')
-				.select('*')
-				.in('order_id', orderIds);
-
-			if (itemsError) {
-				console.error('Error fetching order items:', itemsError);
-				return;
-			}
-
-			// Group items by order_id
-			const itemsByOrderId = new Map<string, any[]>();
-			(itemsData || []).forEach((item) => {
-				const orderId = item.order_id;
-				if (!itemsByOrderId.has(orderId)) {
-					itemsByOrderId.set(orderId, []);
-				}
-				itemsByOrderId.get(orderId)!.push(item);
-			});
-
-			// Combine orders with their items
-			const fetchedOrders = ordersData.map((order) =>
-				dbRowToOrder(order, itemsByOrderId.get(order.id) || [])
-			);
-
-			setOrders(fetchedOrders);
+			const fetched = await fetchOrdersPage(user.id, ORDERS_PER_PAGE, 0);
+			setOrders(fetched);
+			setCurrentOffset(fetched.length);
+			setHasMore(fetched.length === ORDERS_PER_PAGE);
 		} catch (err) {
 			console.error('Unexpected error fetching orders:', err);
 		} finally {
 			setLoading(false);
 		}
-	}, [user]);
+	}, [user, fetchOrdersPage]);
 
 	// Fetch orders when user changes
 	useEffect(() => {
@@ -218,6 +228,38 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 			}
 
 			try {
+				// Preflight validation: ensure every cart item points to an existing DB product.
+				// This avoids FK failures on order_items.product_id.
+				const resolvedProductIds = cartItems.map((item) => (item as any).productId || item.id);
+				const uniqueProductIds = Array.from(new Set(resolvedProductIds.filter(Boolean)));
+
+				if (uniqueProductIds.length === 0) {
+					return { order: null, error: new Error('Your cart is empty or contains invalid items.') };
+				}
+
+				const { data: existingProducts, error: productsError } = await supabase
+					.from('products')
+					.select('id')
+					.in('id', uniqueProductIds);
+
+				if (productsError) {
+					console.error('Error validating products before order:', productsError);
+					return { order: null, error: new Error('Unable to validate cart items. Please try again.') };
+				}
+
+				const existingIds = new Set((existingProducts || []).map((p) => p.id));
+				const missingIds = uniqueProductIds.filter((id) => !existingIds.has(id));
+
+				if (missingIds.length > 0) {
+					console.warn('Order blocked due to missing products:', missingIds);
+					return {
+						order: null,
+						error: new Error(
+							'Some items in your cart are no longer available. Please remove unavailable items and try again.'
+						),
+					};
+				}
+
 				const orderCode = generateOrderCode();
 
 				// Create order
@@ -260,10 +302,11 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 				// Create order items
 				const orderItems = cartItems.map((item) => {
 					const unitPrice = parsePrice(item.price);
+					const resolvedProductId = (item as any).productId || item.id;
 					return {
 						order_id: orderData.id,
 						// order_items.product_id references products.id
-						product_id: (item as any).productId || item.id,
+						product_id: resolvedProductId,
 						product_name: item.name,
 						product_image_url: item.image || null,
 						quantity: item.quantity,
@@ -294,13 +337,14 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 				try {
 					await Promise.all(
 						cartItems.map(async (item) => {
+							const resolvedProductId = (item as any).productId || item.id;
 							const { error: rpcError } = await supabase.rpc('decrement_product_stock', {
-								p_product_id: (item as any).productId || item.id,
+								p_product_id: resolvedProductId,
 								p_quantity: item.quantity,
 							});
 
 							if (rpcError) {
-								console.warn('Failed to decrement stock for product', (item as any).productId || item.id, rpcError);
+								console.warn('Failed to decrement stock for product', resolvedProductId, rpcError);
 							}
 						})
 					);
@@ -311,16 +355,19 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 				// Log purchase analytics events
 				try {
 					await Promise.all(
-						cartItems.map((item) =>
+						cartItems.map((item) => {
+							const resolvedProductId = (item as any).productId || item.id;
+							return (
 							logProductAnalyticsEvent({
-								productId: (item as any).productId || item.id,
+								productId: resolvedProductId,
 								eventType: 'purchase',
 								metadata: {
 									orderId: orderData.id,
 									quantity: item.quantity,
 								},
 							})
-						)
+							);
+						})
 					);
 				} catch (analyticsError) {
 					console.warn('Failed to log purchase analytics events', analyticsError);
@@ -423,6 +470,23 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 		[user, refreshOrders, updateVideoMessageOrderId]
 	);
 
+	// Load next page of orders (appends to existing list)
+	const loadMoreOrders = useCallback(async () => {
+		if (!user || !hasMore || loadingMore) return;
+
+		try {
+			setLoadingMore(true);
+			const fetched = await fetchOrdersPage(user.id, ORDERS_PER_PAGE, currentOffset);
+			setOrders(prev => [...prev, ...fetched]);
+			setCurrentOffset(prev => prev + fetched.length);
+			setHasMore(fetched.length === ORDERS_PER_PAGE);
+		} catch (err) {
+			console.error('Error loading more orders:', err);
+		} finally {
+			setLoadingMore(false);
+		}
+	}, [user, hasMore, loadingMore, currentOffset, fetchOrdersPage]);
+
 	const getOrderById = useCallback(
 		(id: string): Order | undefined => {
 			return orders.find((o) => o.id === id);
@@ -441,12 +505,15 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 		() => ({
 			orders,
 			loading,
+			loadingMore,
+			hasMore,
 			createOrder,
 			refreshOrders,
+			loadMoreOrders,
 			getOrderById,
 			getOrderByCode,
 		}),
-		[orders, loading, createOrder, refreshOrders, getOrderById, getOrderByCode]
+		[orders, loading, loadingMore, hasMore, createOrder, refreshOrders, loadMoreOrders, getOrderById, getOrderByCode]
 	);
 
 	return <OrdersContext.Provider value={value}>{children}</OrdersContext.Provider>;

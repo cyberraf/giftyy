@@ -3,7 +3,9 @@ import { getSupabaseErrorMessage, isNetworkError } from '@/utils/supabase-errors
 import { AuthError, Session, User } from '@supabase/supabase-js';
 import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { registerForPushNotifications } from '@/lib/notifications/registerForPush';
+import { useNetwork } from '@/contexts/NetworkContext';
 import { AppState } from 'react-native';
 
 export type Profile = {
@@ -27,6 +29,7 @@ type AuthContextType = {
 	profile: Profile | null;
 	loading: boolean;
 	isOffline: boolean;
+	isOAuthInProgress: boolean;
 	syncAuth: () => Promise<void>;
 	signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
 	signInWithGoogle: () => Promise<{ error: AuthError | null }>;
@@ -42,12 +45,41 @@ type AuthContextType = {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
+/**
+ * Module-level flag to coordinate OAuth flow between AuthContext and other components (e.g. index.tsx).
+ * Using a module-level variable (instead of React state/ref) ensures the value is always current
+ * when read from async callbacks like URL listeners.
+ */
+let _oauthInProgress = false;
+export function isOAuthFlowActive() {
+	return _oauthInProgress;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
 	const [user, setUser] = useState<User | null>(null);
 	const [session, setSession] = useState<Session | null>(null);
 	const [profile, setProfile] = useState<Profile | null>(null);
 	const [loading, setLoading] = useState(true);
-	const [isOffline, setIsOffline] = useState(false);
+	const { isConnected: networkConnected } = useNetwork();
+	const isOffline = !networkConnected;
+
+	// Mutex to prevent concurrent syncSessionFromSupabase calls.
+	// Multiple triggers (mount, AppState 'active', bootstrap resync) can race
+	// and cause "Refresh Token Not Found" due to Supabase's token rotation.
+	const syncLockRef = React.useRef(false);
+
+	// Flag to prevent AuthContext listeners from racing with signInWithGoogle.
+	// When true, the AppState + linking listeners skip syncSessionFromSupabase
+	// because signInWithGoogle is handling the session establishment itself.
+	const oauthInProgressRef = React.useRef(false);
+	const hasRegisteredPushRef = useRef(false);
+
+	// Auto-retry refs for network failures on initial auth
+	const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const retryCountRef = useRef(0);
+	const syncSessionFromSupabaseRef = useRef<((cancelled?: () => boolean) => Promise<void>) | null>(null);
+	const MAX_AUTH_RETRIES = 5;
+	const AUTH_RETRY_DELAYS = [2000, 4000, 8000, 15000, 30000]; // Exponential backoff
 
 	const isEmailVerified = useCallback((u?: User | null) => {
 		const anyUser = u as any;
@@ -168,7 +200,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		} catch (error: any) {
 			console.error('Error fetching profile:', error);
 			if (isNetworkError(error)) {
-				setIsOffline(true);
+				// Retry once after a brief delay — transient network blips happen on Android
+				// when returning from Chrome Custom Tabs (Google OAuth).
+				console.log('[AuthContext] Profile fetch network error — retrying once after 1s...');
+				await new Promise(resolve => setTimeout(resolve, 1000));
+				try {
+					const { data: retryData } = await supabase
+						.from('profiles')
+						.select('*')
+						.eq('id', u.id)
+						.maybeSingle();
+					if (retryData) {
+						setProfile(retryData as Profile);
+						return;
+					}
+				} catch (_retryErr) {
+					// Fall through
+				}
+				// Network failure — NetworkContext will detect offline state via NetInfo
 			}
 		}
 	}, [extractNamesFromUser]);
@@ -203,16 +252,52 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			setUser(nextSession?.user ?? null);
 			if (nextSession?.user) {
 				await fetchProfileForUser(nextSession.user);
+
+				// Register for push notifications if not already done in this session
+				if (!hasRegisteredPushRef.current) {
+					hasRegisteredPushRef.current = true;
+					// Fire and forget push token registration
+					registerForPushNotifications(nextSession.user.id).catch(err => {
+						console.error('[AuthContext] Push registration failed:', err);
+					});
+				}
 			} else {
 				setProfile(null);
+				hasRegisteredPushRef.current = false;
 			}
 			setLoading(false);
 		},
 		[fetchProfileForUser, isEmailVerified]
 	);
 
+	// Schedule an automatic retry after a network failure with exponential backoff
+	const scheduleAuthRetry = useCallback(() => {
+		if (retryCountRef.current >= MAX_AUTH_RETRIES) {
+			if (__DEV__) console.log(`[AuthContext] Max retries (${MAX_AUTH_RETRIES}) exhausted — giving up auto-retry`);
+			return;
+		}
+		const delay = AUTH_RETRY_DELAYS[Math.min(retryCountRef.current, AUTH_RETRY_DELAYS.length - 1)];
+		retryCountRef.current += 1;
+		if (__DEV__) console.log(`[AuthContext] Scheduling auto-retry #${retryCountRef.current} in ${delay}ms`);
+
+		if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
+		retryTimerRef.current = setTimeout(() => {
+			if (__DEV__) console.log(`[AuthContext] Auto-retry #${retryCountRef.current} firing...`);
+			syncSessionFromSupabaseRef.current?.();
+		}, delay);
+	}, []);
+
 	const syncSessionFromSupabase = useCallback(
 		async (cancelled?: () => boolean) => {
+			// Prevent concurrent sync calls — the main cause of "Refresh Token Not Found".
+			// When multiple callers (mount, AppState, resync timer) race, the first consumes
+			// the refresh token via rotation and the second fails.
+			if (syncLockRef.current) {
+				if (__DEV__) console.log('[AuthContext] syncSessionFromSupabase SKIPPED (already in progress)');
+				return;
+			}
+			syncLockRef.current = true;
+
 			if (__DEV__) console.log('[AuthContext] syncSessionFromSupabase starting...');
 			try {
 				if (__DEV__) console.log('[AuthContext] calling supabase.auth.getSession()...');
@@ -226,22 +311,36 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 					data: { session: currentSession },
 					error,
 				} = await Promise.race([sessionPromise, timeoutPromise]) as { data: { session: Session | null }; error: AuthError | null };
-				
-				// Clear offline state if request succeeds
-				setIsOffline(false);
+
+				retryCountRef.current = 0; // Reset retry count on success
 				if (__DEV__) console.log('[AuthContext] getSession returned, session:', !!currentSession, 'error:', error?.message);
 
 				if (error) {
 					console.warn('Error getting session:', error.message);
 					if (isNetworkError(error)) {
-						setIsOffline(true);
+						// Offline state now derived from NetworkContext
 						setLoading(false);
+						scheduleAuthRetry();
 						return;
 					}
-					
+
 					const errorMessage = error.message?.toLowerCase() || '';
 					if (errorMessage.includes('refresh token') || errorMessage.includes('token not found')) {
-						console.log('Invalid refresh token detected, clearing session...');
+						console.log('[AuthContext] Refresh token error — retrying once after 1s...');
+						// Wait briefly, then retry. The previous call may have rotated the token
+						// and stored a new one, so a fresh getSession() may succeed.
+						await new Promise(resolve => setTimeout(resolve, 1000));
+						try {
+							const { data: retryData, error: retryError } = await supabase.auth.getSession();
+							if (!retryError && retryData?.session) {
+								console.log('[AuthContext] Retry succeeded — session recovered');
+								await applySession(retryData.session, cancelled);
+								return;
+							}
+						} catch {
+							// Fall through to sign out
+						}
+						console.log('[AuthContext] Retry failed — clearing session');
 						await supabase.auth.signOut();
 						await applySession(null, cancelled);
 						return;
@@ -252,41 +351,96 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			} catch (err: any) {
 				const errorMessage = err?.message?.toLowerCase() || '';
 				if (isNetworkError(err)) {
-					setIsOffline(true);
+					// Offline state now derived from NetworkContext
 					setLoading(false);
+					scheduleAuthRetry();
 					return;
 				}
 				if (errorMessage.includes('refresh token') || errorMessage.includes('token not found')) {
-					console.log('Invalid refresh token detected in catch block, clearing session...');
+					console.log('[AuthContext] Refresh token error (catch) — retrying once after 1s...');
+					await new Promise(resolve => setTimeout(resolve, 1000));
+					try {
+						const { data: retryData, error: retryError } = await supabase.auth.getSession();
+						if (!retryError && retryData?.session) {
+							console.log('[AuthContext] Retry succeeded — session recovered');
+							await applySession(retryData.session, cancelled);
+							return;
+						}
+					} catch (_retryErr) {
+						// Fall through to sign out
+					}
+					console.log('[AuthContext] Retry failed — clearing session');
 					await supabase.auth.signOut();
 				} else {
 					console.error('Unexpected error getting session:', err);
 				}
 				await applySession(null, cancelled);
+			} finally {
+				syncLockRef.current = false;
 			}
 		},
-		[applySession]
+		[applySession, scheduleAuthRetry]
 	);
+
+	// Keep ref updated so the retry timer always calls the latest version
+	syncSessionFromSupabaseRef.current = syncSessionFromSupabase;
 
 	useEffect(() => {
 		let cancelled = false;
 		const isCancelled = () => cancelled;
 
-		// Get initial session
-		syncSessionFromSupabase(isCancelled);
+		// Get initial session with auto-retry on failure
+		const attemptSync = async () => {
+			await syncSessionFromSupabase(isCancelled);
+
+			// If we ended up offline and haven't exhausted retries, schedule another attempt
+			// We read isOffline indirectly: if user is still null and loading is false after sync,
+			// and we haven't been cancelled, it likely failed.
+			// The simplest check: if isOffline was set by syncSessionFromSupabase, retry.
+		};
+		attemptSync();
 
 		// Listen for auth changes
 		const {
 			data: { subscription },
-		} = supabase.auth.onAuthStateChange(async (_event, session) => {
+		} = supabase.auth.onAuthStateChange(async (event, session) => {
+			if (__DEV__) console.log(`[AuthContext] onAuthStateChange: ${event}, session: ${!!session}`);
+
+			if (event === 'SIGNED_OUT') {
+				// Explicit cleanup on sign-out: reset retry state and push registration
+				retryCountRef.current = 0;
+				if (retryTimerRef.current) {
+					clearTimeout(retryTimerRef.current);
+					retryTimerRef.current = null;
+				}
+				hasRegisteredPushRef.current = false;
+			}
+
+			if (event === 'TOKEN_REFRESHED') {
+				// Token was successfully refreshed — reset retry counters
+				retryCountRef.current = 0;
+			}
+
 			await applySession(session ?? null);
 		});
 
 		// IMPORTANT (Android): Returning from the OAuth browser often triggers AppState active
 		// before (or instead of) onAuthStateChange firing in time. Sync session on active.
+		// Debounce to avoid rapid-fire calls which cause refresh token rotation races.
+		let appStateDebounce: ReturnType<typeof setTimeout> | null = null;
 		const appStateSub = AppState.addEventListener('change', (nextState) => {
 			if (nextState === 'active') {
-				syncSessionFromSupabase();
+				// Skip if signInWithGoogle is handling the OAuth flow — it will call applySession itself
+				if (oauthInProgressRef.current) {
+					if (__DEV__) console.log('[AuthContext] AppState active SKIPPED (OAuth in progress)');
+					return;
+				}
+				if (appStateDebounce) clearTimeout(appStateDebounce);
+				appStateDebounce = setTimeout(() => {
+					// Also reset retry count when app comes to foreground — gives fresh retry budget
+					retryCountRef.current = 0;
+					syncSessionFromSupabase();
+				}, 500);
 			}
 		});
 
@@ -296,26 +450,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		const linkingSub = Linking.addEventListener('url', (event) => {
 			const url = event?.url || '';
 			if (!url) return;
+			// Skip if signInWithGoogle is handling the OAuth flow
+			if (oauthInProgressRef.current) {
+				if (__DEV__) console.log('[AuthContext] linkingSub SKIPPED (OAuth in progress)');
+				return;
+			}
 			// Only react to auth-related deep links.
 			if (url.includes('auth/callback') || url.includes('access_token') || url.includes('refresh_token')) {
 				// Give Supabase a moment to persist tokens, then sync.
 				setTimeout(() => {
 					syncSessionFromSupabase();
-				}, 250);
+				}, 500);
 			}
 		});
-
-		// Also do a short delayed re-sync on mount to catch races.
-		const bootstrapResync = setTimeout(() => {
-			syncSessionFromSupabase();
-		}, 750);
 
 		return () => {
 			cancelled = true;
 			subscription.unsubscribe();
 			appStateSub.remove();
 			linkingSub.remove();
-			clearTimeout(bootstrapResync);
+			if (appStateDebounce) clearTimeout(appStateDebounce);
+			if (retryTimerRef.current) clearTimeout(retryTimerRef.current);
 		};
 	}, [applySession, syncSessionFromSupabase]);
 
@@ -372,9 +527,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 	}, [applySession, isEmailVerified]);
 
 	const signInWithGoogle = useCallback(async () => {
+		oauthInProgressRef.current = true;
+		_oauthInProgress = true;
 		try {
 			const { makeRedirectUri } = await import('expo-auth-session');
-			const { openBrowserAsync, dismissBrowser, WebBrowserPresentationStyle } = await import('expo-web-browser');
+			const ExpoWebBrowser = await import('expo-web-browser');
+			const openBrowserAsync = ExpoWebBrowser.openBrowserAsync;
+			const dismissBrowser = ExpoWebBrowser.dismissBrowser;
+			const WebBrowserPresentationStyle = (ExpoWebBrowser as any).WebBrowserPresentationStyle;
 
 			// Create the redirect URI
 			// Use 'native' scheme to automatically use exp:// in dev and giftyy:// in production
@@ -460,14 +620,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			// Open browser and wait for the result
 			// The browser will redirect to giftyy://auth/callback when OAuth completes
 			const result = await openBrowserAsync(data.url, {
-				presentationStyle: WebBrowserPresentationStyle.AUTOMATIC,
+				...(WebBrowserPresentationStyle?.AUTOMATIC && {
+					presentationStyle: WebBrowserPresentationStyle.AUTOMATIC,
+				}),
 				enableBarCollapsing: false,
 			});
 
 			console.log('🔵 Browser result type:', result.type);
 
-			// Give a moment for the deep link to be received and processed
-			await new Promise(resolve => setTimeout(resolve, 800));
+			if (result.type === 'opened') {
+				// Android: openBrowserAsync returned immediately (Chrome Custom Tabs are non-blocking).
+				// The user is still in the browser. We MUST keep the URL subscription alive until
+				// the user returns to the app, otherwise we miss the giftyy://auth/callback deep link.
+				await new Promise<void>((resolve) => {
+					const appSub = AppState.addEventListener('change', (nextState) => {
+						if (nextState === 'active') {
+							appSub.remove();
+							resolve();
+						}
+					});
+					// Safety timeout: 2 minutes (user abandoned the flow)
+					setTimeout(resolve, 120000);
+				});
+				// Brief grace period: Android delivers the deep link slightly after AppState fires
+				await new Promise(r => setTimeout(r, 600));
+			} else {
+				// iOS: openBrowserAsync blocks until the browser is dismissed.
+				// Brief wait to let any deep link finish delivering.
+				await new Promise(r => setTimeout(r, 500));
+			}
 
 			// Clean up listener
 			subscription.remove();
@@ -595,6 +776,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 					message: errorMessage,
 				} as AuthError,
 			};
+		} finally {
+			oauthInProgressRef.current = false;
+			_oauthInProgress = false;
 		}
 	}, [applySession]);
 
@@ -1036,6 +1220,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		}
 	}, [user, fetchProfileForUser]);
 
+	// Auto-resync auth when connectivity is restored
+	const prevConnectedRef = useRef(networkConnected);
+	useEffect(() => {
+		if (networkConnected && !prevConnectedRef.current) {
+			console.log('[AuthContext] Network restored — resyncing auth');
+			retryCountRef.current = 0;
+			syncSessionFromSupabase();
+		}
+		prevConnectedRef.current = networkConnected;
+	}, [networkConnected, syncSessionFromSupabase]);
+
 	// Expose a deterministic "rehydrate now" helper for deep-link flows.
 	const syncAuth = useCallback(async () => {
 		await syncSessionFromSupabase();
@@ -1126,6 +1321,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				refreshProfile,
 				deleteAccount,
 				isOffline,
+				isOAuthInProgress: _oauthInProgress,
 			}}
 		>
 			{children}

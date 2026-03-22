@@ -88,7 +88,7 @@ export function getSupabaseErrorMessage(error: AuthError | Error | null | undefi
 		}
 
 		if (status === 429) {
-			return 'Too many requests. Please wait a moment and try again.';
+			return 'Too many attempts. Please wait a minute before trying again.';
 		}
 
 		if (status === 500 || status === 502 || status === 503) {
@@ -120,7 +120,7 @@ export function getSupabaseErrorMessage(error: AuthError | Error | null | undefi
 		}
 
 		if (code === 'too_many_requests') {
-			return 'Too many requests. Please wait a moment and try again.';
+			return 'Too many attempts. Please wait a minute before trying again.';
 		}
 
 		// Return the message if it exists and is meaningful

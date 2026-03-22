@@ -5,6 +5,7 @@
 
 import { useAlert } from '@/contexts/AlertContext';
 import * as ImagePicker from 'expo-image-picker';
+import { safeGoBack } from '@/lib/utils/navigation';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
@@ -223,7 +224,7 @@ export default function SharedMemoryScreen() {
 				<View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
 					<Pressable
 						style={{ paddingVertical: 12, paddingHorizontal: 16 }}
-						onPress={() => router.back()}
+						onPress={() => safeGoBack(router, '/(buyer)/checkout/cart')}
 					>
 						<Text style={{ color: '#64748b', fontWeight: '800', fontSize: 13 }}>Back</Text>
 					</Pressable>

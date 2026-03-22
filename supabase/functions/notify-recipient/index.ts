@@ -7,6 +7,23 @@
 // Designed to preserve sender anonymity — no item details or sender info in recipient-facing content.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+// Inlined from _shared/auth.ts (dashboard deployment doesn't bundle _shared/)
+function verifyServiceRole(req: Request): { authorized: boolean; error?: string } {
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader) return { authorized: false, error: 'Missing Authorization header' }
+  try {
+    const token = authHeader.replace('Bearer ', '')
+    const parts = token.split('.')
+    if (parts.length !== 3) return { authorized: false, error: 'Invalid token format' }
+    const payload = JSON.parse(atob(parts[1]))
+    if (payload.role !== 'service_role') return { authorized: false, error: 'Forbidden: service_role required' }
+    return { authorized: true }
+  } catch { return { authorized: false, error: 'Invalid authorization token' } }
+}
+
+function unauthorizedResponse(message: string, corsHeaders: Record<string, string>, status = 401): Response {
+  return new Response(JSON.stringify({ error: message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status })
+}
 
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
@@ -48,6 +65,12 @@ Deno.serve(async (req) => {
         return new Response('ok', { headers: corsHeaders })
     }
 
+    // Verify caller has service_role authorization (internal calls only)
+    const { authorized, error: authError } = verifyServiceRole(req)
+    if (!authorized) {
+        return unauthorizedResponse(authError || 'Forbidden', corsHeaders, 403)
+    }
+
     try {
         const payload: NotifyPayload = await req.json()
 
@@ -65,9 +88,9 @@ Deno.serve(async (req) => {
         )
 
         const results: Record<string, any> = {}
-        const sendEmail = payload.sendEmail !== false
-        const sendInApp = payload.sendInApp !== false
-        const sendPush = payload.sendPush !== false
+        let sendEmail = payload.sendEmail !== false
+        let sendInApp = payload.sendInApp !== false
+        let sendPush = payload.sendPush !== false
 
         // ══════════════════════════════════════════════════════════════════════
         // STEP 1 — Resolve recipient's user_id (needed for in-app + push)
@@ -75,12 +98,12 @@ Deno.serve(async (req) => {
         let recipientUserId: string | null = null
 
         if (sendInApp || sendPush) {
-            // Try by email in auth.users → profiles
+            // Try by email in profiles (case-insensitive — emails are case-insensitive per RFC)
             if (payload.recipientEmail) {
                 const { data: profileData } = await supabase
                     .from('profiles')
                     .select('id')
-                    .eq('email', payload.recipientEmail)
+                    .ilike('email', payload.recipientEmail)
                     .single()
                 if (profileData?.id) recipientUserId = profileData.id
             }
@@ -103,6 +126,26 @@ Deno.serve(async (req) => {
             }
 
             console.log('[notify-recipient] Resolved recipientUserId:', recipientUserId)
+
+            // Check recipient's notification preferences
+            if (recipientUserId) {
+                const { data: recipientSettings } = await supabase
+                    .from('user_settings')
+                    .select('push_notifications_enabled, email_notifications_enabled')
+                    .eq('user_id', recipientUserId)
+                    .maybeSingle()
+
+                if (recipientSettings) {
+                    if (recipientSettings.push_notifications_enabled === false) {
+                        console.log('[notify-recipient] Push disabled by recipient, skipping')
+                        sendPush = false
+                    }
+                    if (recipientSettings.email_notifications_enabled === false) {
+                        console.log('[notify-recipient] Email disabled by recipient, skipping')
+                        sendEmail = false
+                    }
+                }
+            }
         }
 
         // ══════════════════════════════════════════════════════════════════════
@@ -263,12 +306,19 @@ Deno.serve(async (req) => {
         if (sendPush && recipientUserId) {
             try {
                 // Fetch all Expo push tokens for the recipient's devices
+                console.log('[notify-recipient] Fetching push tokens for user:', recipientUserId)
                 const { data: tokenRows, error: tokenError } = await supabase
                     .from('push_tokens')
-                    .select('token')
+                    .select('token, platform, device_name')
                     .eq('user_id', recipientUserId)
 
-                if (tokenError) throw tokenError
+                if (tokenError) {
+                    console.error('[notify-recipient] Error fetching push tokens:', tokenError)
+                    throw tokenError
+                }
+
+                console.log('[notify-recipient] Found push tokens:', tokenRows?.length || 0,
+                    tokenRows?.map((r: any) => ({ platform: r.platform, device: r.device_name })))
 
                 if (!tokenRows || tokenRows.length === 0) {
                     console.log('[notify-recipient] No push tokens for user:', recipientUserId)
@@ -281,8 +331,9 @@ Deno.serve(async (req) => {
                         sound: 'default',
                         title: '🎁 Giftyy has a surprise for you!',
                         body: `Someone special sent you a gift! Please update your shipping address to ensure delivery. 😉`,
+                        categoryId: 'gift_received',
                         data: {
-                            type: 'gift_incoming',
+                            type: 'gift_received',
                             orderCode: payload.orderCode || null,
                             estimatedArrival: estimatedDays,
                         },
@@ -304,12 +355,21 @@ Deno.serve(async (req) => {
                                 },
                                 body: JSON.stringify(chunk),
                             })
-                            return resp.json()
+                            const result = await resp.json()
+                            // Log individual ticket statuses for debugging
+                            if (result?.data) {
+                                result.data.forEach((ticket: any, idx: number) => {
+                                    if (ticket.status === 'error') {
+                                        console.error(`[notify-recipient] Push ticket error for token ${idx}:`, ticket.message, ticket.details)
+                                    }
+                                })
+                            }
+                            return result
                         })
                     )
 
                     results.push = { success: true, sent: tokenRows.length, expoResponse: pushResults }
-                    console.log('[notify-recipient] Push result:', results.push)
+                    console.log('[notify-recipient] Push result:', JSON.stringify(results.push))
                 }
             } catch (pushErr) {
                 console.error('[notify-recipient] Push error:', pushErr)
@@ -320,6 +380,7 @@ Deno.serve(async (req) => {
                 skipped: true,
                 reason: sendPush ? 'no recipientUserId resolved' : 'disabled',
             }
+            console.log('[notify-recipient] Push skipped:', results.push)
         }
 
         // ── Return combined results ─────────────────────────────────────────

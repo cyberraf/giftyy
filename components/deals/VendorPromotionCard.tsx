@@ -42,10 +42,9 @@ export function VendorPromotionCard({ vendor, discount, productCount, onPress }:
 		scale.value = withSpring(1, { damping: 15, stiffness: 300 });
 	};
 	
-	// Generate gradient colors based on discount
-	const gradientColors = discount > 30
-		? [GIFTYY_THEME.colors.primary, '#ff7a3d']
-		: [GIFTYY_THEME.colors.primaryLight, GIFTYY_THEME.colors.peach];
+	// Brand palette: Giftyy Orange
+	const gradientColors: [string, string] = [GIFTYY_THEME.colors.primary, '#ff7a3d'];
+	const accentColor = '#FFFFFF'; 
 	
 	return (
 		<AnimatedPressable
@@ -60,18 +59,27 @@ export function VendorPromotionCard({ vendor, discount, productCount, onPress }:
 				end={{ x: 1, y: 1 }}
 				style={styles.gradient}
 			>
-				{/* Vendor Logo */}
-				{vendor.profileImageUrl ? (
-					<Image
-						source={{ uri: vendor.profileImageUrl }}
-						style={styles.vendorLogo}
-						resizeMode="cover"
-					/>
-				) : (
-					<View style={styles.vendorLogoPlaceholder}>
-						<IconSymbol name="storefront.fill" size={32} color="#fff" />
+				<View style={styles.topRow}>
+					{/* Vendor Logo */}
+					{vendor.profileImageUrl ? (
+						<Image
+							source={{ uri: vendor.profileImageUrl }}
+							style={styles.vendorLogo}
+							resizeMode="cover"
+						/>
+					) : (
+						<View style={styles.vendorLogoPlaceholder}>
+							<IconSymbol name="storefront" size={24} color={accentColor} />
+						</View>
+					)}
+					
+					{/* Discount Badge - Brand White Accent */}
+					<View style={[styles.discountBadge, { borderColor: 'rgba(255,255,255,0.4)' }]}>
+						<Text style={[styles.discountText, { color: accentColor }]}>
+							{discount}% OFF
+						</Text>
 					</View>
-				)}
+				</View>
 				
 				{/* Vendor Info */}
 				<View style={styles.vendorInfo}>
@@ -79,21 +87,16 @@ export function VendorPromotionCard({ vendor, discount, productCount, onPress }:
 						{vendor.storeName || 'Vendor'}
 					</Text>
 					<Text style={styles.promotionText}>
-						Save on Handmade Gifts
+						Brand Deals & Specials
 					</Text>
-					<View style={styles.discountContainer}>
-						<Text style={styles.discountText}>
-							{discount}% Off
+					<View style={styles.footer}>
+						<Text style={styles.productCountText}>
+							{productCount} {productCount === 1 ? 'PIECE' : 'PIECES'} ON SALE
 						</Text>
+						<View style={styles.arrowContainer}>
+							<IconSymbol name="chevron.right" size={16} color="white" />
+						</View>
 					</View>
-					<Text style={styles.productCountText}>
-						{productCount} {productCount === 1 ? 'product' : 'products'} on sale
-					</Text>
-				</View>
-				
-				{/* Arrow Icon */}
-				<View style={styles.arrowContainer}>
-					<IconSymbol name="arrow.right" size={20} color="rgba(255, 255, 255, 0.8)" />
 				</View>
 			</LinearGradient>
 		</AnimatedPressable>
@@ -103,76 +106,84 @@ export function VendorPromotionCard({ vendor, discount, productCount, onPress }:
 const styles = StyleSheet.create({
 	container: {
 		marginRight: 16,
-		borderRadius: GIFTYY_THEME.radius.xl,
+		borderRadius: GIFTYY_THEME.radius.lg,
 		overflow: 'hidden',
 		...GIFTYY_THEME.shadows.lg,
+		borderWidth: 1,
+		borderColor: 'rgba(255,255,255,0.05)',
 	},
 	gradient: {
-		padding: 20,
-		minHeight: 180,
+		padding: 24,
+		minHeight: 200,
 		justifyContent: 'space-between',
 	},
+	topRow: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'flex-start',
+	},
 	vendorLogo: {
-		width: 60,
-		height: 60,
-		borderRadius: 30,
-		backgroundColor: 'rgba(255, 255, 255, 0.2)',
-		marginBottom: 16,
-		borderWidth: 2,
-		borderColor: 'rgba(255, 255, 255, 0.3)',
+		width: 48,
+		height: 48,
+		borderRadius: 24,
+		backgroundColor: 'rgba(255, 255, 255, 0.05)',
+		borderWidth: 1,
+		borderColor: 'rgba(255, 255, 255, 0.1)',
 	},
 	vendorLogoPlaceholder: {
-		width: 60,
-		height: 60,
-		borderRadius: 30,
-		backgroundColor: 'rgba(255, 255, 255, 0.2)',
-		marginBottom: 16,
+		width: 48,
+		height: 48,
+		borderRadius: 24,
+		backgroundColor: 'rgba(255, 255, 255, 0.05)',
 		alignItems: 'center',
 		justifyContent: 'center',
-		borderWidth: 2,
-		borderColor: 'rgba(255, 255, 255, 0.3)',
+		borderWidth: 1,
+		borderColor: 'rgba(255, 255, 255, 0.1)',
+	},
+	discountBadge: {
+		borderWidth: 1,
+		paddingHorizontal: 10,
+		paddingVertical: 4,
+		borderRadius: 40,
+		backgroundColor: 'rgba(212, 175, 55, 0.05)',
+	},
+	discountText: {
+		fontSize: 10,
+		fontWeight: GIFTYY_THEME.typography.weights.bold,
+		letterSpacing: 1,
 	},
 	vendorInfo: {
-		flex: 1,
+		marginTop: 20,
 	},
 	vendorName: {
-		fontSize: 18,
-		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+		fontSize: GIFTYY_THEME.typography.sizes.lg,
+		fontWeight: GIFTYY_THEME.typography.weights.bold,
 		color: '#fff',
-		marginBottom: 6,
+		marginBottom: 4,
+		letterSpacing: 0.3,
 	},
 	promotionText: {
 		fontSize: 13,
-		color: 'rgba(255, 255, 255, 0.9)',
-		marginBottom: 12,
+		color: 'rgba(255, 255, 255, 0.6)',
+		marginBottom: 16,
 		fontWeight: GIFTYY_THEME.typography.weights.medium,
 	},
-	discountContainer: {
-		alignSelf: 'flex-start',
-		backgroundColor: 'rgba(255, 255, 255, 0.25)',
-		paddingHorizontal: 12,
-		paddingVertical: 6,
-		borderRadius: GIFTYY_THEME.radius.full,
-		marginBottom: 8,
-	},
-	discountText: {
-		fontSize: 16,
-		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
-		color: '#fff',
+	footer: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		justifyContent: 'space-between',
 	},
 	productCountText: {
-		fontSize: 11,
-		color: 'rgba(255, 255, 255, 0.8)',
-		fontWeight: GIFTYY_THEME.typography.weights.medium,
+		fontSize: 10,
+		color: 'rgba(255, 255, 255, 0.4)',
+		fontWeight: GIFTYY_THEME.typography.weights.bold,
+		letterSpacing: 1.2,
 	},
 	arrowContainer: {
-		position: 'absolute',
-		bottom: 20,
-		right: 20,
-		width: 36,
-		height: 36,
-		borderRadius: 18,
-		backgroundColor: 'rgba(255, 255, 255, 0.2)',
+		width: 32,
+		height: 32,
+		borderRadius: 16,
+		backgroundColor: 'rgba(255, 255, 255, 0.1)',
 		alignItems: 'center',
 		justifyContent: 'center',
 	},

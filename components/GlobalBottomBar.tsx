@@ -177,8 +177,10 @@ function NavItem({ iconConfig, isFocused, onPress, totalQuantity = 0 }: NavItemP
 			onPressIn={handlePressIn}
 			onPressOut={handlePressOut}
 			style={[styles.navItem, containerAnimatedStyle]}
-			accessibilityRole="button"
-			accessibilityState={isFocused ? { selected: true } : {}}
+			accessibilityRole="tab"
+			accessibilityLabel={`${iconConfig.label}${iconConfig.name === 'cart' && totalQuantity > 0 ? `, ${totalQuantity} items` : ''}`}
+			accessibilityHint={`Navigate to ${iconConfig.label}`}
+			accessibilityState={{ selected: isFocused }}
 		>
 			<View style={styles.iconContainer}>
 				{/* Sparkle effect for Memories */}

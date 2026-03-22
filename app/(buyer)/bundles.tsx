@@ -214,27 +214,6 @@ export default function BundlesScreen() {
 
 	return (
 		<View style={styles.container}>
-			{/* Header */}
-			<View
-				style={[
-					styles.header,
-					{
-						paddingTop: top + 72,
-					},
-				]}
-			>
-				<Pressable onPress={() => router.back()} style={styles.backButton} hitSlop={12}>
-					<IconSymbol name="chevron.left" size={22} color={GIFTYY_THEME.colors.gray900} />
-				</Pressable>
-				<Text style={styles.headerTitle}>Giftyy Bundles 🎁</Text>
-				<Pressable
-					style={styles.filterButton}
-					onPress={() => setShowFilters(true)}
-				>
-					<IconSymbol name="slider.horizontal.3" size={20} color={GIFTYY_THEME.colors.gray700} />
-				</Pressable>
-			</View>
-
 			{/* Background decorative sparkles */}
 			<View style={styles.backgroundContainer}>
 				<Animated.View style={[styles.sparkle, { top: 150, left: 50 }, sparkle1Style]}>
@@ -256,6 +235,16 @@ export default function BundlesScreen() {
 				<ScrollView
 					contentContainerStyle={[styles.emptyContent, { paddingTop: top + 100, paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE }]}
 				>
+					<View style={[styles.header, { paddingTop: top + 16 }]}>
+						<View style={styles.headerSpacer} />
+						<Text style={styles.headerTitle}>Giftyy Bundles 🎁</Text>
+						<Pressable
+							style={styles.filterButton}
+							onPress={() => setShowFilters(true)}
+						>
+							<IconSymbol name="slider.horizontal.3" size={20} color={GIFTYY_THEME.colors.gray700} />
+						</Pressable>
+					</View>
 					<EmptyCollectionsState onResetFilters={handleResetFilters} />
 				</ScrollView>
 			) : (
@@ -274,6 +263,17 @@ export default function BundlesScreen() {
 						/>
 					}
 				>
+					<View style={[styles.header, { paddingTop: top + 16 }]}>
+						<View style={styles.headerSpacer} />
+						<Text style={styles.headerTitle}>Giftyy Bundles 🎁</Text>
+						<Pressable
+							style={styles.filterButton}
+							onPress={() => setShowFilters(true)}
+						>
+							<IconSymbol name="slider.horizontal.3" size={20} color={GIFTYY_THEME.colors.gray700} />
+						</Pressable>
+					</View>
+
 					{/* Featured Collection Banner */}
 					{featuredCollection && (
 						<FeaturedCollectionBanner
@@ -470,13 +470,9 @@ const styles = StyleSheet.create({
 		...GIFTYY_THEME.shadows.sm,
 		zIndex: 10,
 	},
-	backButton: {
+	headerSpacer: {
 		width: 40,
 		height: 40,
-		borderRadius: 20,
-		alignItems: 'center',
-		justifyContent: 'center',
-		backgroundColor: GIFTYY_THEME.colors.gray100,
 	},
 	headerTitle: {
 		fontSize: GIFTYY_THEME.typography.sizes['2xl'],

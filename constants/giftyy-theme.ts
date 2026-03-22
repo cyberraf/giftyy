@@ -75,7 +75,11 @@ export const GIFTYY_THEME = {
 			android: 'Roboto',
 			default: 'System',
 		}),
-		brandFont: 'Cooper BT', // Giftyy brand font
+		brandFont: Platform.select({
+			ios: 'System',
+			android: 'Roboto',
+			default: 'System',
+		}),
 
 		sizes: {
 			xs: normalizeFont(10),

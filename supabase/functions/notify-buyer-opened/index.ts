@@ -1,5 +1,22 @@
 // @ts-nocheck
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+// Inlined from _shared/auth.ts (dashboard deployment doesn't bundle _shared/)
+function verifyServiceRole(req: Request): { authorized: boolean; error?: string } {
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader) return { authorized: false, error: 'Missing Authorization header' }
+  try {
+    const token = authHeader.replace('Bearer ', '')
+    const parts = token.split('.')
+    if (parts.length !== 3) return { authorized: false, error: 'Invalid token format' }
+    const payload = JSON.parse(atob(parts[1]))
+    if (payload.role !== 'service_role') return { authorized: false, error: 'Forbidden: service_role required' }
+    return { authorized: true }
+  } catch { return { authorized: false, error: 'Invalid authorization token' } }
+}
+
+function unauthorizedResponse(message: string, corsHeaders: Record<string, string>, status = 401): Response {
+  return new Response(JSON.stringify({ error: message }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status })
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -17,6 +34,12 @@ type NotifyPayload = {
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+
+  // Verify caller has service_role authorization (internal calls only)
+  const { authorized, error: authError } = verifyServiceRole(req);
+  if (!authorized) {
+    return unauthorizedResponse(authError || 'Forbidden', corsHeaders, 403);
   }
 
   // Set up Supabase Client using Service Role to bypass RLS when inserting notifications
@@ -38,13 +61,13 @@ Deno.serve(async (req) => {
 
     // 1. Deduplication Check
     // We only want to notify the buyer the FIRST time the gift is opened.
-    // Query `user_notifications` to see if we already sent a `gift_opened` notification for this order.
+    // Query `notifications` to see if we already sent a `gift_opened` notification for this order.
     const { data: existingNotification, error: checkError } = await supabaseAdmin
-      .from('user_notifications')
+      .from('notifications')
       .select('id')
       .eq('user_id', payload.buyerId)
-      // metadata is a JSONB column, so we query it using json path or contains
-      .contains('metadata', { type: 'gift_opened', order_id: payload.orderId })
+      // data is a JSONB column in notifications
+      .contains('data', { type: 'gift_opened', orderId: payload.orderId })
       .maybeSingle();
 
     if (checkError) {
@@ -56,6 +79,25 @@ Deno.serve(async (req) => {
       console.log('Notification already sent for order:', payload.orderId);
       return new Response(
         JSON.stringify({ success: true, message: 'Already notified, skipping.' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
+      );
+    }
+
+    // Check buyer's notification preferences
+    const { data: buyerSettings } = await supabaseAdmin
+      .from('user_settings')
+      .select('push_notifications_enabled, order_updates_enabled')
+      .eq('user_id', payload.buyerId)
+      .maybeSingle();
+
+    const pushEnabled = buyerSettings?.push_notifications_enabled !== false;
+    const orderUpdatesEnabled = buyerSettings?.order_updates_enabled !== false;
+
+    // If order updates are fully disabled, skip everything
+    if (!orderUpdatesEnabled) {
+      console.log('Order updates disabled for buyer:', payload.buyerId);
+      return new Response(
+        JSON.stringify({ success: true, message: 'Order updates disabled by user, skipping.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }
@@ -92,7 +134,8 @@ Deno.serve(async (req) => {
         userId: payload.buyerId,
         title: title,
         body: bodyText,
-        data: { url: href },
+        categoryId: 'order_status',
+        data: { url: href, orderId: payload.orderId, orderCode: payload.orderCode, type: 'gift_opened' },
         sound: 'default'
       }
     });

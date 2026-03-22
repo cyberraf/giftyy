@@ -39,6 +39,7 @@ import { TourAnchor } from '@/components/tour/TourAnchor';
 // Contexts & Utils
 import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
+import { hapticLight } from '@/lib/utils/haptics';
 import { useBottomBarVisibility } from '@/contexts/BottomBarVisibility';
 import { useCategories } from '@/contexts/CategoriesContext';
 import { useNotifications } from '@/contexts/NotificationsContext';
@@ -271,6 +272,7 @@ export default function MarketplaceHomeScreen() {
 		if (filteredProducts.length < nextPage * 60 && hasMore) {
 			await loadMoreProducts();
 		}
+		hapticLight();
 		setShopPage(nextPage);
 		setInnerVisibleCount(30);
 		scrollRef.current?.scrollToOffset({ offset: 0, animated: true });
@@ -278,6 +280,7 @@ export default function MarketplaceHomeScreen() {
 
 	const handlePrevPage = useCallback(() => {
 		if (shopPage > 1) {
+			hapticLight();
 			setShopPage(prev => prev - 1);
 			setInnerVisibleCount(60); // Show full page when going back
 			scrollRef.current?.scrollToOffset({ offset: 0, animated: true });
@@ -307,19 +310,10 @@ export default function MarketplaceHomeScreen() {
 			.slice(0, 12)
 			.map(p => {
 				const vendor = p.vendorId ? vendorsMap.get(p.vendorId) : undefined;
-				const imageUrl = p.imageUrl ? (() => {
-					try {
-						const parsed = JSON.parse(p.imageUrl);
-						return Array.isArray(parsed) ? parsed[0] : p.imageUrl;
-					} catch {
-						return p.imageUrl;
-					}
-				})() : undefined;
-
 				return {
 					...p,
 					vendorName: vendor?.storeName,
-					imageUrl,
+					imageUrl: p.imageUrl,
 				};
 			});
 	}, [products, vendorsMap]);
@@ -572,14 +566,7 @@ export default function MarketplaceHomeScreen() {
 
 	const renderItem = ({ item, index }: { item: Product, index: number }) => {
 		const vendor = item.vendorId ? vendorsMap.get(item.vendorId) : undefined;
-		const imageUrl = item.imageUrl ? (() => {
-			try {
-				const parsed = JSON.parse(item.imageUrl!);
-				return Array.isArray(parsed) ? parsed[0] : item.imageUrl;
-			} catch {
-				return item.imageUrl;
-			}
-		})() : undefined;
+		const imageUrl = item.imageUrl;
 
 		// True 3-column grid width with consistent gaps
 		const gridGap = 10;
@@ -633,6 +620,10 @@ export default function MarketplaceHomeScreen() {
 				}}
 				onEndReachedThreshold={0.5}
 				showsVerticalScrollIndicator={false}
+				maxToRenderPerBatch={12}
+				windowSize={7}
+				removeClippedSubviews={true}
+				initialNumToRender={9}
 				refreshControl={
 					<RefreshControl
 						refreshing={refreshing}
@@ -664,7 +655,7 @@ export default function MarketplaceHomeScreen() {
 										<Text style={[styles.paginationButtonText, shopPage === 1 && { color: GIFTYY_THEME.colors.gray400 }]}>{t('shop.pagination.previous')}</Text>
 									</Pressable>
 
-									<Text style={styles.paginationPageIndicator}>Page {shopPage}</Text>
+									<Text style={styles.paginationPageIndicator}>Page {shopPage} of {Math.max(shopPage, Math.ceil(filteredProducts.length / 60))}</Text>
 
 									<Pressable
 										style={[styles.paginationButton, !hasNextPage && styles.paginationButtonDisabled]}

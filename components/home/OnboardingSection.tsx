@@ -1,7 +1,7 @@
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { BRAND_FONT } from '@/constants/theme';
-import { scale, verticalScale } from '@/utils/responsive';
+import { normalizeFont, scale, verticalScale } from '@/utils/responsive';
 import React from 'react';
 import { useTranslation } from 'react-i18next';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -43,7 +43,7 @@ export const OnboardingSection: React.FC<OnboardingSectionProps> = ({ percentage
                     <View style={[styles.miniBadge, { backgroundColor: progressColor + '20' }]}>
                         <IconSymbol
                             name={percentage === 100 ? "checkmark.circle.fill" : "sparkles"}
-                            size={14}
+                            size={scale(14)}
                             color={progressColor}
                         />
                     </View>
@@ -60,7 +60,6 @@ export const OnboardingSection: React.FC<OnboardingSectionProps> = ({ percentage
                 horizontal
                 showsHorizontalScrollIndicator={false}
                 contentContainerStyle={styles.carouselContainer}
-                snapToInterval={scale(180) + 10}
                 decelerationRate="fast"
                 style={styles.carouselWrapper}
             >
@@ -80,7 +79,7 @@ export const OnboardingSection: React.FC<OnboardingSectionProps> = ({ percentage
                         ]}>
                             <IconSymbol
                                 name={step.completed ? "checkmark" : "arrow.right.circle"}
-                                size={14}
+                                size={scale(14)}
                                 color={step.completed ? "#22C55E" : GIFTYY_THEME.colors.gray400}
                             />
                         </View>
@@ -90,7 +89,7 @@ export const OnboardingSection: React.FC<OnboardingSectionProps> = ({ percentage
                                     styles.stepLabel,
                                     step.completed && styles.stepLabelCompleted
                                 ]}
-                                numberOfLines={2}
+                                numberOfLines={1}
                             >
                                 {step.label}
                             </Text>
@@ -108,8 +107,8 @@ const styles = StyleSheet.create({
     },
     summaryCard: {
         backgroundColor: '#FFF',
-        borderRadius: 20,
-        padding: 16,
+        borderRadius: GIFTYY_THEME.radius.xl,
+        padding: GIFTYY_THEME.spacing.lg,
         ...GIFTYY_THEME.shadows.md,
         borderWidth: 1,
         borderColor: 'rgba(0,0,0,0.03)',
@@ -119,54 +118,55 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        marginBottom: 12,
+        marginBottom: GIFTYY_THEME.spacing.md,
     },
     titleContainer: {
         flex: 1,
     },
     title: {
-        fontSize: 16,
-        fontWeight: '700',
+        fontSize: GIFTYY_THEME.typography.sizes.md,
+        fontWeight: GIFTYY_THEME.typography.weights.bold,
         color: '#2F2318',
         fontFamily: BRAND_FONT,
-        marginBottom: 2,
+        marginBottom: scale(2),
     },
     percentageText: {
-        fontSize: 12,
-        fontWeight: '600',
+        fontSize: GIFTYY_THEME.typography.sizes.sm,
+        fontWeight: GIFTYY_THEME.typography.weights.semibold,
         color: GIFTYY_THEME.colors.gray500,
         opacity: 0.8,
     },
     miniBadge: {
-        width: 28,
-        height: 28,
-        borderRadius: 14,
+        width: scale(28),
+        height: scale(28),
+        borderRadius: scale(14),
         alignItems: 'center',
         justifyContent: 'center',
     },
     progressLineContainer: {
-        height: 4,
+        height: scale(4),
         backgroundColor: '#F3F4F6',
-        borderRadius: 2,
+        borderRadius: scale(2),
         overflow: 'hidden',
     },
     progressLine: {
         height: '100%',
-        borderRadius: 2,
+        borderRadius: scale(2),
     },
     carouselWrapper: {
         marginHorizontal: scale(-20),
     },
     carouselContainer: {
         paddingHorizontal: scale(20),
-        gap: 10,
+        gap: GIFTYY_THEME.spacing.sm,
         paddingBottom: verticalScale(10),
     },
     stepCard: {
-        width: scale(180),
+        minWidth: scale(180),
         backgroundColor: '#FFF',
-        borderRadius: 16,
-        padding: 12,
+        borderRadius: GIFTYY_THEME.radius.lg,
+        paddingVertical: GIFTYY_THEME.spacing.md,
+        paddingHorizontal: scale(14),
         flexDirection: 'row',
         alignItems: 'center',
         borderWidth: 1,
@@ -178,22 +178,22 @@ const styles = StyleSheet.create({
         borderColor: '#E2E8F0',
     },
     statusIcon: {
-        width: 30,
-        height: 30,
-        borderRadius: 15,
+        width: scale(30),
+        height: scale(30),
+        borderRadius: scale(15),
         backgroundColor: '#F1F5F9',
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 10,
+        marginRight: GIFTYY_THEME.spacing.sm,
     },
     stepTextContainer: {
-        flex: 1,
+        flexShrink: 0,
     },
     stepLabel: {
-        fontSize: 13,
-        fontWeight: '600',
+        fontSize: normalizeFont(13),
+        fontWeight: GIFTYY_THEME.typography.weights.semibold,
         color: '#475569',
-        lineHeight: 16,
+        lineHeight: normalizeFont(16),
     },
     stepLabelCompleted: {
         color: '#94A3B8',

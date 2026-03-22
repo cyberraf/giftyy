@@ -19,11 +19,13 @@ function VideoPreviewInner({ signedUrl, style, pauseWhenViewerOpen }: { signedUr
 		p.play();
 	});
 
-	const { status, error } = useEvent(player, 'statusChange', { status: player.status, error: player.error });
+	const { status } = useEvent(player, 'statusChange', { status: player.status });
+	// Use player.status directly if needed
 
 	useEffect(() => {
-		if (error) setHasError(true);
-	}, [error]);
+		// Use player.status directly if needed or status from event
+		if (status === 'error') setHasError(true);
+	}, [status]);
 
 	// Seek to 0 and pause to show first frame once loaded
 	useEffect(() => {
@@ -53,13 +55,13 @@ function VideoPreviewInner({ signedUrl, style, pauseWhenViewerOpen }: { signedUr
 	return (
 		<View style={[style, { backgroundColor: '#000', overflow: 'hidden' }]}>
 			<VideoView
+				key={signedUrl}
 				player={player}
 				style={StyleSheet.absoluteFill}
 				contentFit="cover"
 				nativeControls={false}
-				allowsFullscreen={false}
 			/>
-			{status !== 'readyToPlay' && status !== 'playing' && (
+			{status !== 'readyToPlay' && (
 				<View style={[StyleSheet.absoluteFill, { justifyContent: 'center', alignItems: 'center' }]}>
 					<ActivityIndicator size="small" color="#fff" />
 				</View>

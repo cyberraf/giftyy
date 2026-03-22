@@ -1,183 +1,63 @@
-import { ConversationalFormWizard } from '@/components/forms/ConversationalFormWizard';
-import { ConversationalStep } from '@/components/forms/ConversationalStep';
+import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { COUNTRY_CODES, CountryCode } from '@/constants/country-codes';
-import { BRAND_COLOR } from '@/constants/theme';
 import { useAlert } from '@/contexts/AlertContext';
 import { useAuth } from '@/contexts/AuthContext';
 import { normalizePhoneInput } from '@/lib/utils/phone';
 import { isDuplicateUserError } from '@/utils/supabase-errors';
+import { checkThrottle, resetThrottle } from '@/lib/auth/throttle';
+import { trackFunnel } from '@/lib/analytics';
+import { hapticMedium, hapticSuccess, hapticError } from '@/lib/utils/haptics';
+import { scale, normalizeFont } from '@/utils/responsive';
 import FontAwesome5 from '@expo/vector-icons/FontAwesome5';
-import MaterialIcons from '@expo/vector-icons/MaterialIcons';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Link, useRouter } from 'expo-router';
-import { AsYouType, CountryCode as LibPhoneNumberCountryCode, isValidPhoneNumber } from 'libphonenumber-js';
-import React, { useState } from 'react';
-import { FlatList, Linking, Modal, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { AsYouType, CountryCode as LibPhoneNumberCountryCode, isValidPhoneNumber } from 'libphonenumber-js/min';
+import React, { useRef, useState } from 'react';
+import {
+	ActivityIndicator,
+	FlatList,
+	Image,
+	KeyboardAvoidingView,
+	Linking,
+	Modal,
+	Platform,
+	Pressable,
+	ScrollView,
+	StyleSheet,
+	Text,
+	TextInput,
+	TouchableOpacity,
+	View,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-function SocialFooter() {
-	return (
-		<View style={styles.footer}>
-			<Text style={styles.socialText}>Follow us</Text>
-			<View style={styles.socialIcons}>
-				<Pressable
-					style={styles.socialButton}
-					onPress={() => Linking.openURL('https://www.instagram.com/giftyy_llc')}
-				>
-					<FontAwesome5 name="instagram" size={18} color="#E4405F" />
-				</Pressable>
-				<Pressable
-					style={styles.socialButton}
-					onPress={() => Linking.openURL('https://www.tiktok.com/@giftyy_llc')}
-				>
-					<FontAwesome5 name="tiktok" size={18} color="#000000" />
-				</Pressable>
-				<Pressable
-					style={styles.socialButton}
-					onPress={() => Linking.openURL('https://linkedin.com/company/giftyy-store')}
-				>
-					<FontAwesome5 name="linkedin" size={18} color="#0A66C2" />
-				</Pressable>
-			</View>
-		</View>
-	);
-}
+const T = GIFTYY_THEME;
 
-function SignupNameStep({ formData, updateFormData, onNext, onBack }: any) {
+export default function SignupScreen() {
+	const { signUp, checkEmailExists } = useAuth();
 	const { alert } = useAlert();
-
-	const handleNext = () => {
-		if (!formData.firstName?.trim() || !formData.lastName?.trim()) {
-			alert('Error', 'Please enter your first and last name');
-			return;
-		}
-		onNext();
-	};
-
-	return (
-		<ConversationalStep
-			question="Welcome to Giftyy! What's your name?"
-			avatarSource={require('@/assets/images/giftyy.png')}
-			onNext={handleNext}
-			onBack={onBack}
-		>
-			<View style={styles.inputWrapper}>
-				<View style={[styles.inputContainer, { marginBottom: 12 }]}>
-					<MaterialIcons name="person" size={24} color="#9ba1a6" style={styles.inputIcon} />
-					<TextInput
-						placeholder="First name"
-						placeholderTextColor="#9ba1a6"
-						autoCapitalize="words"
-						value={formData.firstName || ''}
-						onChangeText={(text) => updateFormData({ firstName: text })}
-						style={styles.input}
-						autoFocus
-					/>
-				</View>
-				<View style={styles.inputContainer}>
-					<MaterialIcons name="person" size={24} color="#9ba1a6" style={styles.inputIcon} />
-					<TextInput
-						placeholder="Last name"
-						placeholderTextColor="#9ba1a6"
-						autoCapitalize="words"
-						value={formData.lastName || ''}
-						onChangeText={(text) => updateFormData({ lastName: text })}
-						style={styles.input}
-					/>
-				</View>
-			</View>
-
-			<View style={styles.helperContainer}>
-				<Text style={styles.helperText}>Already have an account? </Text>
-				<Link href="/(auth)/login" asChild>
-					<Pressable>
-						<Text style={styles.linkText}>Sign in</Text>
-					</Pressable>
-				</Link>
-			</View>
-
-			<SocialFooter />
-		</ConversationalStep>
-	);
-}
-
-function SignupEmailStep({ formData, updateFormData, onNext, onBack }: any) {
-	const { alert } = useAlert();
-	const { checkEmailExists } = useAuth();
-	const [loading, setLoading] = useState(false);
 	const router = useRouter();
+	const insets = useSafeAreaInsets();
 
-	const handleNext = async () => {
-		const email = formData.email?.trim() || '';
-		if (!email) {
-			alert('Error', 'Please enter your email address');
-			return;
-		}
-		if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-			alert('Error', 'Please enter a valid email address');
-			return;
-		}
+	const [firstName, setFirstName] = useState('');
+	const [lastName, setLastName] = useState('');
+	const [email, setEmail] = useState('');
+	const [phone, setPhone] = useState('');
+	const [password, setPassword] = useState('');
+	const [showPassword, setShowPassword] = useState(false);
+	const [loading, setLoading] = useState(false);
 
-		setLoading(true);
-		try {
-			const { exists, error } = await checkEmailExists(email);
-			if (error) {
-				alert('Error', error.message || 'Could not verify your email at this time.');
-				return;
-			}
-			if (exists) {
-				alert(
-					'Account Exists',
-					'An account with this email already exists.\nPlease sign in instead.',
-					[
-						{ text: 'Cancel', style: 'cancel' },
-						{ text: 'Sign In', style: 'primary', onPress: () => router.replace('/(auth)/login') }
-					]
-				);
-				return;
-			}
-			onNext(); // Advance to phone step if email is valid and available
-		} finally {
-			setLoading(false);
-		}
-	};
-
-	return (
-		<ConversationalStep
-			question={`Nice to meet you, ${formData.firstName || 'friend'}! What's your email?`}
-			avatarSource={require('@/assets/images/giftyy.png')}
-			onNext={handleNext}
-			onBack={onBack}
-			loading={loading}
-		>
-			<View style={styles.inputWrapper}>
-				<View style={styles.inputContainer}>
-					<MaterialIcons name="email" size={24} color="#9ba1a6" style={styles.inputIcon} />
-					<TextInput
-						placeholder="Email address"
-						placeholderTextColor="#9ba1a6"
-						autoCapitalize="none"
-						keyboardType="email-address"
-						value={formData.email || ''}
-						onChangeText={(text) => updateFormData({ email: text })}
-						style={styles.input}
-						editable={!loading}
-						autoFocus
-					/>
-				</View>
-			</View>
-
-			<SocialFooter />
-		</ConversationalStep>
-	);
-}
-
-function SignupPhoneStep({ formData, updateFormData, onNext, onBack }: any) {
-	const { alert } = useAlert();
 	const [country, setCountry] = useState<CountryCode>(
-		COUNTRY_CODES.find(c => c.code === (formData.countryCode || '+1')) || COUNTRY_CODES[0]
+		COUNTRY_CODES.find(c => c.code === '+1') || COUNTRY_CODES[0]
 	);
 	const [showCountryPicker, setShowCountryPicker] = useState(false);
 	const [searchQuery, setSearchQuery] = useState('');
+
+	const lastNameRef = useRef<TextInput>(null);
+	const emailRef = useRef<TextInput>(null);
+	const phoneRef = useRef<TextInput>(null);
+	const passwordRef = useRef<TextInput>(null);
 
 	const filteredCountries = COUNTRY_CODES.filter(c =>
 		c.country.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -188,208 +68,90 @@ function SignupPhoneStep({ formData, updateFormData, onNext, onBack }: any) {
 		const formatter = new AsYouType(country.iso as LibPhoneNumberCountryCode);
 		const formatted = formatter.input(text);
 
-		const currentPhone = formData.phone || '';
-		const currentNormalized = normalizePhoneInput(currentPhone);
+		const currentNormalized = normalizePhoneInput(phone);
 		const nextNormalized = normalizePhoneInput(text);
 
-		// If user is adding a digit (next is longer than current)
 		if (nextNormalized.length > currentNormalized.length) {
-			// Check if the current value (before this change) was already valid
 			const dialCode = country.code;
 			const numberPart = currentNormalized.startsWith(dialCode) ? currentNormalized.slice(dialCode.length) : currentNormalized;
 			const fullNumber = dialCode + numberPart;
-
 			if (isValidPhoneNumber(fullNumber, country.iso as LibPhoneNumberCountryCode)) {
-				// It was already valid, so don't allow adding more digits
 				return;
 			}
 		}
 
-		updateFormData({ phone: formatted });
+		setPhone(formatted);
 	};
 
-	const isValid = (() => {
-		const phone = formData.phone || '';
+	const isPhoneValid = (() => {
 		const normalized = normalizePhoneInput(phone);
 		if (!normalized) return false;
-
-		// Ensure we check with the full international prefix for isValidPhoneNumber
-		const dialCode = country.code; // e.g. +1 or +355
+		const dialCode = country.code;
 		const numberPart = normalized.startsWith(dialCode) ? normalized.slice(dialCode.length) : normalized;
 		const fullNumber = dialCode + numberPart;
-
 		return isValidPhoneNumber(fullNumber, country.iso as LibPhoneNumberCountryCode);
 	})();
 
-	const handleNext = () => {
-		if (!isValid) {
-			alert('Invalid Number', `The mobile number provided is not valid for ${country.country}.`);
+	const handleSignup = async () => {
+		if (!firstName.trim() || !lastName.trim()) {
+			alert('Error', 'Please enter your first and last name');
 			return;
 		}
 
-		updateFormData({ countryCode: country.code });
-		onNext();
-	};
+		const trimmedEmail = email.trim();
+		if (!trimmedEmail) {
+			alert('Error', 'Please enter your email address');
+			return;
+		}
+		if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+			alert('Error', 'Please enter a valid email address');
+			return;
+		}
 
-	return (
-		<ConversationalStep
-			question="What's your mobile number?"
-			description="Your phone number connects you to your gifting circle."
-			avatarSource={require('@/assets/images/giftyy.png')}
-			onNext={handleNext}
-			onBack={onBack}
-		>
-			<View style={styles.inputWrapper}>
-				<View style={[
-					styles.phoneInputContainer,
-					formData.phone && !isValid && { borderColor: '#ffa500' },
-					formData.phone && isValid && { borderColor: '#4CAF50' }
-				]}>
-					<TouchableOpacity
-						style={styles.countryCodeButton}
-						onPress={() => setShowCountryPicker(true)}
-					>
-						<Text style={styles.countryCodeFlag}>{country.flag}</Text>
-						<Text style={styles.countryCodeText}>{country.code}</Text>
-						<Text style={styles.dropdownArrow}>▼</Text>
-					</TouchableOpacity>
+		if (!isPhoneValid) {
+			alert('Error', `Please enter a valid ${country.country} phone number`);
+			return;
+		}
 
-					<TextInput
-						style={[styles.input, { flex: 1 }]}
-						value={formData.phone || ''}
-						onChangeText={handlePhoneChange}
-						placeholder="(555) 000-0000"
-						placeholderTextColor="#9ba1a6"
-						keyboardType="phone-pad"
-						autoFocus
-					/>
-				</View>
-				{formData.phone && !isValid && (
-					<Text style={styles.validationText}>Enter a valid {country.country} number</Text>
-				)}
-			</View>
-
-			<SocialFooter />
-
-			<Modal
-				visible={showCountryPicker}
-				animationType="slide"
-				transparent={true}
-				onRequestClose={() => setShowCountryPicker(false)}
-			>
-				<View style={styles.modalOverlay}>
-					<View style={styles.pickerModal}>
-						<View style={styles.dragHandle} />
-						<View style={styles.pickerHeader}>
-							<Text style={styles.pickerTitle}>Select Country</Text>
-							<TouchableOpacity onPress={() => setShowCountryPicker(false)}>
-								<Text style={styles.closeButton}>×</Text>
-							</TouchableOpacity>
-						</View>
-
-						<TextInput
-							style={styles.searchInput}
-							placeholder="Search country..."
-							value={searchQuery}
-							onChangeText={setSearchQuery}
-						/>
-
-						<FlatList
-							data={filteredCountries}
-							keyExtractor={(item) => item.country}
-							renderItem={({ item }) => (
-								<TouchableOpacity
-									style={styles.countryOption}
-									onPress={() => {
-										setCountry(item);
-										// Re-format existing number with new country context
-										handlePhoneChange(formData.phone || '');
-										setShowCountryPicker(false);
-										setSearchQuery('');
-									}}
-								>
-									<Text style={styles.countryFlag}>{item.flag}</Text>
-									<View style={{ flex: 1 }}>
-										<Text style={styles.countryName}>{item.country}</Text>
-									</View>
-									<Text style={styles.countryCodeBadge}>{item.code}</Text>
-								</TouchableOpacity>
-							)}
-							contentContainerStyle={styles.countryList}
-						/>
-					</View>
-				</View>
-			</Modal>
-		</ConversationalStep>
-	);
-}
-
-function SignupPasswordStep({ formData, updateFormData, onNext, onBack, loading }: any) {
-	const { alert } = useAlert();
-
-	const handleNext = () => {
-		const password = formData.password || '';
 		if (!password || password.length < 6) {
-			alert('Error', 'Password must be at least 6 characters long');
+			alert('Error', 'Password must be at least 6 characters');
 			return;
 		}
-		onNext();
-	};
 
-	return (
-		<ConversationalStep
-			question="Almost done! Let's secure your account with a password."
-			avatarSource={require('@/assets/images/giftyy.png')}
-			onNext={handleNext}
-			onBack={onBack}
-			loading={loading}
-			nextLabel="Create Account"
-		>
-			<View style={styles.inputWrapper}>
-				<View style={styles.inputContainer}>
-					<MaterialIcons name="lock" size={24} color="#9ba1a6" style={styles.inputIcon} />
-					<TextInput
-						placeholder="Password (min. 6 chars)"
-						placeholderTextColor="#9ba1a6"
-						secureTextEntry
-						editable={!loading}
-						value={formData.password || ''}
-						onChangeText={(text) => updateFormData({ password: text })}
-						style={styles.input}
-						autoFocus
-					/>
-				</View>
-			</View>
-
-			<View style={[styles.helperContainer, { marginTop: 16 }]}>
-				<Text style={styles.termsText}>
-					By signing up, you agree to our Terms of Service and Privacy Policy
-				</Text>
-			</View>
-
-			<SocialFooter />
-		</ConversationalStep>
-	);
-}
-
-export default function SignupScreen() {
-	const { signUp } = useAuth();
-	const { alert } = useAlert();
-	const router = useRouter();
-	const insets = useSafeAreaInsets();
-	const [loading, setLoading] = useState(false);
-
-	const handleSignup = async (data: any) => {
-		const { email, password, firstName, lastName, phone, countryCode } = data;
+		hapticMedium();
 		setLoading(true);
 		try {
-			// Normalize phone number: combine country code + phone digits
-			const rawPhone = phone || '';
-			const dialCode = countryCode || '+1';
-			const normalizedPhone = normalizePhoneInput(rawPhone.startsWith(dialCode) ? rawPhone : `${dialCode}${rawPhone}`);
+			// Check if email already exists
+			const { exists, error: checkError } = await checkEmailExists(trimmedEmail);
+			if (checkError) {
+				alert('Error', checkError.message || 'Could not verify your email at this time.');
+				return;
+			}
+			if (exists) {
+				alert(
+					'Account Exists',
+					'An account with this email already exists.\nPlease sign in instead.',
+					[
+						{ text: 'Cancel', style: 'cancel' },
+						{ text: 'Sign In', style: 'primary', onPress: () => router.replace('/(auth)/login') },
+					]
+				);
+				return;
+			}
+
+			// Normalize phone
+			const normalizedPhone = normalizePhoneInput(
+				phone.startsWith(country.code) ? phone : `${country.code}${phone}`
+			);
+
+			const throttle = checkThrottle('signup');
+			if (!throttle.allowed) {
+				alert('Too Many Attempts', `Please wait ${throttle.retryAfterSeconds} seconds before trying again.`);
+				return;
+			}
 
 			const { error } = await signUp(
-				email.trim(),
+				trimmedEmail,
 				password,
 				firstName.trim(),
 				lastName.trim(),
@@ -397,8 +159,8 @@ export default function SignupScreen() {
 			);
 
 			if (error) {
+				hapticError();
 				const errorMessage = error.message || 'Unable to create account. Please try again.';
-				// Simple duplicate check logic
 				if (
 					isDuplicateUserError?.(error) ||
 					errorMessage.toLowerCase().includes('already exists') ||
@@ -420,37 +182,311 @@ export default function SignupScreen() {
 				return;
 			}
 
-			// Route to verification immediately
-			router.replace(`/(auth)/verify-email?email=${encodeURIComponent(email.trim())}`);
+			hapticSuccess();
+			resetThrottle('signup');
+			trackFunnel('signup_complete');
+			router.replace(`/(auth)/verify-email?email=${encodeURIComponent(trimmedEmail)}`);
 		} catch (err: any) {
 			console.error('Unexpected signup error:', err);
-			const errorMsg = err?.message || 'An unexpected error occurred. Please try again.';
-			alert('Signup Failed', errorMsg);
+			alert('Signup Failed', err?.message || 'An unexpected error occurred. Please try again.');
 		} finally {
 			setLoading(false);
 		}
 	};
 
-	const handleCancel = () => {
-		if (router.canGoBack()) {
-			router.back();
-		} else {
-			router.replace('/(auth)/onboarding'); // Fallback route
-		}
-	};
-
 	return (
-		<View style={[styles.container, { paddingTop: insets.top }]}>
-			<ConversationalFormWizard
-				onComplete={handleSignup}
-				onCancel={handleCancel}
-				hideProgress
+		<View style={styles.container}>
+			<LinearGradient
+				colors={['#fff5f0', '#ffffff', '#ffffff']}
+				locations={[0, 0.35, 1]}
+				style={StyleSheet.absoluteFill}
+			/>
+
+			<KeyboardAvoidingView
+				style={styles.flex}
+				behavior={Platform.OS === 'ios' ? 'padding' : undefined}
 			>
-				<SignupNameStep />
-				<SignupEmailStep />
-				<SignupPhoneStep />
-				<SignupPasswordStep loading={loading} />
-			</ConversationalFormWizard>
+				<ScrollView
+					contentContainerStyle={[
+						styles.scrollContent,
+						{ paddingTop: insets.top + scale(20), paddingBottom: insets.bottom + scale(32) },
+					]}
+					keyboardShouldPersistTaps="handled"
+					showsVerticalScrollIndicator={false}
+				>
+					{/* Logo & Brand */}
+					<View style={styles.brandSection}>
+						<Image
+							source={require('@/assets/images/giftyy.png')}
+							style={styles.logo}
+							resizeMode="contain"
+						/>
+						<Text style={styles.tagline}>Giftyy</Text>
+					</View>
+
+					{/* Form Card */}
+					<View style={styles.card}>
+						<Text style={styles.cardTitle}>Create your account</Text>
+						<Text style={styles.cardSubtitle}>Join the gifting community</Text>
+
+						{/* First & Last Name — side by side */}
+						<View style={styles.nameRow}>
+							<View style={[styles.fieldGroup, styles.nameField]}>
+								<Text style={styles.label}>First name</Text>
+								<View style={[styles.inputContainer, loading && styles.inputDisabled]}>
+									<Ionicons name="person-outline" size={scale(18)} color={T.colors.gray400} />
+									<TextInput
+										placeholder="First"
+										placeholderTextColor={T.colors.gray400}
+										autoCapitalize="words"
+										autoComplete="given-name"
+										textContentType="givenName"
+										returnKeyType="next"
+										value={firstName}
+										onChangeText={setFirstName}
+										onSubmitEditing={() => lastNameRef.current?.focus()}
+										style={styles.input}
+										editable={!loading}
+										accessibilityLabel="First name"
+									/>
+								</View>
+							</View>
+
+							<View style={[styles.fieldGroup, styles.nameField]}>
+								<Text style={styles.label}>Last name</Text>
+								<View style={[styles.inputContainer, loading && styles.inputDisabled]}>
+									<Ionicons name="person-outline" size={scale(18)} color={T.colors.gray400} />
+									<TextInput
+										ref={lastNameRef}
+										placeholder="Last"
+										placeholderTextColor={T.colors.gray400}
+										autoCapitalize="words"
+										autoComplete="family-name"
+										textContentType="familyName"
+										returnKeyType="next"
+										value={lastName}
+										onChangeText={setLastName}
+										onSubmitEditing={() => emailRef.current?.focus()}
+										style={styles.input}
+										editable={!loading}
+										accessibilityLabel="Last name"
+									/>
+								</View>
+							</View>
+						</View>
+
+						{/* Email */}
+						<View style={styles.fieldGroup}>
+							<Text style={styles.label}>Email</Text>
+							<View style={[styles.inputContainer, loading && styles.inputDisabled]}>
+								<Ionicons name="mail-outline" size={scale(20)} color={T.colors.gray400} />
+								<TextInput
+									ref={emailRef}
+									placeholder="you@example.com"
+									placeholderTextColor={T.colors.gray400}
+									autoCapitalize="none"
+									keyboardType="email-address"
+									autoComplete="email"
+									textContentType="emailAddress"
+									returnKeyType="next"
+									value={email}
+									onChangeText={setEmail}
+									onSubmitEditing={() => phoneRef.current?.focus()}
+									style={styles.input}
+									editable={!loading}
+									accessibilityLabel="Email address"
+								/>
+							</View>
+						</View>
+
+						{/* Phone */}
+						<View style={styles.fieldGroup}>
+							<Text style={styles.label}>Phone number</Text>
+							<View style={[
+								styles.phoneRow,
+								loading && styles.inputDisabled,
+								phone && !isPhoneValid && styles.phoneInvalid,
+								phone && isPhoneValid && styles.phoneValid,
+							]}>
+								<TouchableOpacity
+									style={styles.countryPicker}
+									onPress={() => setShowCountryPicker(true)}
+									disabled={loading}
+								>
+									<Text style={styles.countryFlag}>{country.flag}</Text>
+									<Text style={styles.countryCode}>{country.code}</Text>
+									<Ionicons name="chevron-down" size={scale(14)} color={T.colors.gray400} />
+								</TouchableOpacity>
+								<View style={styles.phoneDivider} />
+								<TextInput
+									ref={phoneRef}
+									placeholder="(555) 000-0000"
+									placeholderTextColor={T.colors.gray400}
+									keyboardType="phone-pad"
+									value={phone}
+									onChangeText={handlePhoneChange}
+									style={[styles.input, styles.phoneInput]}
+									editable={!loading}
+									accessibilityLabel="Phone number"
+								/>
+							</View>
+							{phone && !isPhoneValid && (
+								<Text style={styles.validationHint}>Enter a valid {country.country} number</Text>
+							)}
+						</View>
+
+						{/* Password */}
+						<View style={styles.fieldGroup}>
+							<Text style={styles.label}>Password</Text>
+							<View style={[styles.inputContainer, loading && styles.inputDisabled]}>
+								<Ionicons name="lock-closed-outline" size={scale(20)} color={T.colors.gray400} />
+								<TextInput
+									ref={passwordRef}
+									placeholder="Min. 6 characters"
+									placeholderTextColor={T.colors.gray400}
+									secureTextEntry={!showPassword}
+									autoComplete="new-password"
+									textContentType="newPassword"
+									returnKeyType="go"
+									value={password}
+									onChangeText={setPassword}
+									onSubmitEditing={handleSignup}
+									style={styles.input}
+									editable={!loading}
+									accessibilityLabel="Password"
+								/>
+								<Pressable
+									onPress={() => setShowPassword(!showPassword)}
+									hitSlop={8}
+									accessibilityRole="button"
+									accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
+								>
+									<Ionicons
+										name={showPassword ? 'eye-off-outline' : 'eye-outline'}
+										size={scale(20)}
+										color={T.colors.gray400}
+									/>
+								</Pressable>
+							</View>
+						</View>
+
+						{/* Terms */}
+						<Text style={styles.termsText}>
+							By signing up, you agree to our Terms of Service and Privacy Policy
+						</Text>
+
+						{/* Create Account Button */}
+						<Pressable
+							style={({ pressed }) => [
+								styles.primaryButton,
+								pressed && styles.primaryButtonPressed,
+								loading && styles.primaryButtonDisabled,
+							]}
+							onPress={handleSignup}
+							disabled={loading}
+							accessibilityRole="button"
+							accessibilityLabel="Create account"
+							accessibilityState={{ disabled: loading, busy: loading }}
+						>
+							{loading ? (
+								<ActivityIndicator color="#fff" size="small" />
+							) : (
+								<Text style={styles.primaryButtonText}>Create Account</Text>
+							)}
+						</Pressable>
+					</View>
+
+					{/* Sign In Link */}
+					<View style={styles.signInRow}>
+						<Text style={styles.signInText}>Already have an account? </Text>
+						<Link href="/(auth)/login" asChild>
+							<Pressable hitSlop={8}>
+								<Text style={styles.signInLink}>Sign in</Text>
+							</Pressable>
+						</Link>
+					</View>
+
+					{/* Social Links */}
+					<View style={styles.socialSection}>
+						<Text style={styles.socialLabel}>Follow us</Text>
+						<View style={styles.socialIcons}>
+							<Pressable
+								style={styles.socialButton}
+								onPress={() => Linking.openURL('https://www.instagram.com/giftyy_llc')}
+							>
+								<FontAwesome5 name="instagram" size={scale(16)} color="#E4405F" />
+							</Pressable>
+							<Pressable
+								style={styles.socialButton}
+								onPress={() => Linking.openURL('https://www.tiktok.com/@giftyy_llc')}
+							>
+								<FontAwesome5 name="tiktok" size={scale(16)} color="#000000" />
+							</Pressable>
+							<Pressable
+								style={styles.socialButton}
+								onPress={() => Linking.openURL('https://linkedin.com/company/giftyy-store')}
+							>
+								<FontAwesome5 name="linkedin" size={scale(16)} color="#0A66C2" />
+							</Pressable>
+						</View>
+					</View>
+				</ScrollView>
+			</KeyboardAvoidingView>
+
+			{/* Country Picker Modal */}
+			<Modal
+				visible={showCountryPicker}
+				animationType="slide"
+				transparent
+				onRequestClose={() => setShowCountryPicker(false)}
+			>
+				<View style={styles.modalOverlay}>
+					<View style={styles.pickerModal}>
+						<View style={styles.dragHandle} />
+						<View style={styles.pickerHeader}>
+							<Text style={styles.pickerTitle}>Select Country</Text>
+							<Pressable onPress={() => setShowCountryPicker(false)} hitSlop={8}>
+								<Ionicons name="close" size={scale(24)} color={T.colors.gray400} />
+							</Pressable>
+						</View>
+
+						<View style={styles.searchContainer}>
+							<Ionicons name="search-outline" size={scale(18)} color={T.colors.gray400} />
+							<TextInput
+								style={styles.searchInput}
+								placeholder="Search country..."
+								placeholderTextColor={T.colors.gray400}
+								value={searchQuery}
+								onChangeText={setSearchQuery}
+							/>
+						</View>
+
+						<FlatList
+							data={filteredCountries}
+							keyExtractor={(item) => item.country}
+							renderItem={({ item }) => (
+								<Pressable
+									style={({ pressed }) => [
+										styles.countryOption,
+										pressed && styles.countryOptionPressed,
+									]}
+									onPress={() => {
+										setCountry(item);
+										handlePhoneChange(phone);
+										setShowCountryPicker(false);
+										setSearchQuery('');
+									}}
+								>
+									<Text style={styles.countryOptionFlag}>{item.flag}</Text>
+									<Text style={styles.countryName} numberOfLines={1}>{item.country}</Text>
+									<Text style={styles.countryCodeBadge}>{item.code}</Text>
+								</Pressable>
+							)}
+							contentContainerStyle={styles.countryList}
+						/>
+					</View>
+				</View>
+			</Modal>
 		</View>
 	);
 }
@@ -458,198 +494,292 @@ export default function SignupScreen() {
 const styles = StyleSheet.create({
 	container: {
 		flex: 1,
-		backgroundColor: '#F8F9FA',
+		backgroundColor: '#ffffff',
 	},
-	inputWrapper: {
-		marginTop: 10,
+	flex: {
+		flex: 1,
+	},
+	scrollContent: {
+		flexGrow: 1,
+		paddingHorizontal: T.spacing['2xl'],
+	},
+
+	// Brand
+	brandSection: {
+		alignItems: 'center',
+		marginBottom: T.spacing.lg,
+	},
+	logo: {
+		width: scale(72),
+		height: scale(72),
+	},
+	tagline: {
+		marginTop: scale(2),
+		fontSize: T.typography.sizes.lg,
+		color: T.colors.primary,
+		fontWeight: T.typography.weights.extrabold,
+	},
+
+	// Card
+	card: {
+		backgroundColor: '#ffffff',
+		borderRadius: T.radius.xl,
+		padding: T.spacing.xl,
+		borderWidth: 1,
+		borderColor: T.colors.gray200,
+		...T.shadows.md,
+	},
+	cardTitle: {
+		fontSize: T.typography.sizes['2xl'],
+		fontWeight: T.typography.weights.bold,
+		color: T.colors.gray900,
+		marginBottom: scale(2),
+	},
+	cardSubtitle: {
+		fontSize: T.typography.sizes.base,
+		color: T.colors.gray500,
+		marginBottom: T.spacing.lg,
+	},
+
+	// Fields
+	fieldGroup: {
+		marginBottom: T.spacing.md,
+	},
+	nameRow: {
+		flexDirection: 'row',
+		gap: T.spacing.md,
+	},
+	nameField: {
+		flex: 1,
+	},
+	label: {
+		fontSize: T.typography.sizes.sm,
+		fontWeight: T.typography.weights.semibold,
+		color: T.colors.gray700,
+		marginBottom: scale(5),
 	},
 	inputContainer: {
 		flexDirection: 'row',
 		alignItems: 'center',
-		backgroundColor: '#FFFFFF',
-		borderWidth: 2,
-		borderColor: '#E5E7EB',
-		borderRadius: 16,
-		paddingHorizontal: 16,
-		paddingVertical: 4,
-		shadowColor: '#000',
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.03,
-		shadowRadius: 4,
-		elevation: 1,
+		backgroundColor: T.colors.gray50,
+		borderWidth: 1.5,
+		borderColor: T.colors.gray200,
+		borderRadius: scale(14),
+		paddingHorizontal: T.spacing.md,
+		gap: T.spacing.sm,
 	},
-	inputIcon: {
-		marginRight: 12,
+	inputDisabled: {
+		opacity: 0.6,
 	},
 	input: {
 		flex: 1,
-		paddingVertical: 14,
-		fontSize: 18,
-		color: '#1F2937',
-		fontWeight: '500',
+		paddingVertical: scale(11),
+		fontSize: normalizeFont(15),
+		color: T.colors.gray900,
+		fontWeight: T.typography.weights.normal,
 	},
-	helperContainer: {
+
+	// Phone
+	phoneRow: {
 		flexDirection: 'row',
-		alignItems: 'flex-start',
-		marginTop: 24,
-		paddingHorizontal: 8,
-	},
-	helperText: {
-		fontSize: 15,
-		color: '#6B7280',
-	},
-	linkText: {
-		fontSize: 15,
-		color: BRAND_COLOR,
-		fontWeight: '700',
-	},
-	termsText: {
-		fontSize: 14,
-		color: '#9CA3AF',
-		lineHeight: 20,
-	},
-	footer: {
 		alignItems: 'center',
-		paddingTop: 32,
-		paddingBottom: 24,
-		backgroundColor: 'transparent',
+		backgroundColor: T.colors.gray50,
+		borderWidth: 1.5,
+		borderColor: T.colors.gray200,
+		borderRadius: scale(14),
+		paddingLeft: T.spacing.md,
 	},
-	socialText: {
-		fontSize: 14,
-		color: '#6B7280',
-		marginBottom: 16,
-		fontWeight: '500',
+	phoneInvalid: {
+		borderColor: '#f59e0b',
+	},
+	phoneValid: {
+		borderColor: T.colors.success,
+	},
+	countryPicker: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: T.spacing.xs,
+		paddingVertical: scale(11),
+	},
+	countryFlag: {
+		fontSize: T.typography.sizes.lg,
+	},
+	countryCode: {
+		fontSize: normalizeFont(15),
+		fontWeight: T.typography.weights.semibold,
+		color: T.colors.gray700,
+	},
+	phoneDivider: {
+		width: 1,
+		height: scale(24),
+		backgroundColor: T.colors.gray200,
+		marginHorizontal: scale(10),
+	},
+	phoneInput: {
+		paddingLeft: 0,
+	},
+	validationHint: {
+		fontSize: T.typography.sizes.xs,
+		color: '#f59e0b',
+		marginTop: scale(6),
+		marginLeft: T.spacing.xs,
+		fontWeight: T.typography.weights.medium,
+	},
+
+	// Terms
+	termsText: {
+		fontSize: T.typography.sizes.xs,
+		color: T.colors.gray400,
+		lineHeight: normalizeFont(17),
+		marginBottom: scale(14),
+	},
+
+	// Primary Button
+	primaryButton: {
+		backgroundColor: T.colors.primary,
+		borderRadius: scale(14),
+		paddingVertical: scale(14),
+		alignItems: 'center',
+		justifyContent: 'center',
+		...T.shadows.sm,
+	},
+	primaryButtonPressed: {
+		backgroundColor: T.colors.primaryDark,
+	},
+	primaryButtonDisabled: {
+		opacity: 0.7,
+	},
+	primaryButtonText: {
+		color: '#ffffff',
+		fontSize: T.typography.sizes.md,
+		fontWeight: T.typography.weights.bold,
+		letterSpacing: 0.3,
+	},
+
+	// Sign In link
+	signInRow: {
+		flexDirection: 'row',
+		justifyContent: 'center',
+		alignItems: 'center',
+		marginTop: T.spacing.xl,
+	},
+	signInText: {
+		fontSize: normalizeFont(15),
+		color: T.colors.gray500,
+	},
+	signInLink: {
+		fontSize: normalizeFont(15),
+		fontWeight: T.typography.weights.bold,
+		color: T.colors.primary,
+	},
+
+	// Socials
+	socialSection: {
+		alignItems: 'center',
+		marginTop: T.spacing['2xl'],
+		paddingBottom: T.spacing.md,
+	},
+	socialLabel: {
+		fontSize: T.typography.sizes.sm,
+		color: T.colors.gray400,
+		fontWeight: T.typography.weights.medium,
+		marginBottom: T.spacing.md,
 	},
 	socialIcons: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'center',
-		gap: 20,
+		gap: T.spacing.lg,
 	},
 	socialButton: {
-		width: 36,
-		height: 36,
-		borderRadius: 18,
-		backgroundColor: '#F9FAFB',
+		width: scale(38),
+		height: scale(38),
+		borderRadius: scale(19),
+		backgroundColor: '#ffffff',
 		borderWidth: 1,
-		borderColor: '#E5E7EB',
+		borderColor: T.colors.gray200,
 		alignItems: 'center',
 		justifyContent: 'center',
-		shadowColor: '#000',
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.05,
-		shadowRadius: 4,
-		elevation: 2,
 	},
-	phoneInputContainer: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		backgroundColor: '#FFFFFF',
-		borderWidth: 2,
-		borderColor: '#E5E7EB',
-		borderRadius: 16,
-		paddingHorizontal: 12,
-		shadowColor: '#000',
-		shadowOffset: { width: 0, height: 2 },
-		shadowOpacity: 0.03,
-		shadowRadius: 4,
-		elevation: 1,
-	},
-	countryCodeButton: {
-		flexDirection: 'row',
-		alignItems: 'center',
-		paddingRight: 12,
-		borderRightWidth: 1,
-		borderRightColor: '#E5E7EB',
-		marginRight: 12,
-	},
-	countryCodeFlag: {
-		fontSize: 20,
-		marginRight: 6,
-	},
-	countryCodeText: {
-		fontSize: 16,
-		fontWeight: '600',
-		color: '#1F2937',
-	},
-	dropdownArrow: {
-		fontSize: 10,
-		color: '#9CA3AF',
-		marginLeft: 4,
-	},
+
+	// Country Picker Modal
 	modalOverlay: {
 		flex: 1,
-		backgroundColor: 'rgba(0, 0, 0, 0.5)',
+		backgroundColor: 'rgba(0, 0, 0, 0.4)',
 		justifyContent: 'flex-end',
 	},
 	pickerModal: {
-		backgroundColor: '#FFFFFF',
-		borderTopLeftRadius: 24,
-		borderTopRightRadius: 24,
-		maxHeight: '80%',
-		paddingBottom: 40,
+		backgroundColor: '#ffffff',
+		borderTopLeftRadius: T.radius['2xl'],
+		borderTopRightRadius: T.radius['2xl'],
+		maxHeight: '75%',
+		paddingBottom: T.spacing['4xl'],
 	},
 	dragHandle: {
-		width: 40,
-		height: 4,
-		backgroundColor: '#E5E7EB',
-		borderRadius: 2,
+		width: scale(40),
+		height: scale(4),
+		backgroundColor: T.colors.gray200,
+		borderRadius: scale(2),
 		alignSelf: 'center',
-		marginTop: 12,
+		marginTop: T.spacing.md,
 	},
 	pickerHeader: {
 		flexDirection: 'row',
 		justifyContent: 'space-between',
 		alignItems: 'center',
-		padding: 20,
+		paddingHorizontal: T.spacing.xl,
+		paddingVertical: T.spacing.lg,
 		borderBottomWidth: 1,
-		borderBottomColor: '#F3F4F6',
+		borderBottomColor: T.colors.gray100,
 	},
 	pickerTitle: {
-		fontSize: 20,
-		fontWeight: '700',
-		color: '#1F2937',
+		fontSize: T.typography.sizes.lg,
+		fontWeight: T.typography.weights.bold,
+		color: T.colors.gray900,
 	},
-	closeButton: {
-		fontSize: 24,
-		color: '#9CA3AF',
+	searchContainer: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		backgroundColor: T.colors.gray50,
+		borderRadius: T.radius.md,
+		marginHorizontal: T.spacing.lg,
+		marginVertical: T.spacing.md,
+		paddingHorizontal: T.spacing.md,
+		gap: T.spacing.sm,
+		borderWidth: 1,
+		borderColor: T.colors.gray200,
 	},
 	searchInput: {
-		backgroundColor: '#F3F4F6',
-		margin: 16,
-		padding: 12,
-		borderRadius: 12,
-		fontSize: 16,
+		flex: 1,
+		paddingVertical: scale(10),
+		fontSize: normalizeFont(15),
+		color: T.colors.gray900,
 	},
 	countryList: {
-		paddingHorizontal: 16,
+		paddingHorizontal: T.spacing.lg,
 	},
 	countryOption: {
 		flexDirection: 'row',
 		alignItems: 'center',
-		paddingVertical: 14,
+		paddingVertical: scale(14),
 		borderBottomWidth: 1,
-		borderBottomColor: '#F3F4F6',
+		borderBottomColor: T.colors.gray100,
+		gap: T.spacing.md,
 	},
-	countryFlag: {
-		fontSize: 24,
-		marginRight: 16,
+	countryOptionPressed: {
+		backgroundColor: T.colors.gray50,
+	},
+	countryOptionFlag: {
+		fontSize: T.typography.sizes['2xl'],
 	},
 	countryName: {
 		flex: 1,
-		fontSize: 16,
-		color: '#1F2937',
+		fontSize: normalizeFont(15),
+		color: T.colors.gray900,
 	},
 	countryCodeBadge: {
-		fontSize: 14,
-		color: '#6B7280',
-		fontWeight: '600',
-	},
-	validationText: {
-		fontSize: 12,
-		color: '#ffa500',
-		marginTop: 8,
-		marginLeft: 4,
-		fontWeight: '500',
+		fontSize: T.typography.sizes.base,
+		color: T.colors.gray500,
+		fontWeight: T.typography.weights.semibold,
 	},
 });

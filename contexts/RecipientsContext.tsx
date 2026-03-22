@@ -474,7 +474,10 @@ export function RecipientsProvider({ children }: { children: React.ReactNode }) 
     useEffect(() => {
         if (user && !syncedContacts.length && !syncingRef.current) {
             console.log('[RecipientsContext] Starting proactive background sync');
-            syncContacts();
+            syncContacts().catch(() => {
+                // Permission denied or contacts unavailable — handled silently here,
+                // FindFriendsModal will show the proper permission UI when opened.
+            });
         }
     }, [user, syncContacts, syncedContacts.length]);
 

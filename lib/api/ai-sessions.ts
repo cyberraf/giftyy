@@ -307,11 +307,13 @@ export interface RecommenderParams {
   freeText?: string;
   chatHistory?: { role: string; content: string }[];
   feedbackHistory?: { productId: string; productName: string; type: 'like' | 'dislike'; reason?: string; }[];
+  lastRecommendations?: { product_id: string; title: string }[];
   constraints?: {
     gift_wrap_required?: boolean;
     personalization_required?: boolean;
     shipping_deadline_days?: number;
   };
+  sessionState?: any; // v4: history-aware session state
 }
 
 export interface RecommendedProduct {
@@ -335,16 +337,18 @@ export interface RecommenderOutput {
   message_script: string;
   cautions: string[];
   candidates_evaluated: number;
+  // v4: session state and context
+  sessionState?: any;
+  intent?: { type: string; confidence: number };
+  profileScore?: number;
+  extracted_profile_hints?: Record<string, any>;
 }
 
 /**
- * Calls the appropriate AI Recommend Edge Function:
- * - 'ai-recommend' for discovery (untagged)
- * - 'ai-recommend-tagged' for experts (tagged)
+ * Calls the AI Recommend Edge Function (v4).
  */
 export async function callAIRecommendFunction(
-  params: RecommenderParams,
-  isTagged?: boolean
+  params: RecommenderParams
 ): Promise<{ data: RecommenderOutput | null; error: { message: string } | null }> {
   if (!isSupabaseConfigured()) return { data: null, error: NOT_CONFIGURED };
 
@@ -354,7 +358,7 @@ export async function callAIRecommendFunction(
     return { data: null, error: { message: 'Must be logged in to use AI recommender' } };
   }
 
-  const functionName = isTagged ? 'ai-recommend-tagged' : 'ai-recommend';
+  const functionName = 'ai-recommend';
 
   const { data, error } = await supabase.functions.invoke<RecommenderOutput>(functionName, {
     body: params,

@@ -21,6 +21,7 @@ import { useWishlist } from '@/contexts/WishlistContext';
 import { useCheckout } from '@/lib/CheckoutContext';
 import { logProductAnalyticsEvent } from '@/lib/product-analytics';
 import { supabase } from '@/lib/supabase';
+import { smartBuyerBack } from '@/lib/utils/navigation';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useScrollToTop } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -35,7 +36,7 @@ import {
 	Text,
 	View,
 } from 'react-native';
-import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
+import Animated, { FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { getVendorsInfo } from '@/lib/vendor-utils';
 
@@ -452,7 +453,7 @@ export default function ProductDetailsScreen() {
 	};
 
 	// Loading state
-	if (productsLoading) {
+	if (productsLoading || isFetchingLocal) {
 		return (
 			<View style={styles.loadingContainer}>
 				<ActivityIndicator size="large" color={GIFTYY_THEME.colors.primary} />
@@ -468,12 +469,47 @@ export default function ProductDetailsScreen() {
 				<IconSymbol name="exclamationmark.triangle" size={48} color={GIFTYY_THEME.colors.gray400} />
 				<Text style={styles.errorTitle}>Product not found</Text>
 				<Text style={styles.errorText}>The product you're looking for doesn't exist or has been removed.</Text>
-				<Pressable onPress={() => router.back()} style={styles.errorButton}>
+				<Pressable
+					onPress={() => smartBuyerBack(router, { returnTo: params.returnTo })}
+					style={styles.errorButton}
+				>
 					<Text style={styles.errorButtonText}>Go Back</Text>
 				</Pressable>
 			</View>
 		);
 	}
+
+	// Build tag chips from product metadata
+	const tagChips = useMemo(() => {
+		const chips: { label: string; color: string; bg: string; icon?: string }[] = [];
+
+		// Occasion tags
+		(product?.occasionTags || []).forEach(tag => {
+			chips.push({ label: tag.replace(/-/g, ' '), color: GIFTYY_THEME.colors.primary, bg: GIFTYY_THEME.colors.primary + '12', icon: 'gift.fill' });
+		});
+
+		// Target audience
+		(product?.targetAudience || []).forEach(tag => {
+			chips.push({ label: tag.replace(/-/g, ' ').replace('for ', ''), color: '#7c3aed', bg: '#7c3aed12', icon: 'person.fill' });
+		});
+
+		// Gift style tags
+		(product?.giftStyleTags || []).forEach(tag => {
+			chips.push({ label: tag.replace(/-/g, ' '), color: '#0891b2', bg: '#0891b212', icon: 'sparkles' });
+		});
+
+		// Interest tags
+		(product?.interestTags || []).forEach(tag => {
+			chips.push({ label: tag.replace(/-/g, ' '), color: '#059669', bg: '#05966912', icon: 'star.fill' });
+		});
+
+		// Relationship tags
+		(product?.relationshipTags || []).forEach(tag => {
+			chips.push({ label: tag.replace(/-/g, ' '), color: '#d97706', bg: '#d9770612', icon: 'heart.fill' });
+		});
+
+		return chips;
+	}, [product]);
 
 	// Accordion items
 	const accordionItems = [
@@ -503,31 +539,9 @@ export default function ProductDetailsScreen() {
 
 	return (
 		<View style={styles.container}>
-			{/* Header */}
-			<Animated.View entering={FadeInDown.duration(300)} style={[styles.header, { paddingTop: top + 6 }]}>
-				<Pressable onPress={() => router.back()} style={styles.headerButton}>
-					<IconSymbol name="chevron.left" size={24} color={GIFTYY_THEME.colors.gray700} />
-				</Pressable>
-				<View style={styles.headerRight}>
-					<Pressable style={styles.headerButton} onPress={handleShare}>
-						<IconSymbol name="square.and.arrow.up" size={20} color={GIFTYY_THEME.colors.gray700} />
-					</Pressable>
-					<Pressable
-						style={[styles.headerButton, isInWishlist && styles.headerButtonActive]}
-						onPress={handleWishlistToggle}
-					>
-						<IconSymbol
-							name={isInWishlist ? 'heart.fill' : 'heart'}
-							size={20}
-							color={isInWishlist ? GIFTYY_THEME.colors.primary : GIFTYY_THEME.colors.gray700}
-						/>
-					</Pressable>
-				</View>
-			</Animated.View>
-
-			{/* Scrollable Content */}
+			{/* Scrollable Content — GlobalHeader handles navigation */}
 			<ScrollView
-                ref={scrollRef}
+				ref={scrollRef}
 				style={styles.scrollView}
 				contentContainerStyle={{ paddingBottom: BOTTOM_BAR_HEIGHT + bottom + 24 }}
 				showsVerticalScrollIndicator={false}
@@ -541,42 +555,78 @@ export default function ProductDetailsScreen() {
 				}
 			>
 				{/* A - Product Media Carousel */}
-				<ProductMediaCarousel images={imageUris} />
+				<View style={{ paddingTop: top + 56 }}>
+					<ProductMediaCarousel images={imageUris} />
+				</View>
 
 				{/* B - Product Title & Price Block */}
 				<Animated.View entering={FadeInUp.duration(400).delay(100)} style={styles.titleSection}>
-					<View style={styles.titleRow}>
-						<Text style={styles.productTitle}>{product.name}</Text>
-						{product.discountPercentage > 0 && (
-							<View style={styles.discountBadge}>
-								<Text style={styles.discountText}>{product.discountPercentage}% OFF</Text>
-							</View>
-						)}
-					</View>
+					<Text style={styles.productTitle}>{product.name}</Text>
+
 					<View style={styles.priceRow}>
 						<Text style={styles.price}>{formattedPrice}</Text>
 						{formattedOriginalPrice && <Text style={styles.originalPrice}>{formattedOriginalPrice}</Text>}
+						{product.discountPercentage > 0 && (
+							<View style={styles.discountBadge}>
+								<Text style={styles.discountText}>-{product.discountPercentage}%</Text>
+							</View>
+						)}
 					</View>
-					{product.description && (
-						<Text style={styles.subtitle}>
-							Perfect for birthdays, anniversaries, or heartfelt surprises
-						</Text>
-					)}
+
+					{/* Quick Actions: Share & Wishlist */}
+					<View style={styles.actionRow}>
+						<Pressable style={styles.actionButton} onPress={handleShare}>
+							<IconSymbol name="paperplane.fill" size={16} color={GIFTYY_THEME.colors.gray600} />
+							<Text style={styles.actionButtonText}>Share</Text>
+						</Pressable>
+						<Pressable
+							style={[styles.actionButton, isInWishlist && styles.actionButtonActive]}
+							onPress={handleWishlistToggle}
+						>
+							<IconSymbol
+								name={isInWishlist ? 'heart.fill' : 'heart'}
+								size={16}
+								color={isInWishlist ? GIFTYY_THEME.colors.primary : GIFTYY_THEME.colors.gray600}
+							/>
+							<Text style={[styles.actionButtonText, isInWishlist && { color: GIFTYY_THEME.colors.primary }]}>
+								{isInWishlist ? 'Saved' : 'Wishlist'}
+							</Text>
+						</Pressable>
+					</View>
+
+					{/* Stock warnings */}
 					{stockStatus === 'low_stock' && (
 						<View style={styles.stockWarning}>
+							<IconSymbol name="exclamationmark.triangle.fill" size={14} color={GIFTYY_THEME.colors.warning} />
 							<Text style={styles.stockWarningText}>Only {currentStock} left in stock!</Text>
 						</View>
 					)}
 					{stockStatus === 'out_of_stock' && (
 						<View style={styles.stockError}>
+							<IconSymbol name="xmark.circle.fill" size={14} color={GIFTYY_THEME.colors.error} />
 							<Text style={styles.stockErrorText}>Out of stock</Text>
 						</View>
 					)}
 				</Animated.View>
 
-				{/* C - Vendor Section */}
+				{/* C - Tags & Occasions */}
+				{tagChips.length > 0 && (
+					<Animated.View entering={FadeInUp.duration(400).delay(150)} style={styles.tagsSection}>
+						<Text style={styles.tagsSectionTitle}>Perfect for</Text>
+						<View style={styles.tagsWrap}>
+							{tagChips.map((chip, i) => (
+								<View key={i} style={[styles.tagChip, { backgroundColor: chip.bg }]}>
+									<IconSymbol name={(chip.icon || 'tag.fill') as any} size={12} color={chip.color} />
+									<Text style={[styles.tagChipText, { color: chip.color }]}>{chip.label}</Text>
+								</View>
+							))}
+						</View>
+					</Animated.View>
+				)}
+
+				{/* D - Vendor Section */}
 				{vendor && (
-					<Animated.View entering={FadeInUp.duration(400).delay(150)}>
+					<Animated.View entering={FadeInUp.duration(400).delay(200)}>
 						<VendorInfoCard
 							vendorId={vendor.id}
 							vendorName={vendor.storeName}
@@ -587,17 +637,17 @@ export default function ProductDetailsScreen() {
 					</Animated.View>
 				)}
 
-				{/* D - Personalization Block (Giftyy's Magic) */}
-				<Animated.View entering={FadeInUp.duration(400).delay(200)}>
+				{/* E - Personalization Block (Giftyy's Magic) */}
+				<Animated.View entering={FadeInUp.duration(400).delay(250)}>
 					<AddPersonalMessageButton
 						onPress={handleAddVideoMessage}
 						hasMessage={!!videoUri}
 					/>
 				</Animated.View>
 
-				{/* E - Product Options / Variants */}
+				{/* F - Product Options / Variants */}
 				{variantAttributes.length > 0 && (
-					<Animated.View entering={FadeInUp.duration(400).delay(250)}>
+					<Animated.View entering={FadeInUp.duration(400).delay(300)}>
 						<ProductVariantsSelector
 							attributes={variantAttributes}
 							selected={selected}
@@ -607,19 +657,19 @@ export default function ProductDetailsScreen() {
 					</Animated.View>
 				)}
 
-				{/* F - Product Specifications (Accordion) */}
-				<Animated.View entering={FadeInUp.duration(400).delay(300)}>
+				{/* G - Product Specifications (Accordion) */}
+				<Animated.View entering={FadeInUp.duration(400).delay(350)}>
 					<AccordionSection items={accordionItems} defaultOpenId="details" />
 				</Animated.View>
 
-				{/* G - Reviews & Ratings */}
-				<Animated.View entering={FadeInUp.duration(400).delay(350)}>
+				{/* H - Reviews & Ratings */}
+				<Animated.View entering={FadeInUp.duration(400).delay(400)}>
 					<ReviewsList reviews={reviews} averageRating={4.5} totalReviews={0} />
 				</Animated.View>
 
-				{/* H - Recommended Products */}
+				{/* I - Recommended Products */}
 				{recommendationProducts.length > 0 && (
-					<Animated.View entering={FadeInUp.duration(400).delay(400)}>
+					<Animated.View entering={FadeInUp.duration(400).delay(450)}>
 						<RecommendationsCarousel
 							title="You might also like"
 							subtitle="Similar products you'll love"
@@ -699,98 +749,83 @@ const styles = StyleSheet.create({
 		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
 		fontSize: GIFTYY_THEME.typography.sizes.base,
 	},
-	header: {
-		position: 'absolute',
-		top: 0,
-		left: 0,
-		right: 0,
-		zIndex: 100,
-		flexDirection: 'row',
-		justifyContent: 'space-between',
-		alignItems: 'center',
-		paddingHorizontal: GIFTYY_THEME.spacing.lg,
-		paddingBottom: 12,
-		backgroundColor: 'rgba(255, 255, 255, 0.95)',
-		backdropFilter: 'blur(10px)',
-	},
-	headerButton: {
-		width: 40,
-		height: 40,
-		borderRadius: 20,
-		backgroundColor: 'rgba(255, 255, 255, 0.9)',
-		justifyContent: 'center',
-		alignItems: 'center',
-		...GIFTYY_THEME.shadows.sm,
-	},
-	headerButtonActive: {
-		backgroundColor: GIFTYY_THEME.colors.cream,
-	},
-	headerRight: {
-		flexDirection: 'row',
-		gap: 8,
-	},
 	scrollView: {
 		flex: 1,
 	},
 	titleSection: {
 		paddingHorizontal: GIFTYY_THEME.spacing.lg,
-		paddingVertical: GIFTYY_THEME.spacing.xl,
+		paddingTop: GIFTYY_THEME.spacing.lg,
+		paddingBottom: GIFTYY_THEME.spacing.md,
 		backgroundColor: GIFTYY_THEME.colors.white,
 	},
-	titleRow: {
-		flexDirection: 'row',
-		alignItems: 'flex-start',
-		justifyContent: 'space-between',
-		marginBottom: GIFTYY_THEME.spacing.md,
-	},
 	productTitle: {
-		fontSize: GIFTYY_THEME.typography.sizes['3xl'],
+		fontSize: GIFTYY_THEME.typography.sizes['2xl'],
 		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
 		color: GIFTYY_THEME.colors.gray900,
-		flex: 1,
-		lineHeight: 36,
-	},
-	discountBadge: {
-		backgroundColor: GIFTYY_THEME.colors.error,
-		paddingVertical: 6,
-		paddingHorizontal: 12,
-		borderRadius: GIFTYY_THEME.radius.full,
-		marginLeft: GIFTYY_THEME.spacing.md,
-	},
-	discountText: {
-		color: GIFTYY_THEME.colors.white,
-		fontSize: GIFTYY_THEME.typography.sizes.sm,
-		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+		lineHeight: 32,
+		marginBottom: GIFTYY_THEME.spacing.sm,
 	},
 	priceRow: {
 		flexDirection: 'row',
-		alignItems: 'baseline',
-		gap: GIFTYY_THEME.spacing.md,
-		marginBottom: GIFTYY_THEME.spacing.sm,
+		alignItems: 'center',
+		gap: GIFTYY_THEME.spacing.sm,
+		marginBottom: GIFTYY_THEME.spacing.md,
 	},
 	price: {
-		fontSize: GIFTYY_THEME.typography.sizes['3xl'],
+		fontSize: GIFTYY_THEME.typography.sizes['2xl'],
 		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
 		color: GIFTYY_THEME.colors.success,
 	},
 	originalPrice: {
-		fontSize: GIFTYY_THEME.typography.sizes.lg,
+		fontSize: GIFTYY_THEME.typography.sizes.base,
 		color: GIFTYY_THEME.colors.gray400,
 		textDecorationLine: 'line-through',
-		fontWeight: GIFTYY_THEME.typography.weights.semibold,
+		fontWeight: GIFTYY_THEME.typography.weights.medium,
 	},
-	subtitle: {
-		fontSize: GIFTYY_THEME.typography.sizes.base,
+	discountBadge: {
+		backgroundColor: GIFTYY_THEME.colors.error,
+		paddingVertical: 3,
+		paddingHorizontal: 8,
+		borderRadius: GIFTYY_THEME.radius.full,
+	},
+	discountText: {
+		color: GIFTYY_THEME.colors.white,
+		fontSize: GIFTYY_THEME.typography.sizes.xs,
+		fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+	},
+	actionRow: {
+		flexDirection: 'row',
+		gap: 10,
+		marginBottom: GIFTYY_THEME.spacing.md,
+	},
+	actionButton: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 6,
+		paddingVertical: 8,
+		paddingHorizontal: 14,
+		borderRadius: GIFTYY_THEME.radius.full,
+		backgroundColor: GIFTYY_THEME.colors.gray100,
+		borderWidth: 1,
+		borderColor: GIFTYY_THEME.colors.gray200,
+	},
+	actionButtonActive: {
+		backgroundColor: GIFTYY_THEME.colors.primary + '10',
+		borderColor: GIFTYY_THEME.colors.primary + '30',
+	},
+	actionButtonText: {
+		fontSize: GIFTYY_THEME.typography.sizes.sm,
+		fontWeight: GIFTYY_THEME.typography.weights.semibold,
 		color: GIFTYY_THEME.colors.gray600,
-		lineHeight: 22,
-		marginTop: GIFTYY_THEME.spacing.sm,
 	},
 	stockWarning: {
-		backgroundColor: GIFTYY_THEME.colors.warning + '20',
-		paddingVertical: 10,
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 6,
+		backgroundColor: GIFTYY_THEME.colors.warning + '15',
+		paddingVertical: 8,
 		paddingHorizontal: 12,
 		borderRadius: GIFTYY_THEME.radius.md,
-		marginTop: GIFTYY_THEME.spacing.md,
 	},
 	stockWarningText: {
 		color: GIFTYY_THEME.colors.warning,
@@ -798,16 +833,51 @@ const styles = StyleSheet.create({
 		fontWeight: GIFTYY_THEME.typography.weights.semibold,
 	},
 	stockError: {
-		backgroundColor: GIFTYY_THEME.colors.error + '20',
-		paddingVertical: 10,
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 6,
+		backgroundColor: GIFTYY_THEME.colors.error + '15',
+		paddingVertical: 8,
 		paddingHorizontal: 12,
 		borderRadius: GIFTYY_THEME.radius.md,
-		marginTop: GIFTYY_THEME.spacing.md,
 	},
 	stockErrorText: {
 		color: GIFTYY_THEME.colors.error,
 		fontSize: GIFTYY_THEME.typography.sizes.sm,
 		fontWeight: GIFTYY_THEME.typography.weights.semibold,
+	},
+	tagsSection: {
+		paddingHorizontal: GIFTYY_THEME.spacing.lg,
+		paddingVertical: GIFTYY_THEME.spacing.md,
+		backgroundColor: GIFTYY_THEME.colors.white,
+		borderTopWidth: 1,
+		borderTopColor: GIFTYY_THEME.colors.gray100,
+	},
+	tagsSectionTitle: {
+		fontSize: GIFTYY_THEME.typography.sizes.sm,
+		fontWeight: GIFTYY_THEME.typography.weights.bold,
+		color: GIFTYY_THEME.colors.gray500,
+		textTransform: 'uppercase',
+		letterSpacing: 0.5,
+		marginBottom: GIFTYY_THEME.spacing.sm,
+	},
+	tagsWrap: {
+		flexDirection: 'row',
+		flexWrap: 'wrap',
+		gap: 8,
+	},
+	tagChip: {
+		flexDirection: 'row',
+		alignItems: 'center',
+		gap: 5,
+		paddingVertical: 5,
+		paddingHorizontal: 10,
+		borderRadius: GIFTYY_THEME.radius.full,
+	},
+	tagChipText: {
+		fontSize: GIFTYY_THEME.typography.sizes.xs,
+		fontWeight: GIFTYY_THEME.typography.weights.semibold,
+		textTransform: 'capitalize',
 	},
 });
 

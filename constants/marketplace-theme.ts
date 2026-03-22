@@ -2,6 +2,7 @@
  * Giftyy Marketplace Theme
  * Premium marketplace design system with brand colors and design tokens
  */
+import { Platform } from 'react-native';
 
 export const MARKETPLACE_THEME = {
 	colors: {
@@ -47,7 +48,11 @@ export const MARKETPLACE_THEME = {
 		'4xl': 40,
 	},
 	typography: {
-		fontFamily: 'Cooper BT',
+		fontFamily: Platform.select({
+			ios: 'System',
+			android: 'Roboto',
+			default: 'System',
+		}),
 		sizes: {
 			xs: 10,
 			sm: 11,

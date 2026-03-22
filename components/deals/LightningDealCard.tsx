@@ -6,95 +6,64 @@
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import type { Product } from '@/contexts/ProductsContext';
+import { LinearGradient } from 'expo-linear-gradient';
 import React, { useEffect } from 'react';
 import { Dimensions, Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Animated, {
 	Easing,
-	interpolate,
 	useAnimatedStyle,
 	useSharedValue,
 	withRepeat,
 	withSequence,
 	withSpring,
-	withTiming,
+	withTiming
 } from 'react-native-reanimated';
-import { LinearGradient } from 'expo-linear-gradient';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const CARD_WIDTH = SCREEN_WIDTH * 0.82;
+const CARD_WIDTH = SCREEN_WIDTH * 0.55;
 
 type Props = {
 	product: Product & { imageUrl?: string };
 	stockClaimed: number;
 	totalStock: number;
 	onPress: () => void;
+	width?: number;
 };
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-export function LightningDealCard({ product, stockClaimed, totalStock, onPress }: Props) {
+export function LightningDealCard({ product, stockClaimed, totalStock, onPress, width }: Props) {
 	const scale = useSharedValue(1);
-	const glowOpacity = useSharedValue(0.3);
-	const pulseScale = useSharedValue(1);
-	
+	const displayWidth = width || CARD_WIDTH;
+	const isCompact = displayWidth < 135;
+
 	const discount = product.discountPercentage || 0;
 	const originalPrice = product.price || 0;
 	const discountedPrice = originalPrice * (1 - discount / 100);
 	const remainingStock = totalStock - stockClaimed;
 	const isLowStock = remainingStock < 20;
-	
-	// Pulsing glow animation for urgency
-	useEffect(() => {
-		if (isLowStock) {
-			glowOpacity.value = withRepeat(
-				withSequence(
-					withTiming(0.6, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
-					withTiming(0.3, { duration: 1000, easing: Easing.inOut(Easing.ease) })
-				),
-				-1,
-				false
-			);
-			pulseScale.value = withRepeat(
-				withSequence(
-					withTiming(1.02, { duration: 1000, easing: Easing.inOut(Easing.ease) }),
-					withTiming(1, { duration: 1000, easing: Easing.inOut(Easing.ease) })
-				),
-				-1,
-				false
-			);
-		}
-	}, [isLowStock]);
-	
+
 	const cardAnimatedStyle = useAnimatedStyle(() => ({
 		transform: [
-			{ scale: scale.value * pulseScale.value },
+			{ scale: scale.value },
 		],
-	}));
-	
-	const glowAnimatedStyle = useAnimatedStyle(() => ({
-		opacity: glowOpacity.value,
 	}));
 	
 	const handlePressIn = () => {
 		scale.value = withSpring(0.96, { damping: 15, stiffness: 400 });
 	};
-	
+
 	const handlePressOut = () => {
 		scale.value = withSpring(1, { damping: 15, stiffness: 400 });
 	};
-	
+
 	return (
 		<AnimatedPressable
 			onPress={onPress}
 			onPressIn={handlePressIn}
 			onPressOut={handlePressOut}
-			style={[styles.container, cardAnimatedStyle, { width: CARD_WIDTH }]}
+			style={[styles.container, cardAnimatedStyle, { width: displayWidth }]}
 		>
-			{/* Glow effect for low stock */}
-			{isLowStock && (
-				<Animated.View style={[styles.glowEffect, glowAnimatedStyle]} />
-			)}
-			
 			<View style={styles.card}>
 				{/* Product Image Container */}
 				<View style={styles.imageWrapper}>
@@ -109,60 +78,48 @@ export function LightningDealCard({ product, stockClaimed, totalStock, onPress }
 							<IconSymbol name="photo" size={40} color={GIFTYY_THEME.colors.gray300} />
 						</View>
 					)}
-					
-					{/* Discount Badge - Large and Prominent */}
+
+					{/* Discount Badge - Elegant Gold */}
 					{discount > 0 && (
 						<View style={styles.discountBadge}>
-							<LinearGradient
-								colors={[GIFTYY_THEME.colors.error, '#ff4444']}
-								start={{ x: 0, y: 0 }}
-								end={{ x: 1, y: 1 }}
-								style={styles.discountGradient}
-							>
+							<View style={styles.discountBadgeContent}>
 								<Text style={styles.discountPercent}>-{Math.round(discount)}%</Text>
-							</LinearGradient>
+							</View>
 						</View>
 					)}
-					
-					{/* Overlay gradient for better text readability */}
-					<LinearGradient
-						colors={['transparent', 'rgba(0,0,0,0.1)']}
-						style={styles.imageOverlay}
-					/>
+
+					{/* Subtle overlay */}
+					<View style={styles.imageOverlay} />
 				</View>
-				
+
 				{/* Product Info Section */}
-				<View style={styles.infoSection}>
+				<View style={[styles.infoSection, isCompact && styles.infoSectionCompact]}>
 					{/* Product Name */}
-					<Text style={styles.productName} numberOfLines={2}>
+					<Text style={[styles.productName, isCompact && styles.productNameCompact]} numberOfLines={2}>
 						{product.name || 'Product'}
 					</Text>
-					
+
 					{/* Price Section */}
-					<View style={styles.priceSection}>
+					<View style={[styles.priceSection, isCompact && styles.priceSectionCompact]}>
 						<View style={styles.priceRow}>
-							<Text style={styles.currentPrice}>${discountedPrice.toFixed(2)}</Text>
+							<Text style={[styles.currentPrice, isCompact && styles.currentPriceCompact]}>${discountedPrice.toFixed(2)}</Text>
 							{discount > 0 && (
-								<Text style={styles.originalPrice}>${originalPrice.toFixed(2)}</Text>
+								<Text style={[styles.originalPrice, isCompact && styles.originalPriceCompact]}>
+									${originalPrice.toFixed(2)}
+								</Text>
 							)}
 						</View>
-						{discount > 0 && (
-							<Text style={styles.savingsText}>
-								Save ${(originalPrice - discountedPrice).toFixed(2)}
-							</Text>
-						)}
 					</View>
-					
-					{/* CTA Button */}
+
+					{/* CTA Button - Brand Orange */}
 					<View style={styles.ctaButton}>
 						<LinearGradient
 							colors={[GIFTYY_THEME.colors.primary, '#ff7a3d']}
 							start={{ x: 0, y: 0 }}
 							end={{ x: 1, y: 0 }}
-							style={styles.ctaGradient}
+							style={[styles.ctaInternal, isCompact && styles.ctaInternalCompact]}
 						>
-							<Text style={styles.ctaText}>Shop Now</Text>
-							<IconSymbol name="arrow.right" size={16} color="#fff" />
+							<Text style={styles.ctaText}>{isCompact ? 'View' : 'View Offer'}</Text>
 						</LinearGradient>
 					</View>
 				</View>
@@ -173,34 +130,31 @@ export function LightningDealCard({ product, stockClaimed, totalStock, onPress }
 
 const styles = StyleSheet.create({
 	container: {
-		marginRight: 16,
 		position: 'relative',
 	},
 	glowEffect: {
 		position: 'absolute',
-		top: -4,
-		left: -4,
-		right: -4,
-		bottom: -4,
+		top: -2,
+		left: -2,
+		right: -2,
+		bottom: -2,
 		borderRadius: GIFTYY_THEME.radius['2xl'],
-		backgroundColor: GIFTYY_THEME.colors.error,
+		backgroundColor: GIFTYY_THEME.colors.featured, // Amber/Gold glow instead of red
 		zIndex: 0,
 	},
 	card: {
 		backgroundColor: GIFTYY_THEME.colors.white,
 		borderRadius: GIFTYY_THEME.radius['2xl'],
 		overflow: 'hidden',
-		...GIFTYY_THEME.shadows.xl,
-		shadowColor: GIFTYY_THEME.colors.primary,
-		shadowOpacity: 0.15,
+		...GIFTYY_THEME.shadows.lg,
 		borderWidth: 1,
 		borderColor: GIFTYY_THEME.colors.gray100,
 	},
 	imageWrapper: {
 		width: '100%',
-		aspectRatio: 1.1,
+		aspectRatio: 1,
 		position: 'relative',
-		backgroundColor: GIFTYY_THEME.colors.gray50,
+		backgroundColor: '#F8F8F8',
 	},
 	image: {
 		width: '100%',
@@ -211,14 +165,15 @@ const styles = StyleSheet.create({
 		height: '100%',
 		alignItems: 'center',
 		justifyContent: 'center',
-		backgroundColor: GIFTYY_THEME.colors.gray100,
+		backgroundColor: '#F8F8F8',
 	},
 	imageOverlay: {
 		position: 'absolute',
 		bottom: 0,
 		left: 0,
 		right: 0,
-		height: '30%',
+		height: '100%',
+		backgroundColor: 'rgba(0,0,0,0.01)',
 	},
 	discountBadge: {
 		position: 'absolute',
@@ -226,71 +181,87 @@ const styles = StyleSheet.create({
 		right: 12,
 		zIndex: 2,
 	},
-	discountGradient: {
-		paddingHorizontal: 12,
-		paddingVertical: 8,
-		borderRadius: GIFTYY_THEME.radius.lg,
-		...GIFTYY_THEME.shadows.md,
+	discountBadgeContent: {
+		backgroundColor: GIFTYY_THEME.colors.primary,
+		paddingHorizontal: 8,
+		paddingVertical: 4,
+		borderRadius: 6,
+		...GIFTYY_THEME.shadows.sm,
 	},
 	discountPercent: {
-		color: '#fff',
-		fontSize: 18,
-		fontWeight: GIFTYY_THEME.typography.weights.black,
-		letterSpacing: -0.5,
+		color: GIFTYY_THEME.colors.white,
+		fontSize: 12,
+		fontWeight: GIFTYY_THEME.typography.weights.bold,
 	},
 	infoSection: {
-		padding: 16,
+		padding: 12,
 	},
 	productName: {
-		fontSize: 16,
-		fontWeight: GIFTYY_THEME.typography.weights.bold,
+		fontSize: 13,
+		fontWeight: GIFTYY_THEME.typography.weights.semibold,
 		color: GIFTYY_THEME.colors.gray900,
-		marginBottom: 12,
-		lineHeight: 20,
-		minHeight: 40,
+		marginBottom: 6,
+		lineHeight: 18,
+		minHeight: 36,
 	},
 	priceSection: {
-		marginBottom: 14,
+		marginBottom: 12,
 	},
 	priceRow: {
 		flexDirection: 'row',
 		alignItems: 'baseline',
-		marginBottom: 4,
-		gap: 8,
+		marginBottom: 2,
+		gap: 6,
 	},
 	currentPrice: {
-		fontSize: 24,
-		fontWeight: GIFTYY_THEME.typography.weights.black,
+		fontSize: 18,
+		fontWeight: GIFTYY_THEME.typography.weights.bold,
 		color: GIFTYY_THEME.colors.success,
-		letterSpacing: -0.5,
 	},
 	originalPrice: {
-		fontSize: 14,
+		fontSize: 11,
 		color: GIFTYY_THEME.colors.gray400,
 		textDecorationLine: 'line-through',
 		fontWeight: GIFTYY_THEME.typography.weights.medium,
 	},
-	savingsText: {
-		fontSize: 12,
-		color: GIFTYY_THEME.colors.success,
-		fontWeight: GIFTYY_THEME.typography.weights.semibold,
+	originalPriceCompact: {
+		fontSize: 9,
 	},
 	ctaButton: {
-		borderRadius: GIFTYY_THEME.radius.lg,
+		borderRadius: GIFTYY_THEME.radius.sm,
 		overflow: 'hidden',
-		...GIFTYY_THEME.shadows.md,
+		alignSelf: 'center',
 	},
-	ctaGradient: {
+	ctaInternal: {
 		flexDirection: 'row',
 		alignItems: 'center',
 		justifyContent: 'center',
-		paddingVertical: 12,
-		gap: 8,
+		paddingVertical: 10,
+		paddingHorizontal: 16,
 	},
 	ctaText: {
-		color: '#fff',
-		fontSize: 14,
-		fontWeight: GIFTYY_THEME.typography.weights.bold,
-		letterSpacing: 0.3,
+		color: GIFTYY_THEME.colors.white,
+		fontSize: 12,
+		fontWeight: GIFTYY_THEME.typography.weights.semibold,
+	},
+	// Compact Overrides
+	infoSectionCompact: {
+		padding: 8,
+	},
+	productNameCompact: {
+		fontSize: 11,
+		lineHeight: 14,
+		minHeight: 28,
+		marginBottom: 4,
+	},
+	priceSectionCompact: {
+		marginBottom: 8,
+	},
+	currentPriceCompact: {
+		fontSize: 15,
+	},
+	ctaInternalCompact: {
+		paddingVertical: 6,
+		paddingHorizontal: 12,
 	},
 });

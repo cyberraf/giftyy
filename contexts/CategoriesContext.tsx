@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { swrRead, swrWrite } from '@/lib/cache/swr';
 
 export type Category = {
 	id: string;
@@ -78,6 +79,7 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
 
 			const fetchedCategories = (data || []).map(dbRowToCategory);
 			setCategories(fetchedCategories);
+			swrWrite('categories', fetchedCategories).catch(() => {});
 		} catch (err: any) {
 			const isNetworkError = err?.message?.includes('Network request failed') || 
 			                      err?.message?.includes('fetch') ||
@@ -92,10 +94,17 @@ export function CategoriesProvider({ children }: { children: React.ReactNode }) 
 		}
 	}, []);
 
-	// Initial load
+	// Initial load with stale-while-revalidate
 	useEffect(() => {
 		const loadData = async () => {
 			setLoading(true);
+			// Categories change rarely — use a 10-minute SWR window
+			const cached = await swrRead<Category[]>('categories', { maxAgeMs: 10 * 60_000 });
+			if (cached.isCached && cached.data) {
+				setCategories(cached.data);
+				setLoading(false);
+			}
+			// Always revalidate
 			await refreshCategories();
 			setLoading(false);
 		};

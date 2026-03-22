@@ -2,9 +2,10 @@ import { IconSymbol, IconSymbolName } from '@/components/ui/icon-symbol';
 import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
 import { useProducts } from '@/contexts/ProductsContext';
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
 import React, { useCallback, useMemo, useState } from 'react';
-import { Image, Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { OptimizedImage } from '@/components/OptimizedImage';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const tabs = ['Overview', 'Products', 'Settings'] as const;
@@ -87,7 +88,7 @@ export default function StoreProfileScreen() {
                 <View style={styles.heroCard}>
                     <View style={styles.avatarBubble}>
                         {storeData.logo ? (
-                            <Image source={{ uri: storeData.logo }} style={styles.avatarImage} />
+                            <OptimizedImage source={{ uri: storeData.logo }} style={styles.avatarImage} contentFit="cover" />
                         ) : (
                             <Text style={styles.avatarInitials}>{displayInitials}</Text>
                         )}
@@ -180,6 +181,7 @@ function OverviewPanel({ storeData }: { storeData: any }) {
 
 function ProductsPanel({ products, collections }: { products: any[]; collections: any[] }) {
     const router = useRouter();
+    const pathname = usePathname();
 
     return (
         <View style={styles.sectionGap}>
@@ -220,10 +222,10 @@ function ProductsPanel({ products, collections }: { products: any[]; collections
                             <Pressable
                                 key={product.id}
                                 style={styles.productItem}
-                                onPress={() => router.push(`/(buyer)/(tabs)/product/${product.id}`)}
+                                onPress={() => router.push({ pathname: '/(buyer)/(tabs)/product/[id]', params: { id: product.id, returnTo: pathname } } as any)}
                             >
                                 {product.imageUrl && (
-                                    <Image source={{ uri: product.imageUrl }} style={styles.productImage} />
+                                    <OptimizedImage source={{ uri: product.imageUrl }} style={styles.productImage} contentFit="cover" />
                                 )}
                                 <View style={{ flex: 1 }}>
                                     <Text style={styles.productName}>{product.name}</Text>

@@ -1,5 +1,6 @@
 // @ts-nocheck
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { verifyUserAuth, unauthorizedResponse } from '../_shared/auth.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -31,6 +32,12 @@ Deno.serve(async (req) => {
   }
 
   try {
+    // Verify the caller is an authenticated user
+    const { user, error: authError } = await verifyUserAuth(req);
+    if (!user) {
+      return unauthorizedResponse(authError || 'Unauthorized', corsHeaders);
+    }
+
     const { orderId }: CreateOrderQrRequest = await req.json().catch(() => ({}));
 
     if (!orderId) {
@@ -53,6 +60,7 @@ Deno.serve(async (req) => {
       .from('orders')
       .select('id, order_code, user_id')
       .eq('id', orderId)
+      .eq('user_id', user.id) // Ensure user owns this order
       .single();
 
     if (orderError || !order) {

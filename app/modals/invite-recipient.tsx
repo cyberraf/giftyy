@@ -1,3 +1,4 @@
+import { safeGoBack } from '@/lib/utils/navigation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Link, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useMemo, useState } from 'react';

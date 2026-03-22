@@ -7,6 +7,7 @@ import { useProducts } from '@/contexts/ProductsContext';
 import { useCheckout, type CardType } from '@/lib/CheckoutContext';
 import { calculateVendorShippingSync } from '@/lib/shipping-utils';
 import { parsePrice } from '@/lib/utils/currency';
+import { safeGoBack } from '@/lib/utils/navigation';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, FlatList, Image, Modal, Pressable, RefreshControl, ScrollView, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
@@ -396,7 +397,7 @@ export default function DesignScreen() {
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                     <Pressable
                         style={{ paddingVertical: 12, paddingRight: 16 }}
-                        onPress={() => router.back()}
+                        onPress={() => safeGoBack(router, '/(buyer)/checkout/cart')}
                     >
                          <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 13 }}>{t('checkout.common.back')}</Text>
                     </Pressable>

@@ -99,15 +99,6 @@ export default function OrderDetailsScreen() {
     );
   }
 
-  const shippingAddress = (() => {
-    const rec = order.recipient;
-    const line1 = rec.street || '—';
-    const line2 = rec.apartment ? `${rec.apartment}, ` : '';
-    const cityState = [rec.city, rec.state].filter(Boolean).join(', ');
-    const countryZip = [rec.country, rec.zip].filter(Boolean).join(' ');
-    return `${line1}\n${line2}${cityState}\n${countryZip}`.trim();
-  })();
-
   const orderDate = new Date(order.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   const deliveryInfo = order.deliveredAt
     ? `Delivered ${new Date(order.deliveredAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`
@@ -170,8 +161,6 @@ export default function OrderDetailsScreen() {
           <Text style={styles.sectionTitle}>Shipping details</Text>
           <Text style={styles.detailLabel}>Recipient</Text>
           <Text style={styles.detailValue}>{`${order.recipient.firstName} ${order.recipient.lastName || ''}`.trim()}</Text>
-          <Text style={styles.detailLabel}>Address</Text>
-          <Text style={styles.detailValue}>{shippingAddress}</Text>
           {(order.recipient.email || order.recipient.phone) && (
             <>
               <Text style={styles.detailLabel}>Contact</Text>

@@ -6,7 +6,6 @@ import { ShareInviteModal } from '@/components/recipients/ShareInviteModal';
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
-import { BRAND_FONT } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRecipients, type Recipient } from '@/contexts/RecipientsContext';
 import { GiftyyAlert } from '@/lib/AlertManager';
@@ -29,6 +28,7 @@ import {
 	View
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { RecipientsListSkeleton } from '@/components/ui/SkeletonLoader';
 import { useTranslation } from 'react-i18next';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -158,26 +158,11 @@ function RecipientCard({
 			onPress={isPending && !isOutgoing ? undefined : onPress}
 			style={({ pressed }) => [
 				styles.recipientCard,
-				isEditing && styles.recipientCardEditing,
-				isPending && styles.recipientCardPending,
 				pressed && !isPending && styles.recipientCardPressed,
 			]}
 		>
-			<View style={styles.cardHeader}>
-				{isEditing ? (
-					<Pressable style={styles.deleteActionBtn} onPress={onDelete} hitSlop={12}>
-						<IconSymbol name="trash" size={14} color="#DC2626" />
-					</Pressable>
-				) : (
-					<View style={{ width: 32 }} /> // spacer to balance actions
-				)}
-
-				{/* Actions could go right, currently spacer */}
-				<View style={{ width: 32 }} />
-			</View>
-
 			{/* Avatar */}
-			<View style={[styles.avatarCircle, { backgroundColor: displayAvatarUrl ? 'transparent' : avatarBg, marginTop: -24 }]}>
+			<View style={[styles.avatarCircle, { backgroundColor: displayAvatarUrl ? 'transparent' : avatarBg }]}>
 				{displayAvatarUrl ? (
 					<Image
 						source={{ uri: displayAvatarUrl }}
@@ -189,38 +174,28 @@ function RecipientCard({
 				)}
 			</View>
 
-			{/* Name + Relationship */}
-			<View style={styles.cardInfo}>
-				<Text style={[styles.recipientName, { textAlign: 'center' }]} numberOfLines={1}>
-					{currentDisplayName}
+			{/* Name */}
+			<Text style={styles.recipientName} numberOfLines={1}>
+				{currentDisplayName}
+			</Text>
+
+			{/* Relationship Badge */}
+			<View style={styles.relationshipBadge}>
+				<Text style={styles.relationshipBadgeText} numberOfLines={1}>
+					{isPending
+						? (isOutgoing ? t('recipients.status.waiting') : t('recipients.status.pending_request'))
+						: relationship}
 				</Text>
-				<View style={{ alignItems: 'center', marginTop: 2 }}>
-					{isPending ? (
-						<View style={[styles.relationshipBadge, { backgroundColor: '#FEF2F2' }]}>
-							<Text style={[styles.relationshipBadgeText, { color: '#DC2626' }]}>
-								{isOutgoing ? t('recipients.status.waiting') : t('recipients.status.pending_request')}
-							</Text>
-						</View>
-					) : isClaimed ? (
-						<View style={[styles.relationshipBadge, { backgroundColor: '#ECFDF5' }]}>
-							<Text style={[styles.relationshipBadgeText, { color: '#059669' }]}>{relationship}</Text>
-						</View>
-					) : (
-						<View style={[styles.relationshipBadge, { backgroundColor: '#EFF6FF' }]}>
-							<Text style={[styles.relationshipBadgeText, { color: '#3B82F6' }]}>{relationship}</Text>
-						</View>
-					)}
-				</View>
 			</View>
 
-			{/* Right Actions for Pending */}
+			{/* Approval actions for pending */}
 			{showApprovalActions && (
-				<View style={[styles.approvalRow, { marginTop: 12 }]}>
+				<View style={[styles.approvalRow, { marginTop: 8 }]}>
 					<Pressable style={[styles.approvalBtn, styles.approvalBtnAccept]} onPress={onApprove}>
-						<IconSymbol name="checkmark" size={16} color="#FFFFFF" />
+						<IconSymbol name="checkmark" size={14} color="#FFFFFF" />
 					</Pressable>
 					<Pressable style={[styles.approvalBtn, styles.approvalBtnReject]} onPress={onReject}>
-						<IconSymbol name="xmark" size={16} color={GIFTYY_THEME.colors.gray600} />
+						<IconSymbol name="xmark" size={14} color={GIFTYY_THEME.colors.gray600} />
 					</Pressable>
 				</View>
 			)}
@@ -727,7 +702,7 @@ export default function RecipientsScreen() {
 			>
 
 				<View style={styles.tabContainer}>
-					<TourAnchor step="circle_tab">
+					<TourAnchor step="circle_tab" style={{ flex: 1 }}>
 						<Pressable
 							onPress={() => setActiveTab('circle')}
 							style={[styles.tab, activeTab === 'circle' && styles.activeTab]}
@@ -735,7 +710,7 @@ export default function RecipientsScreen() {
 							<Text style={[styles.tabText, activeTab === 'circle' && styles.activeTabText]}>{t('recipients.tabs.circle')}</Text>
 						</Pressable>
 					</TourAnchor>
-					<TourAnchor step="occasions_tab">
+					<TourAnchor step="occasions_tab" style={{ flex: 1 }}>
 						<Pressable
 							onPress={() => setActiveTab('occasions')}
 							style={[styles.tab, activeTab === 'occasions' && styles.activeTab]}
@@ -743,7 +718,7 @@ export default function RecipientsScreen() {
 							<Text style={[styles.tabText, activeTab === 'occasions' && styles.activeTabText]}>{t('recipients.tabs.occasions')}</Text>
 						</Pressable>
 					</TourAnchor>
-					<TourAnchor step="preferences_tab">
+					<TourAnchor step="preferences_tab" style={{ flex: 1 }}>
 						<Pressable
 							onPress={() => setActiveTab('preferences')}
 							style={[styles.tab, activeTab === 'preferences' && styles.activeTab]}
@@ -756,13 +731,11 @@ export default function RecipientsScreen() {
 				{activeTab === 'circle' ? (
 					<>
 						{pendingRecipients.length > 0 && (
-							<View style={[styles.section, { marginBottom: verticalScale(32) }]}>
+							<View style={[styles.section, { marginBottom: verticalScale(24) }]}>
 								<View style={styles.sectionHeader}>
-									<View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-										<Text style={[styles.sectionTitle, { color: '#FF6B00', marginBottom: 0 }]}>{t('recipients.sections.pending')}</Text>
-										<View style={[styles.countBadge, { backgroundColor: 'rgba(255, 107, 0, 0.1)', borderColor: 'rgba(255, 107, 0, 0.2)', height: 20, paddingHorizontal: 8 }]}>
-											<Text style={[styles.countBadgeText, { color: '#FF6B00' }]}>{pendingRecipients.length}</Text>
-										</View>
+									<Text style={[styles.sectionTitle, { color: GIFTYY_THEME.colors.primary }]}>{t('recipients.sections.pending')}</Text>
+									<View style={[styles.countBadge, { backgroundColor: 'rgba(247, 85, 7, 0.08)' }]}>
+										<Text style={[styles.countBadgeText, { color: GIFTYY_THEME.colors.primary }]}>{pendingRecipients.length}</Text>
 									</View>
 								</View>
 								<ScrollView
@@ -802,8 +775,8 @@ export default function RecipientsScreen() {
 								>
 									<IconSymbol
 										name={isSyncing ? "arrow.2.circlepath" : "person.badge.plus"}
-										size={18}
-										color="#FFF"
+										size={15}
+										color={GIFTYY_THEME.colors.gray600}
 									/>
 									<Text style={styles.syncButtonText}>
 										{isSyncing ? t('recipients.actions.syncing') : t('recipients.actions.find_friends')}
@@ -845,7 +818,11 @@ export default function RecipientsScreen() {
 							</View>
 						))}
 
-						{recipients.length === 0 && (
+						{loading && recipients.length === 0 ? (
+							<View style={{ paddingHorizontal: scale(4), paddingTop: scale(8) }}>
+								<RecipientsListSkeleton count={5} />
+							</View>
+						) : recipients.length === 0 && (
 							<View style={styles.emptyState}>
 								<View style={styles.emptyIconContainer}>
 									<IconSymbol name="person.2.fill" size={48} color={GIFTYY_THEME.colors.gray300} />
@@ -1286,38 +1263,33 @@ const styles = StyleSheet.create({
 	},
 	tabContainer: {
 		flexDirection: 'row',
-		backgroundColor: 'rgba(47,35,24,0.04)',
-		borderRadius: 20,
-		padding: 6,
 		marginHorizontal: scale(20),
-		marginBottom: verticalScale(28),
-		borderWidth: 1,
-		borderColor: 'rgba(47,35,24,0.02)',
+		marginBottom: verticalScale(24),
+		gap: 6,
 	},
 	tab: {
 		flex: 1,
-		paddingVertical: 12,
-		paddingHorizontal: 8,
+		paddingVertical: 10,
 		alignItems: 'center',
 		justifyContent: 'center',
-		borderRadius: 16,
+		borderRadius: 12,
+		backgroundColor: '#FFFFFF',
+		borderWidth: 1,
+		borderColor: GIFTYY_THEME.colors.gray200,
 	},
 	activeTab: {
-		backgroundColor: '#FFF',
-		...GIFTYY_THEME.shadows.md,
-		borderWidth: 1,
-		borderColor: 'rgba(47,35,24,0.03)',
+		backgroundColor: GIFTYY_THEME.colors.primary,
+		borderColor: GIFTYY_THEME.colors.primary,
 	},
 	tabText: {
-		fontSize: 14,
-		fontFamily: 'Outfit-SemiBold',
-		color: 'rgba(47,35,24,0.45)',
-		letterSpacing: -0.2,
+		fontSize: 13,
+		fontWeight: '600',
+		color: GIFTYY_THEME.colors.gray500,
 	},
 	activeTabText: {
-		color: '#2F2318',
-		fontFamily: 'Outfit-Bold',
-		fontSize: 15,
+		color: '#FFFFFF',
+		fontWeight: '700',
+		fontSize: 13,
 	},
 	profileTabContent: {
 		paddingHorizontal: scale(24),
@@ -1642,61 +1614,63 @@ const styles = StyleSheet.create({
 	syncButton: {
 		flexDirection: 'row',
 		alignItems: 'center',
-		gap: 6,
-		backgroundColor: GIFTYY_THEME.colors.primary,
-		paddingHorizontal: 12,
+		gap: 5,
+		backgroundColor: '#FFFFFF',
+		paddingHorizontal: 14,
 		paddingVertical: 8,
-		borderRadius: 20,
-		...GIFTYY_THEME.shadows.sm,
+		borderRadius: 12,
+		borderWidth: 1.5,
+		borderColor: GIFTYY_THEME.colors.gray200,
 	},
 	syncButtonText: {
-		color: '#FFF',
+		color: GIFTYY_THEME.colors.gray700,
 		fontSize: 12,
-		fontWeight: '700',
+		fontWeight: '600',
 	},
 	welcomeSection: {
-		marginBottom: verticalScale(24),
+		marginBottom: verticalScale(20),
 		paddingHorizontal: scale(24),
 	},
 	welcomeTitle: {
-		fontSize: responsiveFontSize(20),
+		fontSize: responsiveFontSize(18),
 		fontWeight: '800',
 		color: GIFTYY_THEME.colors.gray900,
-		marginBottom: verticalScale(4),
+		marginBottom: verticalScale(2),
+		letterSpacing: -0.3,
 	},
 	welcomeSubtitle: {
-		fontSize: responsiveFontSize(14),
-		color: GIFTYY_THEME.colors.gray600,
-		lineHeight: verticalScale(20),
+		fontSize: responsiveFontSize(13),
+		color: GIFTYY_THEME.colors.gray500,
+		lineHeight: verticalScale(18),
 	},
 	section: {
-		marginBottom: verticalScale(32),
+		marginBottom: verticalScale(24),
 	},
 	sectionHeader: {
 		flexDirection: 'row',
 		alignItems: 'center',
-		gap: scale(10),
-		marginBottom: verticalScale(16),
+		gap: scale(8),
+		marginBottom: verticalScale(14),
 		paddingHorizontal: scale(24),
 	},
 	sectionTitle: {
-		fontSize: responsiveFontSize(18),
-		fontWeight: '800',
-		color: GIFTYY_THEME.colors.gray900,
-		textTransform: 'capitalize',
+		fontSize: responsiveFontSize(15),
+		fontWeight: '700',
+		color: GIFTYY_THEME.colors.gray800,
+		letterSpacing: -0.2,
 	},
 	countBadge: {
 		backgroundColor: GIFTYY_THEME.colors.gray100,
-		paddingHorizontal: scale(10),
-		paddingVertical: verticalScale(2),
+		width: scale(24),
+		height: scale(24),
 		borderRadius: scale(12),
-		borderWidth: 1,
-		borderColor: GIFTYY_THEME.colors.border,
+		alignItems: 'center',
+		justifyContent: 'center',
 	},
 	countBadgeText: {
-		fontSize: responsiveFontSize(12),
+		fontSize: responsiveFontSize(11),
 		fontWeight: '700',
-		color: GIFTYY_THEME.colors.gray600,
+		color: GIFTYY_THEME.colors.gray500,
 	},
 	carouselContent: {
 		paddingHorizontal: scale(24),
@@ -1707,30 +1681,13 @@ const styles = StyleSheet.create({
 		flexDirection: 'row',
 		flexWrap: 'wrap',
 		paddingHorizontal: H_PADDING,
-		gap: COLUMN_GAP,
-		rowGap: 16,
+		gap: 8,
+		rowGap: 20,
 	},
 	recipientCard: {
-		width: CARD_WIDTH,
+		width: (SCREEN_WIDTH - H_PADDING * 2 - 8 * 2) / 3,
 		flexDirection: 'column',
 		alignItems: 'center',
-		backgroundColor: '#FFFFFF',
-		borderRadius: 24,
-		paddingVertical: 16,
-		paddingHorizontal: 12,
-		borderWidth: 1,
-		borderColor: '#F8FAFC',
-		shadowColor: '#64748B',
-		shadowOffset: { width: 0, height: 12 },
-		shadowOpacity: 0.08,
-		shadowRadius: 24,
-		elevation: 4,
-	},
-	cardHeader: {
-		width: '100%',
-		flexDirection: 'row',
-		justifyContent: 'space-between',
-		alignItems: 'flex-start',
 	},
 	avatarCircle: {
 		width: 64,
@@ -1738,30 +1695,14 @@ const styles = StyleSheet.create({
 		borderRadius: 32,
 		alignItems: 'center',
 		justifyContent: 'center',
-		marginBottom: 12,
+		marginBottom: 8,
+		borderWidth: 3,
+		borderColor: '#FFFFFF',
 	},
 	avatarInitials: {
-		fontSize: 22,
-		fontFamily: 'Outfit-Bold',
+		fontSize: 21,
+		fontWeight: '700',
 		color: '#FFFFFF',
-	},
-	cardInfo: {
-		alignItems: 'center',
-		width: '100%',
-		gap: 4,
-	},
-	cardRight: {
-		alignItems: 'center',
-		justifyContent: 'center',
-		paddingLeft: 12,
-	},
-	deleteActionBtn: {
-		width: 32,
-		height: 32,
-		borderRadius: 16,
-		backgroundColor: '#FEF2F2',
-		alignItems: 'center',
-		justifyContent: 'center',
 	},
 	approvalRow: {
 		flexDirection: 'row',
@@ -1775,7 +1716,7 @@ const styles = StyleSheet.create({
 		justifyContent: 'center',
 	},
 	approvalBtnAccept: {
-		backgroundColor: GIFTYY_THEME.colors.primary,
+		backgroundColor: GIFTYY_THEME.colors.gray900,
 	},
 	approvalBtnReject: {
 		backgroundColor: GIFTYY_THEME.colors.gray100,
@@ -1783,20 +1724,24 @@ const styles = StyleSheet.create({
 	emptyState: {
 		alignItems: 'center',
 		justifyContent: 'center',
-		paddingTop: verticalScale(40),
+		paddingTop: verticalScale(48),
+		paddingHorizontal: scale(32),
 	},
 	emptyIconContainer: {
-		width: scale(80),
-		height: scale(80),
-		borderRadius: scale(40),
-		backgroundColor: GIFTYY_THEME.colors.gray50,
+		width: scale(72),
+		height: scale(72),
+		borderRadius: scale(36),
+		backgroundColor: '#FFFFFF',
 		alignItems: 'center',
 		justifyContent: 'center',
 		marginBottom: verticalScale(16),
+		borderWidth: 1,
+		borderColor: GIFTYY_THEME.colors.gray200,
+		...GIFTYY_THEME.shadows.sm,
 	},
 	emptyStateTitle: {
-		fontSize: responsiveFontSize(18),
-		fontWeight: '800',
+		fontSize: responsiveFontSize(16),
+		fontWeight: '700',
 		color: GIFTYY_THEME.colors.gray900,
 		marginBottom: verticalScale(8),
 	},
@@ -1810,25 +1755,25 @@ const styles = StyleSheet.create({
 		marginBottom: verticalScale(24),
 	},
 	emptyAddButton: {
-		backgroundColor: GIFTYY_THEME.colors.primary,
+		backgroundColor: GIFTYY_THEME.colors.gray900,
 		paddingHorizontal: scale(24),
-		paddingVertical: verticalScale(12),
+		paddingVertical: verticalScale(11),
 		borderRadius: scale(12),
 	},
 	emptyAddButtonText: {
 		color: '#FFF',
-		fontSize: responsiveFontSize(14),
-		fontWeight: '700',
+		fontSize: responsiveFontSize(13),
+		fontWeight: '600',
 	},
 	pendingCard: {
 		width: PENDING_CARD_WIDTH,
 		backgroundColor: '#FFFFFF',
-		borderRadius: 20,
+		borderRadius: 16,
 		padding: 16,
 		marginRight: 12,
 		borderWidth: 1,
-		borderColor: '#F3F4F6',
-		...GIFTYY_THEME.shadows.md,
+		borderColor: GIFTYY_THEME.colors.gray200,
+		...GIFTYY_THEME.shadows.sm,
 	},
 	pendingCardMain: {
 		flexDirection: 'row',
@@ -1865,10 +1810,10 @@ const styles = StyleSheet.create({
 		gap: 4,
 	},
 	pendingName: {
-		fontSize: 16,
-		fontWeight: '800',
+		fontSize: 15,
+		fontWeight: '700',
 		color: GIFTYY_THEME.colors.gray900,
-		fontFamily: BRAND_FONT,
+		letterSpacing: -0.2,
 	},
 	pendingSubtitle: {
 		fontSize: 12,
@@ -1912,13 +1857,13 @@ const styles = StyleSheet.create({
 	},
 	pendingBtnAccept: {
 		flex: 1,
-		backgroundColor: '#F97316',
+		backgroundColor: GIFTYY_THEME.colors.gray900,
 		flexDirection: 'row',
 		gap: 8,
 	},
 	pendingBtnReject: {
 		width: 40,
-		backgroundColor: '#F3F4F6',
+		backgroundColor: GIFTYY_THEME.colors.gray100,
 	},
 	pendingBtnTextWhite: {
 		color: '#FFFFFF',
@@ -1931,38 +1876,28 @@ const styles = StyleSheet.create({
 		fontWeight: '700',
 	},
 	recipientName: {
-		fontFamily: BRAND_FONT,
-		fontSize: 18,
-		fontWeight: '800',
-		color: '#0F172A',
-		letterSpacing: -0.3,
-	},
-	deleteIconBtn: {
-		padding: 4,
-	},
-	recipientCardEditing: {
-		borderColor: GIFTYY_THEME.colors.primary,
-		borderWidth: 2,
-	},
-	recipientCardPending: {
-		borderColor: '#FFF5F0',
-		backgroundColor: '#FFFCFA',
-	},
-	recipientCardPressed: {
-		backgroundColor: GIFTYY_THEME.colors.gray50,
+		fontSize: 13,
+		fontWeight: '600',
+		color: GIFTYY_THEME.colors.gray900,
+		textAlign: 'center',
+		marginBottom: 2,
 	},
 	relationshipBadge: {
-		backgroundColor: 'rgba(247, 85, 7, 0.06)',
-		paddingHorizontal: 12,
-		paddingVertical: 6,
-		borderRadius: 12,
+		backgroundColor: '#ecfdf5',
+		paddingHorizontal: 8,
+		paddingVertical: 3,
+		borderRadius: 10,
+		marginTop: 2,
 	},
 	relationshipBadgeText: {
 		fontSize: 10,
-		fontFamily: 'Outfit-Bold',
-		color: GIFTYY_THEME.colors.primary,
-		textTransform: 'uppercase',
-		letterSpacing: 0.5,
+		fontWeight: '600',
+		color: '#16a34a',
+		textAlign: 'center',
+		textTransform: 'capitalize',
+	},
+	recipientCardPressed: {
+		opacity: 0.7,
 	},
 	verifiedBadge: {
 		position: 'absolute',

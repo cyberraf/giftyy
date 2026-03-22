@@ -13,6 +13,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useFocusEffect } from '@react-navigation/native';
 import { useKeepAwake } from 'expo-keep-awake';
 import { LinearGradient } from 'expo-linear-gradient';
+import { safeGoBack } from '@/lib/utils/navigation';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useState } from 'react';
 import { InteractionManager, Modal, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
@@ -123,7 +124,7 @@ export default function VideoScreen() {
 
 	// Handle cancel from the flow
 	const handleCancel = useCallback(() => {
-		router.back();
+		safeGoBack(router, '/(buyer)/checkout/cart');
 	}, [router]);
 
 	// Handle continue - store locally, don't upload yet

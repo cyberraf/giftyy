@@ -37,11 +37,12 @@ function MemoryThumbnailInner({ fallbackUrl, style, showPlay, onError }: Props &
 		p.loop = false;
 	});
 
-	const { status, error } = useEvent(player, 'statusChange', { status: player.status, error: player.error });
-
+	const { status } = useEvent(player, 'statusChange', { status: player.status });
+	// VideoPlayer status typically doesn't have an error prop directly
+	
 	useEffect(() => {
-		if (error) onError();
-	}, [error, onError]);
+		if (status === 'error') onError();
+	}, [status, onError]);
 
 	// Seek to first frame and pause when loaded
 	useEffect(() => {
@@ -55,11 +56,11 @@ function MemoryThumbnailInner({ fallbackUrl, style, showPlay, onError }: Props &
 	return (
 		<View style={[styles.container, style]}>
 			<VideoView
+				key={fallbackUrl}
 				player={player}
 				style={StyleSheet.absoluteFill}
 				contentFit="cover"
 				nativeControls={false}
-				allowsFullscreen={false}
 			/>
 			{showPlay && loaded && (
 				<Animated.View

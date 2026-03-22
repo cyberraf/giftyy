@@ -1,10 +1,11 @@
-import StepBar from '@/components/StepBar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { useOrders } from '@/contexts/OrdersContext';
 import { useSharedMemories } from '@/contexts/SharedMemoriesContext';
 import { useVideoMessages } from '@/contexts/VideoMessagesContext';
 import { useCheckout } from '@/lib/CheckoutContext';
+import { trackFunnel } from '@/lib/analytics';
+import { MessageVideoViewer } from '@/app/(buyer)/(tabs)/memory';
 import { LinearGradient } from 'expo-linear-gradient';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -18,13 +19,14 @@ type MemoryVideoItem = {
     duration: string;
     date: string;
     videoUrl: string;
-    direction: string;
+    direction: 'sent' | 'received';
+    mediaType?: 'video' | 'photo';
     orderId?: string;
 };
 
 export default function ConfirmationScreen() {
     const { t } = useTranslation();
-    const { bottom } = useSafeAreaInsets();
+    const { bottom, top } = useSafeAreaInsets();
     const { recipient, cardType, videoUri, videoTitle, reset } = useCheckout();
     const router = useRouter();
     const { orderId } = useLocalSearchParams<{ orderId?: string }>();
@@ -34,6 +36,13 @@ export default function ConfirmationScreen() {
 
     const fadeIn = useRef(new Animated.Value(0)).current;
     const pop = useRef(new Animated.Value(0.92)).current;
+
+    // Track purchase funnel completion
+    useEffect(() => {
+        if (orderId) {
+            trackFunnel('purchase_complete', { order_id: orderId });
+        }
+    }, [orderId]);
 
     const [videoVisible, setVideoVisible] = useState(false);
     const [sharedMemoryVisible, setSharedMemoryVisible] = useState(false);
@@ -111,8 +120,9 @@ export default function ConfirmationScreen() {
             duration,
             date: new Date(video.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
             videoUrl: video.videoUrl,
-            direction: video.direction,
-            orderId: video.orderId, // Include orderId for QR code generation
+            direction: video.direction as 'sent' | 'received',
+            mediaType: 'video' as const,
+            orderId: video.orderId,
         };
     }, [orderVideoMessage]);
 
@@ -125,7 +135,7 @@ export default function ConfirmationScreen() {
     }, [order, sharedMemories]);
 
     // Convert shared memory to MemoryVideoItem format
-    const sharedMemoryItem: (MemoryVideoItem & { mediaType: 'video' | 'photo' }) | null = useMemo(() => {
+    const sharedMemoryItem: MemoryVideoItem | null = useMemo(() => {
         if (!orderSharedMemory) return null;
 
         const date = new Date(orderSharedMemory.createdAt);
@@ -141,8 +151,8 @@ export default function ConfirmationScreen() {
             duration: orderSharedMemory.mediaType === 'video' ? '00:00' : '',
             date: formattedDate,
             videoUrl: orderSharedMemory.fileUrl,
-            direction: 'sent',
-            mediaType: orderSharedMemory.mediaType,
+            direction: 'sent' as const,
+            mediaType: orderSharedMemory.mediaType as 'video' | 'photo',
         };
     }, [orderSharedMemory]);
 
@@ -175,22 +185,23 @@ export default function ConfirmationScreen() {
 
     const handleViewOrders = () => {
         reset();
-        router.replace('/(buyer)/(tabs)/profile?tab=Orders');
+        if (orderId) {
+            router.replace({ pathname: '/(buyer)/orders/[id]', params: { id: orderId } });
+        } else {
+            router.replace('/(buyer)/orders/index');
+        }
     };
 
     return (
         <View style={{ flex: 1, backgroundColor: '#fff' }}>
             <Stack.Screen
                 options={{
-                    headerShown: true,
-                    headerTitle: t('checkout.confirmation.header_title'),
-                    headerLeft: () => null,
+                    headerShown: false,
                     gestureEnabled: false,
                 }}
             />
-            <StepBar current={7} total={7} label={t('checkout.confirmation.step_label')} />
             <ScrollView
-                contentContainerStyle={styles.content}
+                contentContainerStyle={[styles.content, { paddingTop: top + 72 }]}
                 refreshControl={
                     <RefreshControl
                         refreshing={refreshing}
@@ -219,9 +230,9 @@ export default function ConfirmationScreen() {
                         <IconSymbol name="list.bullet.clipboard" size={20} color={GIFTYY_THEME.colors.primary} />
                         <Text style={styles.summaryHeading}>{t('checkout.confirmation.delivery_details')}</Text>
                     </View>
-                    <SummaryRow label={t('checkout.confirmation.order_number')} value={`#${orderCode}`} icon="number" />
+                    <SummaryRow label={t('checkout.confirmation.order_number')} value={`#${orderCode}`} icon="cart.fill" />
                     <SummaryRow label={t('checkout.confirmation.recipient')} value={fullName} icon="person.fill" />
-                    <SummaryRow label={t('checkout.confirmation.card_style')} value={order?.cardType || cardType || 'Premium'} icon="greetingcard.fill" />
+                    <SummaryRow label={t('checkout.confirmation.card_style')} value={order?.cardType || cardType || 'Premium'} icon="creditcard.fill" />
                     <SummaryRow label={t('checkout.confirmation.video_message')} value={hasVideo ? t('checkout.confirmation.attached') : t('checkout.confirmation.not_added')} valueStyle={{ color: hasVideo ? '#16a34a' : '#64748B' }} icon="video.fill" />
                     <SummaryRow label={t('checkout.confirmation.shared_memory')} value={hasSharedMemory ? (orderSharedMemory?.mediaType === 'photo' ? t('checkout.confirmation.photo_attached') : t('checkout.confirmation.video_attached')) : t('checkout.confirmation.not_added')} valueStyle={{ color: hasSharedMemory ? '#16a34a' : '#64748B' }} icon="photo.fill" />
                     <SummaryRow label={t('checkout.confirmation.estimated_arrival')} value={order?.estimatedDeliveryDate ? new Date(order.estimatedDeliveryDate).toLocaleDateString() : t('checkout.confirmation.est_days')} icon="shippingbox.fill" />
@@ -339,6 +350,26 @@ export default function ConfirmationScreen() {
                     <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>{t('checkout.confirmation.actions.return_home')}</Text>
                 </Pressable>
             </View>
+
+            {/* Fullscreen Video Message Viewer */}
+            {videoItem && (
+                <MessageVideoViewer
+                    visible={videoVisible}
+                    initialIndex={0}
+                    data={[videoItem]}
+                    onClose={() => setVideoVisible(false)}
+                />
+            )}
+
+            {/* Fullscreen Shared Memory Viewer */}
+            {sharedMemoryItem && (
+                <MessageVideoViewer
+                    visible={sharedMemoryVisible}
+                    initialIndex={0}
+                    data={[sharedMemoryItem]}
+                    onClose={() => setSharedMemoryVisible(false)}
+                />
+            )}
         </View>
     );
 }

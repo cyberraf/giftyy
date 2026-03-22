@@ -114,7 +114,7 @@ export function SingleSelectDropdown({
     );
 }
 
-const BRAND_COLOR = '#E07B39';
+const BRAND_COLOR = '#f75507';
 
 const styles = StyleSheet.create({
     container: {

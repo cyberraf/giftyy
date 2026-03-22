@@ -1,3 +1,4 @@
+import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import React, { useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
@@ -30,6 +31,7 @@ export function ConversationalFormWizard({
     const [currentStep, setCurrentStep] = useState(initialStep);
     const [formData, setFormData] = useState(initialData);
     const [showSelector, setShowSelector] = useState(false);
+    const historyRef = useRef<number[]>([initialStep]); // Navigation history stack
 
     // Animation refs
     const progressAnim = useRef(new Animated.Value(((0 + 1) / Math.max(1, React.Children.count(children))) * 100)).current;
@@ -53,13 +55,13 @@ export function ConversationalFormWizard({
         Animated.parallel([
             Animated.timing(fadeAnim, {
                 toValue: 0,
-                duration: 150,
+                duration: 180,
                 easing: Easing.out(Easing.cubic),
                 useNativeDriver: true,
             }),
             Animated.timing(slideAnim, {
                 toValue: slideOut,
-                duration: 150,
+                duration: 180,
                 easing: Easing.out(Easing.cubic),
                 useNativeDriver: true,
             }),
@@ -89,8 +91,8 @@ export function ConversationalFormWizard({
                 }),
                 Animated.spring(slideAnim, {
                     toValue: 0,
-                    damping: 20,
-                    stiffness: 200,
+                    damping: 22,
+                    stiffness: 220,
                     mass: 0.8,
                     useNativeDriver: true,
                 }),
@@ -144,6 +146,7 @@ export function ConversationalFormWizard({
         }
 
         if (nextStep < totalSteps) {
+            historyRef.current.push(nextStep);
             animateToStep(nextStep, 'forward');
         } else {
             // Final step - complete the form
@@ -152,17 +155,10 @@ export function ConversationalFormWizard({
     };
 
     const handleBack = () => {
-        let prevStep = currentStep - 1;
-        while (prevStep >= 0) {
-            const stepElement = steps[prevStep] as React.ReactElement<any>;
-            if (stepElement.props.shouldShow && !stepElement.props.shouldShow(formData)) {
-                prevStep--;
-            } else {
-                break;
-            }
-        }
-
-        if (prevStep >= 0) {
+        // Pop the current step from history and go to the previous one
+        if (historyRef.current.length > 1) {
+            historyRef.current.pop(); // Remove current step
+            const prevStep = historyRef.current[historyRef.current.length - 1];
             animateToStep(prevStep, 'backward');
         } else if (onCancel) {
             onCancel();
@@ -175,6 +171,7 @@ export function ConversationalFormWizard({
 
     const handleJumpToStep = (targetStep: number) => {
         const direction = targetStep > currentStep ? 'forward' : 'backward';
+        historyRef.current.push(targetStep);
         animateToStep(targetStep, direction);
         setShowSelector(false);
     };
@@ -212,6 +209,7 @@ export function ConversationalFormWizard({
 
                                 const label = stepElement.props.label || `Step ${index + 1}`;
                                 const isActive = currentStep === index;
+                                const isCompleted = index < currentStep;
 
                                 return (
                                     <TouchableOpacity
@@ -219,9 +217,17 @@ export function ConversationalFormWizard({
                                         style={[styles.selectorItem, isActive && styles.selectorItemActive]}
                                         onPress={() => handleJumpToStep(index)}
                                     >
-                                        <View style={[styles.stepCircle, isActive && styles.stepCircleActive]}>
-                                            <Text style={[styles.stepNumber, isActive && styles.stepNumberActive]}>
-                                                {index + 1}
+                                        <View style={[
+                                            styles.stepCircle,
+                                            isActive && styles.stepCircleActive,
+                                            isCompleted && styles.stepCircleCompleted,
+                                        ]}>
+                                            <Text style={[
+                                                styles.stepNumber,
+                                                isActive && styles.stepNumberActive,
+                                                isCompleted && styles.stepNumberCompleted,
+                                            ]}>
+                                                {isCompleted ? '✓' : index + 1}
                                             </Text>
                                         </View>
                                         <Text style={[styles.stepLabel, isActive && styles.stepLabelActive]} numberOfLines={1}>
@@ -249,7 +255,7 @@ export function ConversationalFormWizard({
                         <Text style={styles.progressText}>
                             Step {currentStep + 1} of {totalSteps}
                         </Text>
-                        <Text style={styles.jumpHint}>Tap to jump →</Text>
+                        <Text style={styles.jumpHint}>TAP TO JUMP →</Text>
                     </View>
                     <View style={styles.progressBar}>
                         <Animated.View
@@ -302,8 +308,6 @@ export function ConversationalFormWizard({
     );
 }
 
-const BRAND_COLOR = '#E07B39';
-
 const styles = StyleSheet.create({
     container: {
         flex: 1,
@@ -311,10 +315,10 @@ const styles = StyleSheet.create({
     },
     progressContainer: {
         paddingHorizontal: 20,
-        paddingTop: 20,
-        paddingBottom: 16,
+        paddingTop: 16,
+        paddingBottom: 12,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(0,0,0,0.06)',
+        borderBottomColor: 'rgba(0,0,0,0.04)',
     },
     progressHeader: {
         flexDirection: 'row',
@@ -324,25 +328,24 @@ const styles = StyleSheet.create({
     },
     progressText: {
         fontSize: 13,
-        color: 'rgba(0,0,0,0.5)',
+        color: GIFTYY_THEME.colors.gray500,
         fontWeight: '600',
     },
     jumpHint: {
         fontSize: 11,
-        color: BRAND_COLOR,
+        color: GIFTYY_THEME.colors.primary,
         fontWeight: '700',
-        textTransform: 'uppercase',
         letterSpacing: 0.5,
     },
     progressBar: {
         height: 4,
-        backgroundColor: 'rgba(0,0,0,0.06)',
+        backgroundColor: GIFTYY_THEME.colors.gray100,
         borderRadius: 2,
         overflow: 'hidden',
     },
     progressFill: {
         height: '100%',
-        backgroundColor: BRAND_COLOR,
+        backgroundColor: GIFTYY_THEME.colors.primary,
         borderRadius: 2,
     },
     stepContainer: {
@@ -374,16 +377,16 @@ const styles = StyleSheet.create({
         marginBottom: 20,
         paddingBottom: 12,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(0,0,0,0.05)',
+        borderBottomColor: GIFTYY_THEME.colors.gray100,
     },
     selectorTitle: {
         fontSize: 20,
         fontWeight: '800',
-        color: '#1F2937',
+        color: GIFTYY_THEME.colors.gray900,
     },
     closeIcon: {
         fontSize: 20,
-        color: '#9CA3AF',
+        color: GIFTYY_THEME.colors.gray400,
         padding: 4,
     },
     selectorList: {
@@ -398,42 +401,49 @@ const styles = StyleSheet.create({
         marginBottom: 4,
     },
     selectorItemActive: {
-        backgroundColor: 'rgba(224, 123, 57, 0.08)',
+        backgroundColor: 'rgba(247, 85, 7, 0.06)',
     },
     stepCircle: {
         width: 32,
         height: 32,
         borderRadius: 16,
-        backgroundColor: 'rgba(0,0,0,0.05)',
+        backgroundColor: GIFTYY_THEME.colors.gray100,
         alignItems: 'center',
         justifyContent: 'center',
         marginRight: 16,
     },
     stepCircleActive: {
-        backgroundColor: BRAND_COLOR,
+        backgroundColor: GIFTYY_THEME.colors.primary,
+    },
+    stepCircleCompleted: {
+        backgroundColor: GIFTYY_THEME.colors.success,
     },
     stepNumber: {
         fontSize: 14,
         fontWeight: '700',
-        color: '#6B7280',
+        color: GIFTYY_THEME.colors.gray500,
     },
     stepNumberActive: {
         color: '#FFFFFF',
+    },
+    stepNumberCompleted: {
+        color: '#FFFFFF',
+        fontSize: 12,
     },
     stepLabel: {
         flex: 1,
         fontSize: 16,
         fontWeight: '600',
-        color: '#374151',
+        color: GIFTYY_THEME.colors.gray700,
     },
     stepLabelActive: {
-        color: BRAND_COLOR,
+        color: GIFTYY_THEME.colors.primary,
     },
     activeIndicator: {
         width: 8,
         height: 8,
         borderRadius: 4,
-        backgroundColor: BRAND_COLOR,
+        backgroundColor: GIFTYY_THEME.colors.primary,
     },
     errorStep: {
         flex: 1,

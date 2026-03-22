@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useMemo, useEffect, useCallback } from 'react';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { swrRead, swrWrite } from '@/lib/cache/swr';
 
 export type Product = {
 	id: string;
@@ -65,7 +66,7 @@ type ProductsContextValue = {
 const ProductsContext = createContext<ProductsContextValue | undefined>(undefined);
 
 // Helper function to convert database row (snake_case) to Product (camelCase)
-function dbRowToProduct(row: any): Product {
+export function dbRowToProduct(row: any): Product {
 	// Handle images - support both image_url (string/JSON) and images (JSONB array)
 	let imageUrl: string | undefined = undefined;
 	if (row.images && Array.isArray(row.images) && row.images.length > 0) {
@@ -308,6 +309,11 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 		setLoading(true);
 		setPage(0);
 		await fetchProductsBatch(0, false);
+		// Cache the fetched products for SWR
+		setProducts(current => {
+			swrWrite('products', current).catch(() => {});
+			return current;
+		});
 		setLoading(false);
 	}, [fetchProductsBatch]);
 
@@ -455,12 +461,26 @@ export function ProductsProvider({ children }: { children: React.ReactNode }) {
 		}
 	}, []);
 
-	// Initial load
+	// Initial load with stale-while-revalidate
 	useEffect(() => {
 		const loadData = async () => {
 			setLoading(true);
-			await Promise.all([refreshProducts(), refreshCollections()]);
-			setLoading(false);
+
+			// Try to load cached products immediately
+			const cached = await swrRead<Product[]>('products', { maxAgeMs: 5 * 60_000 });
+			if (cached.isCached && cached.data) {
+				setProducts(cached.data);
+				setLoading(false);
+			}
+
+			// Always revalidate from network (even if cache was fresh, to catch updates)
+			if (cached.isStale || !cached.isCached) {
+				await Promise.all([refreshProducts(), refreshCollections()]);
+				setLoading(false);
+			} else {
+				// Revalidate in background (cache was fresh but we still want latest)
+				Promise.all([refreshProducts(), refreshCollections()]).catch(() => {});
+			}
 		};
 		loadData();
 	}, [refreshProducts, refreshCollections]);

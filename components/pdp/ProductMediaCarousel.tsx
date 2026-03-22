@@ -5,8 +5,8 @@
 
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
-import React, { useRef, useState } from 'react';
-import { Dimensions, StyleSheet, View } from 'react-native';
+import React, { useCallback, useRef, useState } from 'react';
+import { ActivityIndicator, Dimensions, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
 	FadeIn,
@@ -15,6 +15,7 @@ import Animated, {
 	useSharedValue,
 	withSpring,
 	withTiming,
+	runOnJS,
 } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -23,10 +24,23 @@ const IMAGE_HEIGHT = SCREEN_WIDTH; // Square images for premium feel
 type ProductMediaCarouselProps = {
 	images: string[];
 	onImageChange?: (index: number) => void;
+	onPress?: (index: number) => void;
 };
 
-export function ProductMediaCarousel({ images, onImageChange }: ProductMediaCarouselProps) {
+export function ProductMediaCarousel({ images, onImageChange, onPress }: ProductMediaCarouselProps) {
 	const [activeIndex, setActiveIndex] = useState(0);
+	const [loadingImages, setLoadingImages] = useState<Set<number>>(new Set([0]));
+	const [failedImages, setFailedImages] = useState<Set<number>>(new Set());
+
+	const handleImageLoad = useCallback((index: number) => {
+		setLoadingImages(prev => { const next = new Set(prev); next.delete(index); return next; });
+	}, []);
+
+	const handleImageError = useCallback((index: number) => {
+		setLoadingImages(prev => { const next = new Set(prev); next.delete(index); return next; });
+		setFailedImages(prev => new Set(prev).add(index));
+	}, []);
+
 	const scrollX = useSharedValue(0);
 	const scale = useSharedValue(1);
 	const translateX = useSharedValue(0);
@@ -34,7 +48,7 @@ export function ProductMediaCarousel({ images, onImageChange }: ProductMediaCaro
 	const scrollViewRef = useRef<any>(null);
 
 	// Reset to first image when images change (e.g., when variation changes)
-	const imagesKey = images.join(',');
+	const imagesKey = images?.join(',') || '';
 	React.useEffect(() => {
 		if (images && images.length > 0) {
 			setActiveIndex(0);
@@ -90,9 +104,18 @@ export function ProductMediaCarousel({ images, onImageChange }: ProductMediaCaro
 			}
 		});
 
+	// Single tap to trigger onPress (waits for double tap to fail)
+	const singleTapGesture = Gesture.Tap()
+		.numberOfTaps(1)
+		.onEnd(() => {
+			if (onPress) {
+				runOnJS(onPress)(activeIndex);
+			}
+		});
+
 	// Race between gestures - tap wins first, then pan can activate if needed
 	// Pan gesture will fail on horizontal swipes, allowing ScrollView to handle them
-	const composedGesture = Gesture.Race(doubleTapGesture, panGesture);
+	const composedGesture = Gesture.Exclusive(doubleTapGesture, singleTapGesture, panGesture);
 
 	const animatedImageStyle = useAnimatedStyle(() => ({
 		transform: [
@@ -133,13 +156,29 @@ export function ProductMediaCarousel({ images, onImageChange }: ProductMediaCaro
 						<View key={`${uri}-${index}`} style={styles.imageWrapper}>
 							<GestureDetector gesture={composedGesture}>
 								<Animated.View style={styles.imageWrapper}>
-									<Animated.Image
-										source={{ uri }}
-										style={[styles.image, animatedImageStyle]}
-										resizeMode="cover"
-										entering={FadeIn.duration(300)}
-										exiting={FadeOut.duration(200)}
-									/>
+									{failedImages.has(index) ? (
+										<View style={styles.placeholder}>
+											<IconSymbol name="exclamationmark.triangle" size={32} color={GIFTYY_THEME.colors.gray300} />
+											<Text style={styles.errorText}>Failed to load</Text>
+										</View>
+									) : (
+										<>
+											{loadingImages.has(index) && (
+												<View style={styles.loadingOverlay}>
+													<ActivityIndicator size="large" color={GIFTYY_THEME.colors.primary} />
+												</View>
+											)}
+											<Animated.Image
+												source={{ uri }}
+												style={[styles.image, animatedImageStyle]}
+												resizeMode="cover"
+												entering={FadeIn.duration(300)}
+												exiting={FadeOut.duration(200)}
+												onLoad={() => handleImageLoad(index)}
+												onError={() => handleImageError(index)}
+											/>
+										</>
+									)}
 								</Animated.View>
 							</GestureDetector>
 						</View>
@@ -203,6 +242,18 @@ const styles = StyleSheet.create({
 		backgroundColor: GIFTYY_THEME.colors.gray100,
 		justifyContent: 'center',
 		alignItems: 'center',
+	},
+	loadingOverlay: {
+		...StyleSheet.absoluteFillObject,
+		backgroundColor: GIFTYY_THEME.colors.gray100,
+		justifyContent: 'center',
+		alignItems: 'center',
+		zIndex: 1,
+	},
+	errorText: {
+		marginTop: 8,
+		fontSize: 13,
+		color: GIFTYY_THEME.colors.gray400,
 	},
 	dotsContainer: {
 		position: 'absolute',

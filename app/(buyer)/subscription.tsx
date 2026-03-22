@@ -409,9 +409,7 @@ export default function SubscriptionScreen() {
             <ScrollView contentContainerStyle={[styles.content, { paddingBottom: bottom + BOTTOM_BAR_TOTAL_SPACE + 20 }]}>
                 {/* Header */}
                 <View style={styles.header}>
-                    <Pressable onPress={() => router.back()} style={styles.backButton}>
-                        <IconSymbol name="chevron.left" size={24} color={palette.textPrimary} />
-                    </Pressable>
+                    <View style={styles.backButton} />
                     <Text style={styles.headerTitle}>Subscription</Text>
                     <View style={{ width: 40 }} />
                 </View>

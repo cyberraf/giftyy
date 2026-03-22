@@ -1,4 +1,3 @@
-import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useRouter } from 'expo-router';
 import React from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -21,11 +20,9 @@ export default function GiftyyAIScreen() {
   }, []);
 
   return (
-    <View style={{ flex: 1, backgroundColor: 'white', paddingTop: top + 6 }}>
+    <View style={{ flex: 1, backgroundColor: 'white', paddingTop: top + 56 }}>
       <View style={styles.header}>
-        <Pressable onPress={() => router.back()} style={styles.iconBtn}>
-          <IconSymbol name="chevron.left" size={20} color="#111" />
-        </Pressable>
+        <View style={styles.iconBtn} />
         <Text style={styles.title}>Giftyy AI</Text>
         <View style={styles.iconBtn} />
       </View>

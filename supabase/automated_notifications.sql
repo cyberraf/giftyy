@@ -5,9 +5,35 @@
 -- Create a function to notify on new order
 CREATE OR REPLACE FUNCTION public.notify_on_new_order()
 RETURNS TRIGGER AS $$
+DECLARE
+    order_updates BOOLEAN;
 BEGIN
-    -- Call the send-push-notification edge function
-    -- Replace 'YOUR_SERVICE_ROLE_KEY' with your actual key from Supabase Dashboard
+    -- Check if user has order updates enabled
+    SELECT COALESCE(s.order_updates_enabled, true) INTO order_updates
+    FROM public.user_settings s
+    WHERE s.user_id = NEW.user_id;
+
+    -- Default to true if no settings row exists
+    IF order_updates IS NULL THEN
+        order_updates := true;
+    END IF;
+
+    IF NOT order_updates THEN
+        RETURN NEW;
+    END IF;
+
+    -- 1. Insert into in-app notifications
+    INSERT INTO public.notifications (user_id, type, title, body, data)
+    VALUES (
+        NEW.user_id,
+        'order_confirmed',
+        'Order Confirmed! 🎁',
+        'Your order (#' || NEW.order_code || ') has been placed successfully.',
+        jsonb_build_object('orderId', NEW.id, 'orderCode', NEW.order_code, 'type', 'order_status')
+    );
+
+    -- 2. Call the send-push-notification edge function
+    -- (push preference is also checked inside the edge function itself)
     PERFORM net.http_post(
         url := 'https://qaftabktuogxisioeeua.supabase.co/functions/v1/send-push-notification',
         headers := jsonb_build_object(
@@ -17,7 +43,9 @@ BEGIN
         body := jsonb_build_object(
             'userId', NEW.user_id,
             'title', 'Giftyy: Order Confirmed! 🎁',
-            'body', 'Your order (#' || NEW.order_code || ') has been placed successfully.'
+            'body', 'Your order (#' || NEW.order_code || ') has been placed successfully.',
+            'categoryId', 'order_status',
+            'data', jsonb_build_object('orderId', NEW.id, 'orderCode', NEW.order_code, 'type', 'order_status')
         )
     );
 
@@ -31,6 +59,91 @@ CREATE TRIGGER tr_notify_on_new_order
 AFTER INSERT ON public.orders
 FOR EACH ROW
 EXECUTE FUNCTION public.notify_on_new_order();
+
+
+-- Function to notify on order status update
+CREATE OR REPLACE FUNCTION public.notify_on_order_status_update()
+RETURNS TRIGGER AS $$
+DECLARE
+    notification_title TEXT;
+    notification_body TEXT;
+    do_notify BOOLEAN := false;
+    order_updates BOOLEAN;
+BEGIN
+    -- Only notify on specific status changes that are meaningful to the user
+    IF (OLD.status IS DISTINCT FROM NEW.status) THEN
+        IF NEW.status = 'confirmed' THEN
+            notification_title := 'Order Confirmed! 🎁';
+            notification_body := 'Your order (#' || NEW.order_code || ') has been confirmed and is being processed.';
+            do_notify := true;
+        ELSIF NEW.status = 'shipped' THEN
+            notification_title := 'Order Shipped! 🚚';
+            notification_body := 'Great news! Your order (#' || NEW.order_code || ') is on its way.';
+            do_notify := true;
+        ELSIF NEW.status = 'delivered' THEN
+            notification_title := 'Order Delivered! 🥳';
+            notification_body := 'Your order (#' || NEW.order_code || ') has been delivered. Enjoy!';
+            do_notify := true;
+        ELSIF NEW.status = 'out_for_delivery' THEN
+            notification_title := 'Out for Delivery! 📦';
+            notification_body := 'Your order (#' || NEW.order_code || ') is out for delivery and will arrive soon.';
+            do_notify := true;
+        END IF;
+    END IF;
+
+    IF do_notify THEN
+        -- Check if user has order updates enabled
+        SELECT COALESCE(s.order_updates_enabled, true) INTO order_updates
+        FROM public.user_settings s
+        WHERE s.user_id = NEW.user_id;
+
+        -- Default to true if no settings row exists
+        IF order_updates IS NULL THEN
+            order_updates := true;
+        END IF;
+
+        IF NOT order_updates THEN
+            RETURN NEW;
+        END IF;
+
+        -- 1. Insert into in-app notifications
+        INSERT INTO public.notifications (user_id, type, title, body, data)
+        VALUES (
+            NEW.user_id,
+            'order_status_update',
+            notification_title,
+            notification_body,
+            jsonb_build_object('orderId', NEW.id, 'orderCode', NEW.order_code, 'status', NEW.status, 'type', 'order_status')
+        );
+
+        -- 2. Call push notification edge function
+        -- (push preference is also checked inside the edge function itself)
+        PERFORM net.http_post(
+            url := 'https://qaftabktuogxisioeeua.supabase.co/functions/v1/send-push-notification',
+            headers := jsonb_build_object(
+                'Content-Type', 'application/json',
+                'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InFhZnRhYmt0dW9neGlzaW9lZXVhIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc2MzA2ODQxMywiZXhwIjoyMDc4NjQ0NDEzfQ.N_TY31PKPua7lUUt5gxABf6921c87uOL0oAJyGbJ6n0'
+            ),
+            body := jsonb_build_object(
+                'userId', NEW.user_id,
+                'title', 'Giftyy: ' || notification_title,
+                'body', notification_body,
+                'categoryId', 'order_status',
+                'data', jsonb_build_object('orderId', NEW.id, 'orderCode', NEW.order_code, 'status', NEW.status, 'type', 'order_status')
+            )
+        );
+    END IF;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Trigger for order updates
+DROP TRIGGER IF EXISTS tr_notify_on_order_status_update ON public.orders;
+CREATE TRIGGER tr_notify_on_order_status_update
+AFTER UPDATE ON public.orders
+FOR EACH ROW
+EXECUTE FUNCTION public.notify_on_order_status_update();
 
 
 -- Function for Batch Occasion Reminders
@@ -79,7 +192,9 @@ BEGIN
                         body := jsonb_build_object(
                             'userId', occ.user_id,
                             'title', 'Upcoming Occasion! 🎁',
-                            'body', message
+                            'body', message,
+                            'categoryId', 'occasion_reminder',
+                            'data', jsonb_build_object('type', 'occasion_reminder', 'occasionId', occ.id)
                         )
                     );
                 END IF;
@@ -97,7 +212,9 @@ BEGIN
                         body := jsonb_build_object(
                             'userId', occ.user_id,
                             'title', 'Upcoming Occasion! 🎁',
-                            'body', message
+                            'body', message,
+                            'categoryId', 'occasion_reminder',
+                            'data', jsonb_build_object('type', 'occasion_reminder', 'occasionId', occ.id)
                         )
                     );
                 END IF;

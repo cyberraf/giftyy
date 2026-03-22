@@ -8,8 +8,9 @@ import { useProducts, type Product } from '@/contexts/ProductsContext';
 import { useRecipients } from '@/contexts/RecipientsContext';
 import { useHome } from '@/lib/hooks/useHome';
 import { supabase } from '@/lib/supabase';
+import { safeGoBack } from '@/lib/utils/navigation';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, usePathname, useRouter } from 'expo-router';
 import { useScrollToTop } from '@react-navigation/native';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -144,6 +145,7 @@ export default function RecipientDetailScreen() {
     const { id, occasionId } = useLocalSearchParams<{ id: string; occasionId?: string }>();
     const { top, bottom } = useSafeAreaInsets();
     const router = useRouter();
+    const pathname = usePathname();
     const navigation = useNavigation();
     const { session } = useAuth();
     const { t, i18n } = useTranslation();
@@ -506,7 +508,7 @@ export default function RecipientDetailScreen() {
                     if (error) {
                         alert(t('settings.error'), `${t('recipient.errors.failed_delete')}: ${error.message}`);
                     } else {
-                        router.back();
+                        safeGoBack(router);
                     }
                 },
             },
@@ -536,7 +538,7 @@ export default function RecipientDetailScreen() {
             <Pressable
                 key={product.id}
                 style={styles.productCard}
-                onPress={() => router.push({ pathname: '/(buyer)/(tabs)/product/[id]', params: { id: product.id } })}
+                onPress={() => router.push({ pathname: '/(buyer)/(tabs)/product/[id]', params: { id: product.id, returnTo: pathname } } as any)}
             >
                 <View style={styles.productImageBox}>
                     {primaryImage ? (
@@ -568,7 +570,7 @@ export default function RecipientDetailScreen() {
             <View style={[styles.centered, { paddingTop: top }]}>
                 <IconSymbol name="person.fill" size={64} color={GIFTYY_THEME.colors.gray300} />
                 <Text style={styles.errorText}>{t('recipient.errors.not_found')}</Text>
-                <Pressable onPress={() => router.back()} style={styles.backButton}>
+                <Pressable onPress={() => safeGoBack(router)} style={styles.backButton}>
                     <Text style={styles.backButtonText}>{t('settings.go_back')}</Text>
                 </Pressable>
             </View>

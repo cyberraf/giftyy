@@ -3,6 +3,7 @@ import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { BRAND_FONT } from '@/constants/theme';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRecipients, type MatchedContact } from '@/contexts/RecipientsContext';
+import { openContactSettings } from '@/lib/utils/contacts';
 import { responsiveFontSize, scale, verticalScale } from '@/utils/responsive';
 import React, { useEffect, useMemo, useState } from 'react';
 import {
@@ -38,11 +39,24 @@ export function FindFriendsModal({ visible, onClose, onConnect, onInvite }: Find
     const [selectedContact, setSelectedContact] = useState<MatchedContact | null>(null);
     const [relationshipModalVisible, setRelationshipModalVisible] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
-
+    const [permissionDenied, setPermissionDenied] = useState(false);
+    const [canAskAgain, setCanAskAgain] = useState(true);
+    const [syncError, setSyncError] = useState<string | null>(null);
 
     useEffect(() => {
         if (visible) {
-            syncContacts();
+            setPermissionDenied(false);
+            setSyncError(null);
+            syncContacts(true).catch((err: any) => {
+                if (err?.message?.includes('Permission') || err?.status === 'denied') {
+                    setPermissionDenied(true);
+                    setCanAskAgain(err?.canAskAgain ?? false);
+                } else if (err?.message?.includes('not available')) {
+                    setSyncError('Contacts are not available in this build. Please update your app.');
+                } else {
+                    setSyncError('Could not load contacts. Pull down to retry.');
+                }
+            });
         }
     }, [visible, syncContacts]);
 
@@ -180,7 +194,57 @@ export function FindFriendsModal({ visible, onClose, onConnect, onInvite }: Find
                 </View>
 
                 {/* Contact List */}
-                {isSyncingContacts && syncedContacts.length === 0 ? (
+                {permissionDenied ? (
+                    <View style={styles.loadingContainer}>
+                        <IconSymbol name="person.crop.circle.badge.exclamationmark" size={56} color={GIFTYY_THEME.colors.gray300} />
+                        <Text style={[styles.loadingText, { fontWeight: '700', marginTop: verticalScale(16) }]}>
+                            Contact Access Required
+                        </Text>
+                        <Text style={[styles.emptyText, { marginTop: verticalScale(8), paddingHorizontal: scale(40) }]}>
+                            {canAskAgain
+                                ? 'Giftyy needs access to your contacts to find friends. Tap below to grant permission.'
+                                : 'Contact access was denied. Please enable it in your device settings to find friends on Giftyy.'}
+                        </Text>
+                        <Pressable
+                            style={[styles.actionButton, styles.connectButton, { marginTop: verticalScale(20), paddingHorizontal: scale(24), paddingVertical: verticalScale(12) }]}
+                            onPress={() => {
+                                if (canAskAgain) {
+                                    setPermissionDenied(false);
+                                    syncContacts().catch((err: any) => {
+                                        setPermissionDenied(true);
+                                        setCanAskAgain(err?.canAskAgain ?? false);
+                                    });
+                                } else {
+                                    openContactSettings();
+                                }
+                            }}
+                        >
+                            <Text style={[styles.actionButtonText, { color: '#FFF', fontSize: responsiveFontSize(15) }]}>
+                                {canAskAgain ? 'Grant Access' : 'Open Settings'}
+                            </Text>
+                        </Pressable>
+                    </View>
+                ) : syncError ? (
+                    <View style={styles.loadingContainer}>
+                        <IconSymbol name="exclamationmark.triangle" size={48} color={GIFTYY_THEME.colors.gray300} />
+                        <Text style={[styles.emptyText, { marginTop: verticalScale(12), paddingHorizontal: scale(40) }]}>
+                            {syncError}
+                        </Text>
+                        <Pressable
+                            style={[styles.actionButton, styles.connectButton, { marginTop: verticalScale(16), paddingHorizontal: scale(24), paddingVertical: verticalScale(12) }]}
+                            onPress={() => {
+                                setSyncError(null);
+                                syncContacts(true).catch((err: any) => {
+                                    setSyncError('Could not load contacts. Pull down to retry.');
+                                });
+                            }}
+                        >
+                            <Text style={[styles.actionButtonText, { color: '#FFF', fontSize: responsiveFontSize(15) }]}>
+                                Retry
+                            </Text>
+                        </Pressable>
+                    </View>
+                ) : isSyncingContacts && syncedContacts.length === 0 ? (
                     <View style={styles.loadingContainer}>
                         <ActivityIndicator size="large" color={GIFTYY_THEME.colors.primary} />
                         <Text style={styles.loadingText}>Syncing your contacts...</Text>

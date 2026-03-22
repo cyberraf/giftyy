@@ -12,8 +12,10 @@ import { useTour } from '@/contexts/TourContext';
 import { supabase } from '@/lib/supabase';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { GIFTYY_THEME } from '@/constants/giftyy-theme';
+import { HomeSkeleton } from '@/components/ui/SkeletonLoader';
 
 /**
  * Buyer Home: AI Chat Interface with Upcoming Celebrations & Onboarding
@@ -127,9 +129,10 @@ export default function BuyerHomeIndexScreen() {
 	const hasPreferences = useMemo(() => {
 		if (!myPreferences) return false;
 		// Check for at least one meaningful preference field
+		// Note: dbRowToPreferences converts snake_case → camelCase
 		const keyFields = [
-			'age_range', 'lifestyle_type', 'gender_identity',
-			'fashion_style', 'interests', 'dietary_preferences'
+			'ageRange', 'lifestyleType', 'genderIdentity',
+			'fashionStyle', 'interests', 'dietaryPreferences'
 		];
 		return keyFields.some(field => {
 			const val = (myPreferences as any)[field];
@@ -145,19 +148,19 @@ export default function BuyerHomeIndexScreen() {
 					id: 'add-name',
 					label: t('onboarding.steps.add_name'),
 					completed: !!(profile?.first_name),
-					onPress: () => router.push('/(buyer)/(tabs)/profile'),
+					onPress: () => router.push('/(buyer)/settings/profile'),
 				},
 				{
 					id: 'add-phone',
 					label: t('onboarding.steps.add_phone'),
 					completed: !!(profile?.phone),
-					onPress: () => router.push('/(buyer)/(tabs)/profile'),
+					onPress: () => router.push('/(buyer)/settings/profile'),
 				},
 				{
 					id: 'add-birthday',
 					label: t('onboarding.steps.add_birthday'),
 					completed: !!(profile?.date_of_birth),
-					onPress: () => router.push('/(buyer)/(tabs)/profile'),
+					onPress: () => router.push('/(buyer)/settings/profile'),
 				},
 				{
 					id: 'add-recipient',
@@ -247,9 +250,7 @@ export default function BuyerHomeIndexScreen() {
 						)}
 					</>
 				) : (
-					<View style={{ height: 300, justifyContent: 'center', alignItems: 'center' }}>
-						<ActivityIndicator size="small" color="#f75507" />
-					</View>
+					<HomeSkeleton />
 				)}
 			</HomeAIInterface>
 		</View>
@@ -262,6 +263,6 @@ const styles = StyleSheet.create({
 		backgroundColor: 'transparent',
 	},
 	onboardingWrapper: {
-		marginTop: 16,
+		marginTop: GIFTYY_THEME.spacing.lg,
 	},
 });

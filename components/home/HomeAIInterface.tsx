@@ -1,7 +1,10 @@
 import { RecommendationCard } from '@/components/home/RecommendationCard';
 import { TourAnchor } from '@/components/tour/TourAnchor';
 import { IconSymbol } from '@/components/ui/icon-symbol';
+import { BlurView } from 'expo-blur';
+import { LinearGradient } from 'expo-linear-gradient';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
+import { normalizeFont, scale, verticalScale } from '@/utils/responsive';
 import { useAuth } from '@/contexts/AuthContext';
 import { useRecipients } from '@/contexts/RecipientsContext';
 import {
@@ -18,8 +21,8 @@ import {
 } from '@/lib/api/ai-sessions';
 import { UpcomingOccasion } from '@/lib/hooks/useHome';
 import { useAppStore } from '@/lib/store/useAppStore';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { usePathname, useRouter } from 'expo-router';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
     ActivityIndicator,
@@ -53,6 +56,8 @@ import Animated, {
     ZoomOut
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useProducts, type Product } from '@/contexts/ProductsContext';
+import * as Haptics from 'expo-haptics';
 
 
 
@@ -70,6 +75,8 @@ type Message = {
         variant?: 'primary' | 'secondary' | 'outline';
     }[];
     quickReplies?: string[];
+    sessionState?: any;
+    hasSignal?: boolean; // v4: indicate that this message provided a profile fact
 };
 
 type Props = {
@@ -97,14 +104,117 @@ const DEFAULT_SUGGESTIONS = [
 
 const BUDGET_PRESETS = [25, 50, 100, 250];
 
-export default function HomeAIInterface({ 
-    onSearch, 
-    recipients = [], 
-    occasions = [], 
-    products = [], 
-    initialPrompt = '', 
-    children, 
-    style, 
+const SASSY_AVATAR_MESSAGES = [
+    "Go ahead, tap me... I dare you 😏",
+    "Psst... my pouch is stuffed. You know you wanna tap 👀",
+    "Don't just stare — tap me! I've got goodies 🎁😘",
+    "Feeling lucky? Tap me and find out 🍀",
+    "My pouch is bursting. Tap tap tap! 🐻",
+    "I don't bite. Tap me 😏",
+    "Tap me already, I've been waiting ALL day 🥺",
+    "Bet you can't tap me 10 times 😈",
+    "Tap me — there's treasure in this pouch 💎",
+    "One tap = one step closer to a surprise 😎",
+    "This pouch won't open itself — tap it, bestie 💅",
+    "Warning: tapping me causes extreme joy ⚠️ Tap anyway",
+    "You + me + 10 taps = magic. Do it 🎉",
+    "My pouch is glowing. Tap to find out why ✨",
+    "Hey you! Yeah you. Tap this pouch 👉🐻",
+    "I've got a secret... tap me to unlock it 🤫",
+    "Roses are red, violets are blue, tap me right now 🌹",
+    "I'm a piñata in disguise. Start tapping! 🪅",
+    "Breaking news: adorable bear seeks tapper 📰 Tap now",
+    "Better deals than your inbox. Tap and see 📬",
+    "Impeccable taste lives in this pouch. Tap to peek 💁‍♀️",
+    "Tap me like you mean it! No weak taps 💪",
+    "Wanna see an explosion? Tap tap tap 💥",
+    "Legends tap me. Be a legend 🏆",
+    "I'm a treasure chest with fur. Tap to open 🧸",
+    "VIP access: tap me. It's free 🎟️",
+    "Spoiler alert: something awesome awaits. Tap me 🍿",
+    "My therapist says I should share. So tap me! 🛋️",
+    "90% fluff, 10% surprises. Tap to verify 📊",
+    "My pouch refills every time. Tap again! 🧪",
+    "You miss 100% of surprises you don't tap for 🏒",
+    "My pouch is judging you. Tap it already 👁️",
+    "🎵 Tap Me Baby One More Time 🎵",
+    "I'm holding a gift for you. Tap me! 😤",
+    "Boop! Or just tap me. Either works 🐽",
+    "My pouch is screaming 'TAP ME!' 🗣️",
+    "Fastest fingers win. Ready, set, TAP! 🏁",
+    "Knock knock. Tap to let the surprise in 🚪",
+    "I'm magical. Tap me and see ✨🐻",
+    "Daily reminder: tap the bear 📝",
+    "Curiosity rewarded here. Tap me 🐱",
+    "10 taps. That's it. Tap me 😉",
+    "My pouch is full of gains. Tap to see 💪🎁",
+    "I'm sitting on a surprise. Tap me for it 🪑",
+    "Tap me before I change my mind 😤💨",
+    "Tap quietly. Or loudly. Just tap 🤫",
+    "Other apps notify. I explode. Tap me 💥",
+    "My pouch winked at you. Tap back 😉",
+    "PRO TIP: tap me for instant serotonin 🧠💕",
+    "Loading surprise... nah, just tap me 😜",
+    "99 problems but you can fix one — tap me 🎒",
+    "The suspense! TAP ALREADY 😩",
+    "The gift gods demand it: tap me 🗿",
+    "You scrolled this far. Now tap me 🤷",
+    "More secrets than your group chat. Tap to spill 💬",
+    "Dare accepted. Now tap me 10 times 🎯",
+    "What's inside? Tap me to find out 📦",
+    "Main character energy. Tap me 💫",
+    "It's not a pouch, it's a portal. Tap to enter 🌀",
+    "Tapping me is self-care. Tap away 🧘",
+    "I'm fluffy. I'm here. Tap me ✨🐻",
+    "Every tap = one happy bear. Tap me 🥹",
+    "You haven't tapped yet?! Hurry up 😏",
+    "Great surprises start with 10 taps. Tap me 🎖️",
+    "My pouch has trust issues. Tap to earn it 🔐",
+    "Tap responsibly. Side effects: pure joy 💊",
+    "Please tap me. PLEASE 🥺👉👈",
+    "This pouch isn't decoration. Tap it 👜",
+    "Aggressively generous. Tap to experience 🎁",
+    "10 taps to surprise. Countdown: tap NOW 🚀",
+    "MVP pouch right here. Tap it 🏅",
+    "I'm your lucky charm. Tap me 🍀",
+    "Pouch inspector needed. Apply by tapping 📋",
+    "Stop reading. Start tapping 👀",
+    "Give me taps, I'll give you surprises 🤝",
+    "Hot take: tapping me = best decision today 🔥",
+    "Designer pouch. Exclusive surprises. Tap me 👛",
+    "Don't leave me on read — tap me 📱",
+    "New surprise just dropped. Tap to claim 🌅",
+    "Between us... tap me for something incredible 🤭",
+    "Not your average bear. Tap for deals 🐻‍❄️",
+    "Wish-granting pouch. Tap to test 🧞",
+    "I have a surprise. You haven't tapped. Fix that 🤨",
+    "This pouch is fire. Tap it 🔥🐻",
+    "Tap for confetti. Stay for the surprise 🎊",
+    "New update available. Tap to install 📲",
+    "Wrong app for swiping. Right app for tapping. Tap me 😅",
+    "Fluffier than your pillow. Tap me 🐻💅",
+    "The pouch is calling. Tap to answer 📞",
+    "Speed round: tap me 10 times. GO 🏃💨",
+    "Pouch is on fire today. Tap it 🔥🎒",
+    "Secret level unlocked: TAP THE BEAR 🎮",
+    "Adorable AND full of surprises. Tap me 💁🐻",
+    "Tap me and I'll make it rain confetti 🌧️🎊",
+    "Fortune favors the bold. Tap the bear 🗡️",
+    "I always deliver. Tap me 🌋",
+    "One does not simply NOT tap this bear 🧙",
+    "Gift or deal? Tap me to find out 🎰",
+    "Life is like this pouch. Tap me, Forrest 🍫",
+    "Rule #1: tap the bear. Rule #2: TAP THE BEAR 🐻",
+];
+
+export default function HomeAIInterface({
+    onSearch,
+    recipients = [],
+    occasions = [],
+    products = [],
+    initialPrompt = '',
+    children,
+    style,
     scrollToTop,
     refreshing = false,
     onRefresh
@@ -112,10 +222,12 @@ export default function HomeAIInterface({
     const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
     const { bottom, top } = useSafeAreaInsets();
     const router = useRouter();
+    const pathname = usePathname();
     const { user, profile } = useAuth();
     const { t } = useTranslation();
     const firstName = profile?.first_name || user?.email?.split('@')[0] || 'friend';
     const { addRecipient } = useRecipients();
+    const { products: allProducts } = useProducts();
     const { homeAiState, setHomeAiState } = useAppStore();
 
     const [text, setText] = useState(homeAiState?.text ?? initialPrompt);
@@ -126,7 +238,9 @@ export default function HomeAIInterface({
     const [showMentions, setShowMentions] = useState(false);
     const [isHistoryVisible, setIsHistoryVisible] = useState(false);
     const [sessionId, setSessionId] = useState<string | null>(homeAiState?.sessionId ?? null);
-    
+    const [sessionState, setSessionState] = useState<any | null>(homeAiState?.sessionState ?? null);
+    const [lastRecommendations, setLastRecommendations] = useState<{ product_id: string; title: string }[]>([]);
+
     const defaultMessages: Message[] = [
         {
             id: '1',
@@ -134,7 +248,7 @@ export default function HomeAIInterface({
             sender: 'ai',
         }
     ];
-    
+
     const [messages, setMessages] = useState<Message[]>(homeAiState?.messages ?? defaultMessages);
     const [feedbackHistory, setFeedbackHistory] = useState<Array<{
         productId: string;
@@ -148,8 +262,225 @@ export default function HomeAIInterface({
     const [loadingSessions, setLoadingSessions] = useState(false);
     const [historySearchQuery, setHistorySearchQuery] = useState('');
 
+    // Easter egg: tappable avatar that grows, wobbles, and explodes with confetti
+    const [sassyMessage, setSassyMessage] = useState(() =>
+        SASSY_AVATAR_MESSAGES[Math.floor(Math.random() * SASSY_AVATAR_MESSAGES.length)]
+    );
+    const [surpriseDeal, setSurpriseDeal] = useState<Product | null>(null);
+    const shownDealIdsRef = useRef<Set<string>>(new Set());
+    const [avatarTapCount, setAvatarTapCount] = useState(0);
+    const [confettiParticles, setConfettiParticles] = useState<Array<{
+        key: string; x: number; y: number; color: string; rotation: number; scale: number;
+        shape: 'circle' | 'rect' | 'star' | 'streamer' | 'ribbon' | 'emoji';
+        emoji?: string; wave: number; index: number;
+    }>>([]);
+    const confettiBatchRef = useRef(0);
+    const avatarScale = useSharedValue(1);
+    const avatarRotate = useSharedValue(0);
+    const tapInactivityRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const MAX_TAPS = 10;
+    const CONFETTI_COLORS = ['#f75507', '#14b8a6', '#FFD700', '#FF69B4', '#7C3AED', '#10B981', '#F59E0B', '#EF4444'];
+    const CONFETTI_SHAPES: Array<'circle' | 'rect' | 'star' | 'streamer' | 'ribbon' | 'emoji'> = [
+        'circle', 'rect', 'star', 'streamer', 'ribbon', 'circle', 'rect', 'star', 'streamer', 'emoji',
+    ];
+    const CONFETTI_EMOJIS = ['🎉', '🎊', '✨', '🎁', '🥳', '💥', '⭐', '🎈'];
+
+    const pickRandomDeal = useCallback(() => {
+        const saleProducts = allProducts.filter(
+            p => p.isActive && p.discountPercentage > 0 && p.stockQuantity > 0
+        );
+        if (saleProducts.length === 0) return null;
+        // Filter out already shown deals (reset if we've shown them all)
+        let available = saleProducts.filter(p => !shownDealIdsRef.current.has(p.id));
+        if (available.length === 0) {
+            shownDealIdsRef.current.clear();
+            available = saleProducts;
+        }
+        const pick = available[Math.floor(Math.random() * available.length)];
+        shownDealIdsRef.current.add(pick.id);
+        return pick;
+    }, [allProducts]);
+
+    const getHapticStyle = useCallback((tapNum: number) => {
+        if (tapNum <= 3) return Haptics.ImpactFeedbackStyle.Light;
+        if (tapNum <= 6) return Haptics.ImpactFeedbackStyle.Medium;
+        return Haptics.ImpactFeedbackStyle.Heavy;
+    }, []);
+
+    const handleAvatarTap = useCallback(() => {
+        const newCount = avatarTapCount + 1;
+        setAvatarTapCount(newCount);
+
+        // Clear any existing inactivity timer
+        if (tapInactivityRef.current) {
+            clearTimeout(tapInactivityRef.current);
+            tapInactivityRef.current = null;
+        }
+
+        if (newCount < MAX_TAPS) {
+            Haptics.impactAsync(getHapticStyle(newCount));
+            const scale = 1 + (newCount * 0.06);
+
+            // Wobble after tap 7
+            if (newCount >= 7) {
+                const wobbleIntensity = (newCount - 6) * 2.5; // 2.5° → 5° → 7.5°
+                avatarRotate.value = withSequence(
+                    withTiming(wobbleIntensity, { duration: 40 }),
+                    withTiming(-wobbleIntensity, { duration: 40 }),
+                    withTiming(wobbleIntensity * 0.6, { duration: 40 }),
+                    withTiming(-wobbleIntensity * 0.6, { duration: 40 }),
+                    withTiming(0, { duration: 60 })
+                );
+            }
+
+            avatarScale.value = withSequence(
+                withTiming(scale + 0.08, { duration: 80 }),
+                withTiming(scale, { duration: 120 })
+            );
+
+            // Reset if no tap within 1.5s
+            tapInactivityRef.current = setTimeout(() => {
+                setAvatarTapCount(0);
+                avatarScale.value = withTiming(1, { duration: 300 });
+                avatarRotate.value = withTiming(0, { duration: 200 });
+            }, 1500);
+        } else {
+            // Explosion! Multi-wave confetti burst
+            Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+
+            // Unique batch ID to prevent key collisions across explosions
+            const batch = ++confettiBatchRef.current;
+
+            // Wave 1: tight radial burst (instant)
+            const wave1 = Array.from({ length: 30 }, (_, i) => {
+                const angle = (i / 30) * Math.PI * 2 + (Math.random() * 0.3 - 0.15);
+                const dist = 60 + Math.random() * 100;
+                return {
+                    key: `${batch}-w0-${i}`,
+                    index: i,
+                    x: Math.cos(angle) * dist,
+                    y: Math.sin(angle) * dist - 40,
+                    color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+                    rotation: Math.random() * 720 - 360,
+                    scale: Math.random() * 0.7 + 0.5,
+                    shape: CONFETTI_SHAPES[Math.floor(Math.random() * CONFETTI_SHAPES.length)],
+                    emoji: CONFETTI_EMOJIS[Math.floor(Math.random() * CONFETTI_EMOJIS.length)],
+                    wave: 0,
+                };
+            });
+            setConfettiParticles(wave1);
+
+            // Wave 2: wider explosion (after 300ms)
+            setTimeout(() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                setConfettiParticles(prev => [...prev, ...Array.from({ length: 25 }, (_, i) => {
+                    const angle = (i / 25) * Math.PI * 2 + (Math.random() * 0.5 - 0.25);
+                    const dist = 120 + Math.random() * 140;
+                    return {
+                        key: `${batch}-w1-${i}`,
+                        index: i,
+                        x: Math.cos(angle) * dist,
+                        y: Math.sin(angle) * dist - 80,
+                        color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+                        rotation: Math.random() * 1080 - 540,
+                        scale: Math.random() * 1.0 + 0.3,
+                        shape: CONFETTI_SHAPES[Math.floor(Math.random() * CONFETTI_SHAPES.length)],
+                        emoji: CONFETTI_EMOJIS[Math.floor(Math.random() * CONFETTI_EMOJIS.length)],
+                        wave: 1,
+                    };
+                })]);
+            }, 300);
+
+            // Wave 3: floating shower from above (after 600ms)
+            setTimeout(() => {
+                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                setConfettiParticles(prev => [...prev, ...Array.from({ length: 20 }, (_, i) => {
+                    return {
+                        key: `${batch}-w2-${i}`,
+                        index: i,
+                        x: (Math.random() - 0.5) * 320,
+                        y: -(150 + Math.random() * 200),
+                        color: CONFETTI_COLORS[Math.floor(Math.random() * CONFETTI_COLORS.length)],
+                        rotation: Math.random() * 540 - 270,
+                        scale: Math.random() * 0.6 + 0.6,
+                        shape: CONFETTI_SHAPES[Math.floor(Math.random() * CONFETTI_SHAPES.length)],
+                        emoji: CONFETTI_EMOJIS[Math.floor(Math.random() * CONFETTI_EMOJIS.length)],
+                        wave: 2,
+                    };
+                })]);
+            }, 600);
+
+            avatarRotate.value = 0;
+            avatarScale.value = withSequence(
+                withTiming(2.5, { duration: 200 }),
+                withTiming(0, { duration: 150 }),
+                withTiming(1, { duration: 400 })
+            );
+            // Clear confetti and show surprise deal
+            setTimeout(() => {
+                setConfettiParticles([]);
+                setAvatarTapCount(0);
+                const deal = pickRandomDeal();
+                if (deal) setSurpriseDeal(deal);
+            }, 2400);
+            // Rotate sassy message while the deal popup is showing (user won't notice the swap)
+            setTimeout(() => {
+                setSassyMessage(prev => {
+                    let next;
+                    do {
+                        next = SASSY_AVATAR_MESSAGES[Math.floor(Math.random() * SASSY_AVATAR_MESSAGES.length)];
+                    } while (next === prev && SASSY_AVATAR_MESSAGES.length > 1);
+                    return next;
+                });
+            }, 7000);
+        }
+    }, [avatarTapCount, avatarScale, avatarRotate, getHapticStyle, pickRandomDeal]);
+
+    // Surprise deal popup countdown (10s auto-dismiss)
+    const [dealCountdown, setDealCountdown] = useState(0);
+    const dealTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+    useEffect(() => {
+        if (surpriseDeal) {
+            setDealCountdown(10);
+            dealTimerRef.current = setInterval(() => {
+                setDealCountdown(prev => {
+                    if (prev <= 1) {
+                        clearInterval(dealTimerRef.current!);
+                        dealTimerRef.current = null;
+                        setSurpriseDeal(null);
+                        return 0;
+                    }
+                    return prev - 1;
+                });
+            }, 1000);
+        }
+        return () => {
+            if (dealTimerRef.current) {
+                clearInterval(dealTimerRef.current);
+                dealTimerRef.current = null;
+            }
+        };
+    }, [surpriseDeal]);
+
+    const dismissDeal = useCallback(() => {
+        if (dealTimerRef.current) {
+            clearInterval(dealTimerRef.current);
+            dealTimerRef.current = null;
+        }
+        setSurpriseDeal(null);
+    }, []);
+
+    const animatedEasterEggStyle = useAnimatedStyle(() => ({
+        transform: [
+            { scale: avatarScale.value },
+            { rotate: `${avatarRotate.value}deg` },
+        ],
+    }));
+
     // Constraints State
     const [budget, setBudget] = useState<number>(100);
+    const [occasion, setOccasion] = useState<string | null>(null);
     const [giftWrapRequired, setGiftWrapRequired] = useState(false);
     const [personalizationRequired, setPersonalizationRequired] = useState(false);
     const [showConstraints, setShowConstraints] = useState(false);
@@ -178,39 +509,17 @@ export default function HomeAIInterface({
             text,
             isExpanded,
             sessionId,
-            messages
+            messages,
+            sessionState
         });
-    }, [text, isExpanded, sessionId, messages, setHomeAiState]);
+    }, [text, isExpanded, sessionId, messages, sessionState, setHomeAiState]);
 
     const [showMenu, setShowMenu] = useState(false);
     const menuScale = useSharedValue(0);
+    const inputFocus = useSharedValue(0);
 
 
-    // Generate dynamic suggestions based on data
-    const dynamicSuggestions = useMemo(() => {
-        const suggestions: string[] = [];
 
-        // 1. Take top upcoming occasions
-        occasions.slice(0, 3).forEach(o => {
-            const firstName = o.recipientName.split(' ')[0] || o.recipientName;
-            suggestions.push(`Birthday gift for @${firstName}`);
-        });
-
-        if (suggestions.length < 6 && recipients.length > 0) {
-            recipients.slice(0, 3).forEach(r => {
-                const displayName = r.displayName || r.firstName;
-
-                const sugg = `Gift ideas for @${displayName}`;
-                if (!suggestions.includes(sugg)) {
-                    suggestions.push(sugg);
-                }
-            });
-        }
-
-        // 3. Merge with defaults and unique them
-        const combined = [...suggestions, ...DEFAULT_SUGGESTIONS];
-        return Array.from(new Set(combined)).slice(0, 8);
-    }, [recipients, occasions]);
 
     const expandedHeight = SCREEN_HEIGHT * 0.7; // Fixed height relative to screen for the inline chat block
 
@@ -221,6 +530,14 @@ export default function HomeAIInterface({
         };
     });
 
+    const inputContainerStyle = useAnimatedStyle(() => {
+        return {
+            borderColor: interpolate(inputFocus.value, [0, 1], [0.1, 0.4]) > 0.2 ? GIFTYY_THEME.colors.orange : 'rgba(247, 85, 7, 0.1)',
+            borderWidth: interpolate(inputFocus.value, [0, 1], [1.5, 2]),
+            shadowOpacity: interpolate(inputFocus.value, [0, 1], [0.1, 0.2]),
+        };
+    });
+
     const expandedContentStyle = useAnimatedStyle(() => {
         return {
             opacity: expansion.value,
@@ -228,22 +545,18 @@ export default function HomeAIInterface({
         };
     });
 
-    const suggestionsStyle = useAnimatedStyle(() => {
-        return {
-            opacity: expansion.value,
-            transform: [
-                { translateY: interpolate(expansion.value, [0, 1], [20, 0]) }
-            ],
-            display: (expansion.value > 0.1 && messages.length <= 1) ? 'flex' : 'none',
-        };
-    });
 
     const handleFocus = () => {
         setIsExpanded(true);
+        inputFocus.value = withTiming(1, { duration: 300 });
         expansion.value = withTiming(1, {
             duration: 300,
             easing: Easing.out(Easing.quad)
         });
+    };
+
+    const handleBlur = () => {
+        inputFocus.value = withTiming(0, { duration: 300 });
     };
 
     const handleCollapse = () => {
@@ -341,6 +654,13 @@ export default function HomeAIInterface({
 
             setMessages(loadedMessages);
 
+            // Re-hydrate sessionState from the latest AI message
+            const latestAiMsg = [...loadedMessages].reverse().find(m => m.sender === 'ai' && (m as any).sessionState);
+            if (latestAiMsg) {
+                console.log('[DEBUG] Re-hydrating sessionState from past message');
+                setSessionState((latestAiMsg as any).sessionState);
+            }
+
             // Fetch and re-hydrate feedback for this recipient to maintain memory
             if (user?.id) {
                 const recipientId = session.recipient_profile_id;
@@ -374,6 +694,9 @@ export default function HomeAIInterface({
         }
 
         setSessionId(null);
+        setSessionState(null); // Reset session state for new chat
+        setLastRecommendations([]); // Clear last recs for fresh session
+        setOccasion(null); // Reset occasion for fresh session
         setMessages([{
             id: '1',
             text: t('home.ai_greeting', { name: firstName }),
@@ -460,7 +783,6 @@ export default function HomeAIInterface({
 
         return (
             <View style={styles.thinkingDotsContainer}>
-                <Text style={styles.thinkingText}>{t('home.ai_thinking')}</Text>
                 <Animated.View style={[styles.thinkingDot, dotStyle(dot1)]} />
                 <Animated.View style={[styles.thinkingDot, dotStyle(dot2)]} />
                 <Animated.View style={[styles.thinkingDot, dotStyle(dot3)]} />
@@ -710,9 +1032,72 @@ export default function HomeAIInterface({
 
     // Helper to extract a budget from text (e.g. "$50", "50 bucks", "under 100")
     // This is a naive client-side fallback; ideally, the backend extracts this precisely.
-    const extractBudget = (input: string, currentBudget: number): number => {
-        const match = input.match(/\$?(\d+)\s*(bucks|dollars)?/i);
-        return match ? parseInt(match[1], 10) : currentBudget;
+    // Helper to extract a budget from text (e.g. "$50", "around 100", "under 100")
+    const extractBudget = (input: string): number | null => {
+        // Look for patterns like "under 50", "$50", "around 100", "budget of 150"
+        const patterns = [
+            /\bunder\s*\$?(\d+)\b/i,
+            /\baround\s*\$?(\d+)\b/i,
+            /\bbudget\s*(?:of|is)?\s*\$?(\d+)\b/i,
+            /\$(\d+)\b/i,
+            /\b(\d+)\s*(bucks|dollars)\b/i,
+        ];
+
+        for (const pattern of patterns) {
+            const match = input.match(pattern);
+            if (match && match[1]) {
+                const val = parseInt(match[1], 10);
+                // Sanity check for budget values
+                if (val > 0 && val < 10000) return val;
+            }
+        }
+        return null; // Not mentioned — let the AI discover it via wizard
+    };
+
+    // Helper to extract relationship from text
+    const extractRelationship = (input: string): string | null => {
+        const lower = input.toLowerCase();
+        const relationships: Record<string, string> = {
+            'wife': 'Wife',
+            'husband': 'Husband',
+            'partner': 'Partner',
+            'girlfriend': 'Girlfriend',
+            'boyfriend': 'Boyfriend',
+            'son': 'Son',
+            'daughter': 'Daughter',
+            'mother': 'Mother',
+            'father': 'Father',
+            'mom': 'Mother',
+            'dad': 'Father',
+            'sister': 'Sister',
+            'brother': 'Brother',
+            'friend': 'Friend',
+            'colleague': 'Colleague',
+            'boss': 'Boss',
+            'grandpa': 'Grandfather',
+            'grandma': 'Grandmother',
+            'grandfather': 'Grandfather',
+            'grandmother': 'Grandmother',
+            'grandson': 'Grandson',
+            'granddaughter': 'Granddaughter',
+            'uncle': 'Uncle',
+            'aunt': 'Aunt',
+            'auntie': 'Aunt',
+            'nephew': 'Nephew',
+            'niece': 'Niece',
+            'cousin': 'Cousin',
+            'fiancé': 'Fiancé',
+            'fiancée': 'Fiancée',
+            'fiance': 'Fiancé',
+            'fiancee': 'Fiancée',
+            'teacher': 'Teacher',
+            'coworker': 'Colleague'
+        };
+
+        for (const [key, val] of Object.entries(relationships)) {
+            if (new RegExp(`\\b${key}\\b`, 'i').test(lower)) return val;
+        }
+        return null;
     };
 
     // Helper to extract an occasion from text
@@ -725,9 +1110,18 @@ export default function HomeAIInterface({
         if (lower.includes('graduation')) return 'Graduation';
         if (lower.includes('baby')) return 'Baby Shower';
         if (lower.includes('valentine')) return 'Valentines';
-        if (lower.includes('mother')) return 'Mothers Day';
-        if (lower.includes('father')) return 'Fathers Day';
-        if (lower.match(/\bgift\b|\bpresent\b/)) return 'Gift';
+        if (/\bmother'?s?\s*day\b/.test(lower) || (lower.includes('mother') && !lower.includes('grandmother'))) return 'Mothers Day';
+        if (/\bfather'?s?\s*day\b/.test(lower) || (lower.includes('father') && !lower.includes('grandfather'))) return 'Fathers Day';
+        if (lower.includes('ramadan')) return 'Ramadan';
+        if (lower.includes('eid')) return 'Eid';
+        if (lower.includes('housewarming')) return 'Housewarming';
+        if (lower.includes('thank you') || lower.includes('appreciation')) return 'Thank You';
+        if (lower.includes('retirement')) return 'Retirement';
+        if (lower.includes('easter')) return 'Easter';
+        if (lower.includes('hanukkah') || lower.includes('chanukah')) return 'Hanukkah';
+        if (lower.includes('diwali')) return 'Diwali';
+        if (lower.includes('new year')) return 'New Year';
+        // Don't match generic words like "gift" or "present" — they're context, not occasions
         return null;
     };
 
@@ -760,6 +1154,8 @@ export default function HomeAIInterface({
             if (!sessionError && data?.id) {
                 currentSessionId = data.id;
                 setSessionId(currentSessionId);
+                setOccasion(null); // Fresh session — clear persisted occasion
+                setSessionState(null); // Fresh session — clear stale session state
                 console.log('[DEBUG] Session created:', currentSessionId);
                 // Reload sessions to update the count
                 loadSessions();
@@ -836,34 +1232,74 @@ export default function HomeAIInterface({
             let finalRecipientName = mentionedRecipientName;
             let finalRecipientRelationship = mentionedRecipientRelationship;
 
+            // Search for relationship if no @mention was found
+            const extractedRel = extractRelationship(searchText);
+            if (!finalRecipientId && extractedRel) {
+                finalRecipientRelationship = extractedRel;
+                console.log(`[DEBUG] Extracted relationship from text: ${extractedRel}`);
+            }
+
+            // Detect if the user is switching to a different recipient
+            const isNewRecipient = (extractedRel || mentionedRecipientId) &&
+                contextRecipient &&
+                (extractedRel !== contextRecipient.relationship || mentionedRecipientId !== contextRecipient.id);
+
+            if (isNewRecipient) {
+                console.log(`[DEBUG] Recipient changed — clearing occasion & session state`);
+                setOccasion(null);
+                setSessionState(null);
+            }
+
             if (finalRecipientId && finalRecipientName) {
                 console.log(`[DEBUG] Found mention: ${finalRecipientName} (${finalRecipientId})`);
-                setContextRecipient({ 
-                    id: finalRecipientId, 
-                    name: finalRecipientName, 
-                    relationship: finalRecipientRelationship || undefined 
+                setContextRecipient({
+                    id: finalRecipientId,
+                    name: finalRecipientName,
+                    relationship: finalRecipientRelationship || undefined
                 });
+            } else if (finalRecipientRelationship && !finalRecipientId) {
+                // If we found a relationship but no specific person yet
+                // We keep it in context
+                console.log(`[DEBUG] Found relationship context: ${finalRecipientRelationship}`);
+                setContextRecipient({
+                    id: 'temp_rel', // marker for relationship-only context
+                    name: finalRecipientRelationship,
+                    relationship: finalRecipientRelationship
+                });
+                // We don't set finalRecipientId because we don't have a profile yet
             } else if (contextRecipient) {
-                finalRecipientId = contextRecipient.id;
-                finalRecipientName = contextRecipient.name;
-                finalRecipientRelationship = contextRecipient.relationship || null;
-                console.log(`[DEBUG] Using contextual recipient: ${finalRecipientName}`);
+                // Restore from context
+                finalRecipientId = contextRecipient.id === 'temp_rel' ? null : contextRecipient.id;
+                finalRecipientName = (contextRecipient.id === 'temp_rel' && !finalRecipientName) ? null : (finalRecipientName || contextRecipient.name);
+                finalRecipientRelationship = finalRecipientRelationship || contextRecipient.relationship || null;
+                console.log(`[DEBUG] Using contextual recipient: ${finalRecipientRelationship || finalRecipientName}`);
             } else {
                 console.log('[DEBUG] No recipient mentioned or found in context.');
             }
 
             console.log('[DEBUG] Cleaning text for occasion extraction...');
             let textForOccasion = searchText;
-            if (finalRecipientName) {
-                const nameRegex = new RegExp(finalRecipientName, 'ig');
-                textForOccasion = textForOccasion.replace(nameRegex, '').replace(/@\w+/g, '');
+            // Use both name and relationship for cleaning if available
+            const cleanTerms = [finalRecipientName, finalRecipientRelationship].filter(Boolean) as string[];
+            for (const term of cleanTerms) {
+                const termRegex = new RegExp(`\\b${term}\\b`, 'ig');
+                textForOccasion = textForOccasion.replace(termRegex, '');
             }
+            textForOccasion = textForOccasion.replace(/@\w+/g, '');
 
             console.log('[DEBUG] Extracting budget/occasion...');
-            const reqBudget = extractBudget(searchText, budget);
-            setBudget(reqBudget);
-            const reqOccasion = extractOccasion(textForOccasion);
-            console.log('[DEBUG] Extracted:', { reqBudget, reqOccasion });
+            const reqBudget = extractBudget(searchText); // null if not explicitly mentioned
+            if (reqBudget !== null && reqBudget !== budget) {
+                setBudget(reqBudget);
+            }
+            const extractedOccasion = extractOccasion(textForOccasion);
+            if (extractedOccasion) {
+                setOccasion(extractedOccasion); // Persist for future messages
+            }
+            // If recipient changed, don't carry over the old occasion (React state update is async)
+            const persistedOccasion = isNewRecipient ? null : occasion;
+            const reqOccasion = extractedOccasion || persistedOccasion;
+            console.log('[DEBUG] Extracted:', { reqBudget, reqOccasion, extractedOccasion, persistedOccasion: occasion });
 
             const historyToSend = [
                 ...messages.filter(m => m.id !== '1'),
@@ -875,7 +1311,7 @@ export default function HomeAIInterface({
 
             console.log('[DEBUG] Calling AI Recommend Function with params:', {
                 recipientProfileId: finalRecipientId,
-                recipientName: finalRecipientName,
+                recipientName: (finalRecipientId === 'temp_rel' || !finalRecipientId) ? null : finalRecipientName,
                 recipientRelationship: finalRecipientRelationship,
                 occasion: reqOccasion,
                 budget: reqBudget
@@ -883,18 +1319,20 @@ export default function HomeAIInterface({
 
             const { data: recommendationsData, error } = await callAIRecommendFunction({
                 recipientProfileId: finalRecipientId || undefined,
-                recipientName: finalRecipientName || undefined,
+                recipientName: (finalRecipientId === 'temp_rel' || !finalRecipientId) ? undefined : (finalRecipientName || undefined),
                 recipientRelationship: finalRecipientRelationship || undefined,
-                budget: reqBudget,
+                budget: reqBudget ?? undefined, // Only send if user explicitly mentioned a budget
                 occasion: reqOccasion || undefined,
                 freeText: searchText,
                 chatHistory: historyToSend,
                 feedbackHistory: feedbackHistory,
+                lastRecommendations: lastRecommendations,
                 constraints: {
                     gift_wrap_required: giftWrapRequired,
                     personalization_required: personalizationRequired
-                }
-            }, !!finalRecipientId);
+                },
+                sessionState: sessionState // Pass current v4 session state
+            });
 
             console.log('[DEBUG] AI Recommend Function returned:', {
                 hasData: !!recommendationsData,
@@ -907,55 +1345,58 @@ export default function HomeAIInterface({
                 throw new Error(error?.message || 'Failed to get recommendations from edge function');
             }
 
-            let responseText = '';
+            // Sync v4 session state from response
+            if (recommendationsData.sessionState) {
+                console.log('[DEBUG] Received new sessionState. Phase:', recommendationsData.sessionState.phase);
+                setSessionState(recommendationsData.sessionState);
+            }
+
+            // Check if this message provided any signals (hints)
+            const hasSignals = recommendationsData.extracted_profile_hints &&
+                Object.values(recommendationsData.extracted_profile_hints).some(v => v !== undefined && v !== null);
+
+            if (hasSignals) {
+                console.log('[DEBUG] Profile signals detected in user message');
+                // Mark the last user message as having a signal
+                setMessages(prev => {
+                    const newMsgs = [...prev];
+                    const lastUserMsgIndex = newMsgs.findLastIndex(m => m.sender === 'user');
+                    if (lastUserMsgIndex !== -1) {
+                        newMsgs[lastUserMsgIndex] = { ...newMsgs[lastUserMsgIndex], hasSignal: true };
+                    }
+                    return newMsgs;
+                });
+            }
+
             let aiMsg: Message;
 
             const hasQuestions = recommendationsData.clarifying_questions && recommendationsData.clarifying_questions.length > 0;
             const hasRecs = recommendationsData.recommendations && recommendationsData.recommendations.length > 0;
 
-            if (hasQuestions || hasRecs) {
-                const targetName = finalRecipientName ? ` for ${finalRecipientName}` : '';
-                
-                let text = '';
-                if (hasRecs) {
-                    text = `I've evaluated ${recommendationsData.candidates_evaluated} products and found these great matches${targetName}! ✨`;
-                }
+            const fallbackQuestion = hasQuestions ? recommendationsData.clarifying_questions[0] : '';
+            const mainText = (recommendationsData.chat_followup || fallbackQuestion || '').trim() || t('home.ai_refinement_fallback');
 
-                // If we also have questions, append them or prioritize them in the follow-up
-                let mainText = text;
-                let followup = recommendationsData.chat_followup || "What do you think of these options?";
+            aiMsg = {
+                id: (Date.now() + 2).toString(),
+                text: mainText,
+                sender: 'ai',
+                suggestions: hasRecs ? recommendationsData.recommendations : undefined,
+                message_script: undefined,
+                quickReplies: recommendationsData.quick_replies
+            };
 
-                if (hasQuestions) {
-                    const questionText = recommendationsData.clarifying_questions.join('\n\n');
-                    if (!mainText) {
-                        mainText = questionText;
-                        followup = "Reply here and we'll keep looking!";
-                    } else {
-                        // Append questions to main text if recommendations are also present
-                        mainText += `\n\n${questionText}`;
-                    }
-                }
+            if (recommendationsData.cautions && recommendationsData.cautions.length > 0) {
+                aiMsg.text += `\n\n⚠️ Caution: ${recommendationsData.cautions.join(' ')}`;
+            }
 
-                aiMsg = {
-                    id: (Date.now() + 2).toString(),
-                    text: mainText,
-                    sender: 'ai',
-                    suggestions: hasRecs ? recommendationsData.recommendations : undefined,
-                    followup,
-                    message_script: recommendationsData.message_script,
-                    quickReplies: recommendationsData.quick_replies
-                };
-
-                if (recommendationsData.cautions && recommendationsData.cautions.length > 0) {
-                    aiMsg.text += `\n\n⚠️ Caution: ${recommendationsData.cautions.join(' ')}`;
-                }
-            } else {
-                aiMsg = {
-                    id: (Date.now() + 3).toString(),
-                    text: responseText || t('home.ai_refinement_fallback'),
-                    sender: 'ai',
-                    quickReplies: recommendationsData.quick_replies
-                };
+            // Track last shown recommendations for product follow-up detection
+            if (hasRecs) {
+                setLastRecommendations(
+                    recommendationsData.recommendations.map((r: any) => ({
+                        product_id: r.product_id,
+                        title: r.title,
+                    }))
+                );
             }
 
             setMessages(prev => [...prev, aiMsg]);
@@ -964,12 +1405,14 @@ export default function HomeAIInterface({
             if (currentSessionId && user?.id) {
                 // Save with metadata for session persistence
                 const metadata = {
-                    suggestions: aiMsg.suggestions,
+                    suggestions: aiMsg.suggestions, // Persist suggestions for history view
                     followup: aiMsg.followup,
+                    message_script: aiMsg.message_script,
                     quickReplies: aiMsg.quickReplies,
-                    actions: aiMsg.actions
+                    actions: aiMsg.actions,
+                    sessionState: recommendationsData.sessionState // Save state in metadata for re-hydration
                 };
-                const { error: msgError } = await insertAIMessage(currentSessionId, 'assistant', responseText, metadata);
+                const { error: msgError } = await insertAIMessage(currentSessionId, 'assistant', aiMsg.text, metadata);
                 if (msgError) console.warn('[FloatingAIInput] Failed to save assistant message:', msgError.message);
 
                 if (recommendationsData.recommendations) {
@@ -988,8 +1431,9 @@ export default function HomeAIInterface({
 
                 await updateSessionLastActive(currentSessionId);
             }
-        } catch (error) {
-            console.error('[FloatingAIInput]', error);
+        } catch (err: any) {
+            console.error('[FloatingAIInput] Error in handleSubmit:', err);
+
             const errorMsg: Message = {
                 id: (Date.now() + 4).toString(),
                 text: t('home.ai_error_fallback'),
@@ -1026,7 +1470,7 @@ export default function HomeAIInterface({
 
         if (suggestion.product_id) {
             handleCollapse();
-            router.push(`/(buyer)/(tabs)/product/${suggestion.product_id}`);
+            router.push({ pathname: '/(buyer)/(tabs)/product/[id]', params: { id: suggestion.product_id, returnTo: pathname } } as any);
         } else {
             // General suggestion or no product ID
             onSearch(suggestion.title);
@@ -1045,90 +1489,168 @@ export default function HomeAIInterface({
 
     return (
         <View style={[styles.container, style]}>
-            <KeyboardAvoidingView 
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'} 
+            <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={{ flex: 1 }}
                 keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
             >
                 <View style={[styles.contentContainer, { flex: 1 }]}>
                     {/* Header & Main Chat Area */}
                     <View style={{ flex: 1, backgroundColor: 'transparent' }}>
-                        <ScrollView
-                            ref={scrollRef}
-                            style={[styles.chatArea, { flex: 1 }]}
-                            contentContainerStyle={[
-                                styles.chatContent,
-                                { flexGrow: 1, justifyContent: messages.length > 1 ? 'flex-end' : 'flex-start' }
-                            ]}
-                            showsVerticalScrollIndicator={false}
-                            keyboardShouldPersistTaps="handled"
-                            refreshControl={
-                                onRefresh ? (
-                                    <RefreshControl
-                                        refreshing={refreshing}
-                                        onRefresh={onRefresh}
-                                        tintColor={GIFTYY_THEME.colors.primary}
-                                        colors={[GIFTYY_THEME.colors.primary]}
-                                        progressViewOffset={top + 20}
-                                    />
-                                ) : undefined
-                            }
-                        >
-                            {/* Clear header when in chat mode; Dashboard children handle their own padding */}
-                            {messages.length > 1 && <View style={{ height: top + 80 }} />}
+                        <View style={[styles.expandedMain, { paddingTop: top }]}>
+                            <ScrollView
+                                ref={scrollRef}
+                                style={[styles.chatArea, { flex: 1 }]}
+                                contentContainerStyle={[
+                                    styles.chatContent,
+                                    { flexGrow: 1, justifyContent: messages.length > 1 ? 'flex-end' : 'flex-start' }
+                                ]}
+                                showsVerticalScrollIndicator={false}
+                                keyboardShouldPersistTaps="handled"
+                                refreshControl={
+                                    onRefresh ? (
+                                        <RefreshControl
+                                            refreshing={refreshing}
+                                            onRefresh={onRefresh}
+                                            tintColor={GIFTYY_THEME.colors.primary}
+                                            colors={[GIFTYY_THEME.colors.primary]}
+                                            progressViewOffset={top + 20}
+                                        />
+                                    ) : undefined
+                                }
+                            >
+                                {/* Clear header when in chat mode; Dashboard children handle their own padding */}
+                                {messages.length > 1 && <View style={{ height: top + 40 }} />}
 
-                            {/* Safe area spacer for when children are hidden */}
-                            {/* messages.length > 1 && <View style={{ height: top + 10 }} /> */}
-
-                            {/* Inline Home Page Content rendered here! */}
-                            {messages.length <= 1 && (
-                                <View>
-                                    {messages.map((msg, index) => {
-                                        // Simple greeting check: the very first AI message when starting a conversation
-                                        const isInitialGreeting = index === 0 &&
-                                            msg.sender === 'ai' &&
-                                            messages.length === 1;
-
-                                        if (isInitialGreeting) {
-                                            return (
-                                                <View key={msg.id} style={styles.initialGreetingContainer}>
-                                                    <View style={styles.initialGreetingAvatarWrapper}>
-                                                        <Image
-                                                            source={require('@/assets/images/giftyy.png')}
-                                                            style={styles.initialGreetingAvatar}
-                                                            resizeMode="cover"
-                                                        />
-                                                    </View>
-                                                    <Text
-                                                        style={styles.initialGreetingTitle}
-                                                        numberOfLines={1}
-                                                        adjustsFontSizeToFit
-                                                    >
-                                                        Hi <Text style={{ color: '#000' }}>{firstName}</Text>, I'm <Text style={{ color: GIFTYY_THEME.colors.orange, fontWeight: 'bold' }}>Giftyy</Text>!
-                                                    </Text>
-                                                    <Text style={styles.initialGreetingText}>
-                                                        {(() => {
-                                                            try {
-                                                                return renderFormattedText("Who are we celebrating today? Let's find some sparks of joy! ✨", false, GIFTYY_THEME.colors.gray500);
-                                                            } catch (err) {
-                                                                return msg.text;
-                                                            }
-                                                        })()}
-                                                    </Text>
-                                                </View>
-                                            );
-                                        }
-                                        return null;
-                                    })}
-                                    <View>
-                                        {children}
+                                {/* Profile Score Progress Bar */}
+                                {messages.length > 1 && sessionState?.profileScore !== undefined && (
+                                    <View style={styles.profileScoreContainer}>
+                                        <View style={styles.profileScoreTrack}>
+                                            <View 
+                                                style={[
+                                                    styles.profileScoreFill, 
+                                                    { width: `${(sessionState.profileScore * 100).toFixed(0)}%` as any }
+                                                ]} 
+                                            />
+                                        </View>
+                                        <Text style={styles.profileScoreText}>
+                                            {sessionState.profileScore >= 0.85 ? 'Perfect match ready! 🎯' : 
+                                            sessionState.profileScore >= 0.55 ? 'Getting close... ✨' : 
+                                            'Learning about them... 🧠'}
+                                        </Text>
                                     </View>
-                                </View>
-                            )}
+                                )}
 
-                            {messages.length > 1 && messages.map((msg, index) => {
+                                {/* Inline Home Page Content rendered here! */}
+                                {messages.length <= 1 && (
+                                    <View>
+                                        {messages.map((msg, index) => {
+                                            // Simple greeting check: the very first AI message when starting a conversation
+                                            const isInitialGreeting = index === 0 &&
+                                                msg.sender === 'ai' &&
+                                                messages.length === 1;
 
-                                return (
+                                            if (isInitialGreeting) {
+                                                return (
+                                                    <View key={msg.id} style={[styles.initialGreetingContainer, { overflow: 'visible' }]}>
+                                                        <View style={{ alignItems: 'center', overflow: 'visible' }}>
+                                                            <Pressable onPress={handleAvatarTap} style={{ alignItems: 'center', justifyContent: 'center' }}>
+                                                                <Animated.View style={[styles.initialGreetingAvatarWrapper, animatedEasterEggStyle]}>
+                                                                    <Image
+                                                                        source={require('@/assets/images/giftyy.png')}
+                                                                        style={styles.initialGreetingAvatar}
+                                                                        resizeMode="cover"
+                                                                    />
+                                                                </Animated.View>
+                                                            </Pressable>
+                                                            {confettiParticles.length > 0 && (
+                                                                <View style={styles.confettiContainer} pointerEvents="none">
+                                                                    {confettiParticles.map((p) => {
+                                                                        const entryDelay = p.wave * 250 + p.index * 12;
+
+                                                                        if (p.shape === 'emoji') {
+                                                                            return (
+                                                                                <Animated.View
+                                                                                    key={p.key}
+                                                                                    entering={ZoomIn.delay(entryDelay).duration(300)}
+                                                                                    exiting={FadeOutDown.duration(800)}
+                                                                                    style={[
+                                                                                        styles.confettiEmoji,
+                                                                                        {
+                                                                                            transform: [
+                                                                                                { translateX: p.x },
+                                                                                                { translateY: p.y },
+                                                                                                { rotate: `${p.rotation}deg` },
+                                                                                                { scale: p.scale },
+                                                                                            ],
+                                                                                        },
+                                                                                    ]}
+                                                                                >
+                                                                                    <Text style={{ fontSize: GIFTYY_THEME.typography.sizes.md }}>{p.emoji}</Text>
+                                                                                </Animated.View>
+                                                                            );
+                                                                        }
+
+                                                                        const shapeStyle =
+                                                                            p.shape === 'circle' ? styles.confettiCircle :
+                                                                            p.shape === 'star' ? styles.confettiStar :
+                                                                            p.shape === 'streamer' ? styles.confettiStreamer :
+                                                                            p.shape === 'ribbon' ? styles.confettiRibbon :
+                                                                            styles.confettiRect;
+
+                                                                        return (
+                                                                            <Animated.View
+                                                                                key={p.key}
+                                                                                entering={ZoomIn.delay(entryDelay).duration(250)}
+                                                                                exiting={FadeOutDown.duration(800)}
+                                                                                style={[
+                                                                                    shapeStyle,
+                                                                                    {
+                                                                                        backgroundColor: p.color,
+                                                                                        transform: [
+                                                                                            { translateX: p.x },
+                                                                                            { translateY: p.y },
+                                                                                            { rotate: `${p.rotation}deg` },
+                                                                                            { scale: p.scale },
+                                                                                        ],
+                                                                                    },
+                                                                                ]}
+                                                                            />
+                                                                        );
+                                                                    })}
+                                                                </View>
+                                                            )}
+                                                        </View>
+
+
+                                                        <Text
+                                                            style={styles.initialGreetingTitle}
+                                                            numberOfLines={1}
+                                                            adjustsFontSizeToFit
+                                                        >
+                                                            Hi <Text style={{ color: '#000' }}>{firstName}</Text>, I'm <Text style={{ color: GIFTYY_THEME.colors.orange, fontWeight: 'bold' }}>Giftyy</Text>!
+                                                        </Text>
+                                                        <Text style={styles.initialGreetingText}>
+                                                            {(() => {
+                                                                try {
+                                                                    return renderFormattedText(sassyMessage, false, GIFTYY_THEME.colors.gray500);
+                                                                } catch (err) {
+                                                                    return msg.text;
+                                                                }
+                                                            })()}
+                                                        </Text>
+                                                    </View>
+                                                );
+                                            }
+                                            return null;
+                                        })}
+                                        <View>
+                                            {children}
+                                        </View>
+                                    </View>
+                                )}
+
+                                {messages.length > 1 && messages.map((msg, index) => (
                                     <View key={msg.id} style={[
                                         styles.messageContainer,
                                         msg.sender === 'user' ? styles.userMessageContainer : styles.aiMessageContainer
@@ -1162,6 +1684,13 @@ export default function HomeAIInterface({
                                                             }
                                                         })()}
                                                     </Text>
+
+                                                    {/* Signal Badge for User Messages */}
+                                                    {msg.sender === 'user' && msg.hasSignal && (
+                                                        <View style={styles.signalBadge}>
+                                                            <IconSymbol name="timer" size={12} color="#FFFFFF" />
+                                                        </View>
+                                                    )}
                                                 </View>
                                             </View>
                                         </View>
@@ -1205,22 +1734,9 @@ export default function HomeAIInterface({
                                                 {msg.followup && (
                                                     <View style={styles.followupContainer}>
                                                         <View style={[styles.messageBubble, styles.aiBubble, styles.followupBubble]}>
-                                                            {msg.message_script && (
-                                                                <Text style={[styles.messageText, { fontSize: 13, fontWeight: '700', color: GIFTYY_THEME.colors.primary, marginBottom: 8 }]}>
-                                                                    💬 You can use this note!
-                                                                </Text>
-                                                            )}
-                                                            <Text style={[styles.messageText, styles.aiMessageText, { fontStyle: msg.message_script ? 'italic' : 'normal' }]}>
-                                                                {msg.message_script || msg.followup}
+                                                            <Text style={[styles.messageText, styles.aiMessageText]}>
+                                                                {msg.followup}
                                                             </Text>
-                                                            {msg.message_script && msg.followup && (
-                                                                <>
-                                                                    <View style={{ height: 1, backgroundColor: GIFTYY_THEME.colors.gray50, marginVertical: 12 }} />
-                                                                    <Text style={[styles.messageText, styles.aiMessageText]}>
-                                                                        {msg.followup}
-                                                                    </Text>
-                                                                </>
-                                                            )}
                                                         </View>
                                                     </View>
                                                 )}
@@ -1228,104 +1744,80 @@ export default function HomeAIInterface({
                                         )}
 
                                         {msg.actions && msg.actions.length > 0 && (
-                                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, marginLeft: 46 }}>
-                                                {msg.actions.map((action, idx) => (
-                                                    <Pressable
-                                                        key={idx}
-                                                        style={({ pressed }) => [
-                                                            styles.actionButton,
-                                                            styles.actionButtonOutline,
-                                                            pressed && styles.actionButtonPressed
-                                                        ]}
-                                                        onPress={() => {
-                                                            handleCollapse();
-                                                            router.push({
-                                                                pathname: action.route as any,
-                                                                params: action.params
-                                                            });
-                                                        }}
-                                                    >
-                                                        <Text style={styles.actionButtonText}>{action.label}</Text>
-                                                    </Pressable>
-                                                ))}
+                                            <View style={{ marginTop: GIFTYY_THEME.spacing.md, marginLeft: scale(46) }}>
+                                                <ScrollView
+                                                    horizontal
+                                                    showsHorizontalScrollIndicator={false}
+                                                    contentContainerStyle={{ gap: GIFTYY_THEME.spacing.sm, paddingRight: GIFTYY_THEME.spacing['3xl'], alignItems: 'center' }}
+                                                    keyboardShouldPersistTaps="handled"
+                                                    scrollEnabled={true}
+                                                >
+                                                    {msg.actions.map((action, idx) => (
+                                                        <Pressable
+                                                            key={idx}
+                                                            style={({ pressed }) => [
+                                                                styles.actionButton,
+                                                                styles.actionButtonOutline,
+                                                                pressed && styles.actionButtonPressed
+                                                            ]}
+                                                            onPress={() => {
+                                                                handleCollapse();
+                                                                router.push({
+                                                                    pathname: action.route as any,
+                                                                    params: action.params
+                                                                });
+                                                            }}
+                                                        >
+                                                            <Text style={styles.actionButtonText}>{action.label}</Text>
+                                                        </Pressable>
+                                                    ))}
+                                                </ScrollView>
                                             </View>
                                         )}
 
-                                        {msg.quickReplies && msg.quickReplies.length > 0 && (!msg.suggestions || msg.suggestions.length === 0) && (
-                                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 12, marginLeft: 46 }}>
-                                                {msg.quickReplies.map((reply, idx) => (
-                                                    <Pressable
-                                                        key={idx}
-                                                        style={({ pressed }) => [
-                                                            styles.actionButton,
-                                                            styles.actionButtonOutline,
-                                                            pressed && styles.actionButtonPressed
-                                                        ]}
-                                                        onPress={() => {
-                                                            setText(reply);
-                                                            handleSubmit(reply);
-                                                        }}
-                                                    >
-                                                        <Text style={styles.actionButtonText}>{reply}</Text>
-                                                    </Pressable>
-                                                ))}
+                                        {/* Quick Replies — only show on the latest AI message */}
+                                        {msg.sender === 'ai' && msg.quickReplies && msg.quickReplies.length > 0 && index === messages.length - 1 && !loading && (
+                                            <View style={styles.quickRepliesContainer}>
+                                                <View style={styles.quickRepliesContent}>
+                                                    {msg.quickReplies.map((reply, idx) => (
+                                                        <Pressable
+                                                            key={idx}
+                                                            style={({ pressed }) => [
+                                                                styles.quickReplyButton,
+                                                                pressed && styles.quickReplyButtonPressed
+                                                            ]}
+                                                            onPress={() => handleSubmit(reply)}
+                                                        >
+                                                            <Text style={styles.quickReplyText}>{reply}</Text>
+                                                        </Pressable>
+                                                    ))}
+                                                </View>
                                             </View>
                                         )}
                                     </View>
-                                );
-                            })}
-
-                            {loading && (
-                                <View style={styles.aiMessageContainer}>
-                                    <View style={styles.aiMessageRow}>
-                                        <View style={styles.aiAvatarContainer}>
-                                            <Animated.Image
-                                                source={require('@/assets/images/giftyy.png')}
-                                                style={[styles.messageAvatar, animatedAvatarStyle]}
-                                                resizeMode="cover"
-                                            />
-                                        </View>
-                                        <View style={styles.bubbleWrapper}>
-                                            <View style={[styles.messageBubble, styles.aiBubble, styles.loadingBubble]}>
-                                                <ThinkingDots />
-                                            </View>
-                                        </View>
-                                    </View>
-                                </View>
-                            )}
-                        </ScrollView>
-
-                        {/* Suggestions Carousel - Now inside the white container */}
-                        <AnimatedView style={[
-                            styles.suggestionsRow,
-                            suggestionsStyle,
-                            messages.length > 1 && { borderTopWidth: 0 }
-                        ]}>
-                            <ScrollView
-                                horizontal
-                                showsHorizontalScrollIndicator={false}
-                                contentContainerStyle={styles.suggestionsScroll}
-                                keyboardShouldPersistTaps="handled"
-                            >
-                                {dynamicSuggestions.map((s, i) => (
-                                    <Pressable
-                                        key={i}
-                                        style={({ pressed }) => [
-                                            styles.suggestionChip,
-                                            pressed && styles.suggestionChipPressed
-                                        ]}
-                                        onPress={() => {
-                                            setText(s);
-                                            handleSubmit(s);
-                                        }}
-                                    >
-                                        <Text style={styles.suggestionText}>{renderFormattedText(s)}</Text>
-                                    </Pressable>
                                 ))}
-                            </ScrollView>
-                        </AnimatedView>
-                    </View>
 
+                                {loading && (
+                                    <View style={styles.aiMessageContainer}>
+                                        <View style={styles.aiMessageRow}>
+                                            <View style={styles.aiAvatarContainer}>
+                                                <Animated.Image
+                                                    source={require('@/assets/images/giftyy.png')}
+                                                    style={[styles.messageAvatar, animatedAvatarStyle]}
+                                                    resizeMode="cover"
+                                                />
+                                            </View>
+                                            <View style={styles.bubbleWrapper}>
+                                                <View style={[styles.messageBubble, styles.aiBubble, styles.loadingBubble]}>
+                                                    <ThinkingDots />
+                                                </View>
+                                            </View>
+                                        </View>
+                                    </View>
+                                )}
+                            </ScrollView>
+                        </View>
+                    </View>
 
                     {/* Plus Menu Overlay */}
                     {showMenu && (
@@ -1334,6 +1826,7 @@ export default function HomeAIInterface({
                             onPress={handleToggleMenu}
                         />
                     )}
+
                     {/* Navigation Menu (Plus Button) */}
                     {showMenu && (
                         <View style={styles.actionMenu}>
@@ -1387,14 +1880,14 @@ export default function HomeAIInterface({
                     {/* Floating History Icon (Only on Chat Screen) */}
                     {messages.length > 1 && !showMenu && (
                         <Pressable
-                            style={[styles.floatingHistoryButton, { bottom: Math.max(bottom, 24) + 230 }]}
+                            style={[styles.floatingHistoryButton, { bottom: Math.max(bottom, 24) + 80 }]}
                             onPress={handleHistoryPress}
                         >
                             <IconSymbol name="clock.fill" size={24} color="#FFFFFF" />
                         </Pressable>
                     )}
 
-                    <View style={[styles.inputWrapper, { paddingBottom: Math.max(bottom, 16) + 12 }]}>
+                    <View style={[styles.inputWrapper, { paddingBottom: Math.max(bottom, 12) }]}>
                         {/* Mentions Dropdown */}
                         {showMentions && filteredRecipients.length > 0 && (
                             <AnimatedView 
@@ -1433,44 +1926,39 @@ export default function HomeAIInterface({
 
                         <TourAnchor step="home_burger_menu">
                             <Pressable style={styles.plusButton} onPress={handleToggleMenu}>
-                                <IconSymbol name={showMenu ? "xmark" : "line.3.horizontal"} size={20} color={GIFTYY_THEME.colors.gray600} />
+                                <IconSymbol name="line.3.horizontal" size={24} color={GIFTYY_THEME.colors.text} />
                             </Pressable>
                         </TourAnchor>
-                        <TourAnchor step="home_ai_chat" style={styles.textInputContainer}>
+                        <Animated.View style={[styles.textInputContainer, inputContainerStyle]}>
                             <TourAnchor step="home_tagging" style={StyleSheet.absoluteFillObject} />
-                            <TextInput
-                                ref={inputRef}
-                                style={[styles.input, { maxHeight: 100 }]}
-                                placeholder="Ask Giftyy (Use @ to tag)"
-                                placeholderTextColor="#94A3B8"
-                                value={text}
-                                onChangeText={handleTextChange}
-                                onSelectionChange={handleSelectionChange}
-                                onFocus={handleFocus}
-                                multiline
-                                onSubmitEditing={() => handleSubmit()}
-                                returnKeyType="send"
-                            />
-                            <Pressable
-                                onPress={() => handleSubmit()}
-                                disabled={!text.trim() || loading}
-                                style={({ pressed }) => [
-                                    styles.sendButton,
-                                    (!text.trim() || loading) && styles.sendButtonDisabled,
-                                    (pressed && text.trim() && !loading) && styles.sendButtonPressed
-                                ]}
-                            >
-                                {loading ? (
-                                    <ActivityIndicator size="small" color={GIFTYY_THEME.colors.primary} />
-                                ) : (
-                                    <IconSymbol
-                                        name="paperplane.fill"
-                                        size={18}
-                                        color="#FFFFFF"
-                                    />
-                                )}
-                            </Pressable>
-                        </TourAnchor>
+                            <TourAnchor step="home_ai_chat" style={{ flex: 1, flexDirection: 'row', alignItems: 'center' }}>
+                                <TextInput
+                                    ref={inputRef}
+                                    style={[styles.input, { maxHeight: 100 }]}
+                                    placeholder="Ask Giftyy (Use @ to tag)"
+                                    placeholderTextColor="#94A3B8"
+                                    value={text}
+                                    onChangeText={handleTextChange}
+                                    onSelectionChange={handleSelectionChange}
+                                    onFocus={handleFocus}
+                                    onBlur={handleBlur}
+                                    multiline
+                                    onSubmitEditing={() => handleSubmit()}
+                                    returnKeyType="send"
+                                />
+                                <Pressable 
+                                    style={({ pressed }) => [
+                                        styles.sendButton,
+                                        (loading || !text.trim()) && styles.sendButtonDisabled,
+                                        pressed && !loading && text.trim() && styles.sendButtonPressed
+                                    ]}
+                                    onPress={() => handleSubmit()}
+                                    disabled={loading || !text.trim()}
+                                >
+                                    <IconSymbol name="paperplane.fill" size={18} color="#FFF" />
+                                </Pressable>
+                            </TourAnchor>
+                        </Animated.View>
                     </View>
                 </View>
             </KeyboardAvoidingView>
@@ -1482,134 +1970,227 @@ export default function HomeAIInterface({
                 animationType="fade"
                 onRequestClose={() => setIsHistoryVisible(false)}
             >
-                <Pressable
-                    style={styles.modalBackdrop}
-                    onPress={() => setIsHistoryVisible(false)}
-                />
-                <View style={styles.modalContentWrapper}>
-                    <View style={styles.historyPopupContainer}>
+                <View style={styles.modalOverlay}>
+                    {Platform.OS === 'ios' ? (
+                        <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
+                    ) : (
+                        <View style={styles.modalBackdropFallback} />
+                    )}
+                    <Pressable
+                        style={StyleSheet.absoluteFill}
+                        onPress={() => setIsHistoryVisible(false)}
+                    />
+                    
+                    <AnimatedView 
+                        entering={ZoomIn.duration(300).springify()}
+                        style={styles.historyPopupContainer}
+                    >
                         <View style={styles.historyHeader}>
                             <View>
-                                <Text style={styles.historyHeaderText}>Recent Chats</Text>
-                                <Text style={styles.historyHeaderSessionCount}>
-                                    {pastSessions.length} {pastSessions.length === 1 ? 'session' : 'sessions'}
+                                <Text style={styles.historyTitleText}>Previous Chats</Text>
+                                <Text style={styles.historySubtitleText}>
+                                    {pastSessions.length} active sessions
                                 </Text>
                             </View>
                             <Pressable
-                                style={styles.historyCloseBtn}
+                                style={styles.historyCloseCircle}
                                 onPress={() => setIsHistoryVisible(false)}
-                                hitSlop={12}
+                                hitSlop={15}
                             >
-                                <IconSymbol name="xmark" size={22} color={GIFTYY_THEME.colors.gray400} />
+                                <IconSymbol name="xmark" size={18} color={GIFTYY_THEME.colors.gray600} />
                             </Pressable>
                         </View>
 
-                        <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
+                        <View style={{ marginBottom: GIFTYY_THEME.spacing.xl }}>
                             <Pressable 
-                                style={[
-                                    styles.startChatBtn, 
-                                    { width: '100%', marginTop: 0 },
-                                    pastSessions.length >= 3 && { opacity: 0.5 }
-                                ]}
                                 onPress={() => {
                                     startNewChat();
                                     setIsHistoryVisible(false);
                                 }}
+                                disabled={pastSessions.length >= 3}
                             >
-                                <IconSymbol name="plus" size={16} color="#FFF" />
-                                <Text style={styles.startChatBtnText}>New Chat</Text>
+                                <LinearGradient
+                                    colors={[GIFTYY_THEME.colors.orange, '#FF8C42']}
+                                    start={{ x: 0, y: 0 }}
+                                    end={{ x: 1, y: 0 }}
+                                    style={[
+                                        styles.startChatGradient,
+                                        pastSessions.length >= 3 && { opacity: 0.6 }
+                                    ]}
+                                >
+                                    <IconSymbol name="plus.circle.fill" size={20} color="#FFF" />
+                                    <Text style={styles.startChatGradientText}>Start New Chat</Text>
+                                </LinearGradient>
                             </Pressable>
                         </View>
 
                         {loadingSessions ? (
-                            <View style={styles.historyLoadingContainer}>
-                                <ActivityIndicator color={GIFTYY_THEME.colors.primary} />
+                            <View style={styles.historyLoadingBox}>
+                                <ActivityIndicator color={GIFTYY_THEME.colors.primary} size="large" />
                             </View>
                         ) : pastSessions.length === 0 ? (
-                            <View style={styles.emptyHistoryPopup}>
-                                <View style={styles.emptyHistoryIconWrapper}>
-                                    <IconSymbol name="message.fill" size={42} color={GIFTYY_THEME.colors.gray200} />
+                            <View style={styles.emptyHistoryState}>
+                                <View style={styles.emptyHistoryIconOuter}>
+                                    <IconSymbol name="message.badge.filled.fill" size={48} color={GIFTYY_THEME.colors.gray300} />
                                 </View>
                                 <Text style={styles.emptyHistoryTitle}>No chats yet</Text>
-                                <Text style={styles.emptyHistoryText}>Your gifting conversations will appear here.</Text>
-                                <Pressable
-                                    style={styles.startChatBtn}
-                                    onPress={() => {
-                                        startNewChat();
-                                        setIsHistoryVisible(false);
-                                    }}
-                                >
-                                    <Text style={styles.startChatBtnText}>Start your first chat</Text>
-                                </Pressable>
+                                <Text style={styles.emptyHistoryBody}>Your gifting conversations will appear here.</Text>
                             </View>
                         ) : (
                             <>
-                                <View style={styles.historySearchWrapper}>
-                                    <IconSymbol name="magnifyingglass" size={16} color={GIFTYY_THEME.colors.gray400} />
+                                <View style={styles.historySearchContainer}>
+                                    <IconSymbol name="magnifyingglass" size={18} color={GIFTYY_THEME.colors.gray400} />
                                     <TextInput
                                         style={styles.historySearchInput}
-                                        placeholder="Find a conversation..."
+                                        placeholder="Search conversations..."
                                         placeholderTextColor={GIFTYY_THEME.colors.gray400}
                                         value={historySearchQuery}
                                         onChangeText={setHistorySearchQuery}
                                     />
                                     {historySearchQuery.length > 0 && (
-                                        <Pressable onPress={() => setHistorySearchQuery('')} hitSlop={8}>
-                                            <IconSymbol name="xmark.circle.fill" size={16} color={GIFTYY_THEME.colors.gray300} />
+                                        <Pressable onPress={() => setHistorySearchQuery('')} hitSlop={10}>
+                                            <IconSymbol name="xmark.circle.fill" size={18} color={GIFTYY_THEME.colors.gray300} />
                                         </Pressable>
                                     )}
                                 </View>
 
                                 <ScrollView
                                     showsVerticalScrollIndicator={false}
-                                    contentContainerStyle={{ paddingBottom: 20 }}
+                                    contentContainerStyle={{ paddingBottom: GIFTYY_THEME.spacing.sm }}
                                 >
                                     {groupedSessions.length === 0 ? (
-                                        <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-                                            <Text style={{ color: GIFTYY_THEME.colors.gray400, fontFamily: 'Outfit-Medium', fontSize: 14 }}>
-                                                No results found
+                                        <View style={styles.historyNoResults}>
+                                            <Text style={styles.historyNoResultsText}>
+                                                Nothing found for your search
                                             </Text>
                                         </View>
                                     ) : groupedSessions.map((group) => (
-                                        <View key={group.title} style={{ marginBottom: 24 }}>
+                                        <View key={group.title} style={{ marginBottom: GIFTYY_THEME.spacing['3xl'] }}>
                                             <Text style={styles.historyGroupTitle}>{group.title}</Text>
-                                            {group.data.map((session: any, idx: number) => (
-                                                <View key={session.id}>
-                                                    <View style={styles.historyItemRow}>
-                                                        <Pressable
-                                                            style={styles.historyItemMainContent}
-                                                            onPress={() => {
-                                                                loadPastSession(session);
-                                                                setIsHistoryVisible(false);
-                                                            }}
-                                                        >
-                                                            <View style={styles.historyItemAvatar}>
-                                                                <IconSymbol name="clock.fill" size={14} color={GIFTYY_THEME.colors.primary} />
-                                                            </View>
-                                                            <View style={{ flex: 1, paddingRight: 12 }}>
-                                                                <Text style={styles.historyItemTitle} numberOfLines={1}>
-                                                                    {session.previewText}
-                                                                </Text>
-                                                                <Text style={styles.historyItemDate}>
-                                                                    {new Date(session.last_active_at).toLocaleDateString(undefined, {
-                                                                        month: 'short',
-                                                                        day: 'numeric',
-                                                                        hour: '2-digit',
-                                                                        minute: '2-digit'
-                                                                    })}
-                                                                </Text>
-                                                            </View>
-                                                        </Pressable>
+                                            {group.data.map((session: any) => (
+                                                <Pressable
+                                                    key={session.id}
+                                                    onPress={() => {
+                                                        loadPastSession(session);
+                                                        setIsHistoryVisible(false);
+                                                    }}
+                                                    style={({ pressed }) => [
+                                                        styles.historyItemCard,
+                                                        pressed && styles.historyItemCardPressed
+                                                    ]}
+                                                >
+                                                    <View style={styles.historyItemIconBox}>
+                                                        <IconSymbol name="sparkles" size={16} color={GIFTYY_THEME.colors.orange} />
                                                     </View>
-                                                    {idx < group.data.length - 1 && <View style={styles.historyItemDivider} />}
-                                                </View>
+                                                    <View style={{ flex: 1 }}>
+                                                        <Text style={styles.historyItemPreview} numberOfLines={1}>
+                                                            {session.previewText}
+                                                        </Text>
+                                                        <Text style={styles.historyItemMetaText}>
+                                                            {new Date(session.last_active_at).toLocaleDateString(undefined, {
+                                                                month: 'short',
+                                                                day: 'numeric',
+                                                                hour: '2-digit',
+                                                                minute: '2-digit'
+                                                            })}
+                                                        </Text>
+                                                    </View>
+                                                    <IconSymbol name="chevron.right" size={14} color={GIFTYY_THEME.colors.gray300} />
+                                                </Pressable>
                                             ))}
                                         </View>
                                     ))}
                                 </ScrollView>
                             </>
                         )}
-                    </View>
+                    </AnimatedView>
+                </View>
+            </Modal>
+            {/* Surprise Deal Popup Modal */}
+            <Modal
+                visible={!!surpriseDeal}
+                transparent
+                animationType="fade"
+                statusBarTranslucent
+                onRequestClose={dismissDeal}
+            >
+                <View style={styles.surpriseModalOverlay}>
+                    <Animated.View entering={ZoomIn.duration(300)} style={styles.surpriseModalCard}>
+                        {/* Countdown timer ring */}
+                        <View style={styles.surpriseTimerBadge}>
+                            <Text style={styles.surpriseTimerText}>{dealCountdown}s</Text>
+                        </View>
+
+                        {/* Close button */}
+                        <Pressable onPress={dismissDeal} hitSlop={12} style={styles.surpriseCloseBtn}>
+                            <Text style={styles.surpriseCloseBtnText}>✕</Text>
+                        </Pressable>
+
+                        {/* Header */}
+                        <Text style={styles.surpriseTitle}>🎉 Surprise Deal!</Text>
+                        <Text style={styles.surpriseSubtitle}>You unlocked a hidden deal</Text>
+
+                        {/* Product image */}
+                        {surpriseDeal?.imageUrl && (
+                            <Image
+                                source={{ uri: (() => {
+                                    try {
+                                        const parsed = JSON.parse(surpriseDeal.imageUrl!);
+                                        return Array.isArray(parsed) ? parsed[0] : surpriseDeal.imageUrl;
+                                    } catch { return surpriseDeal.imageUrl; }
+                                })() }}
+                                style={styles.surpriseProductImage}
+                                resizeMode="cover"
+                            />
+                        )}
+
+                        {/* Product info */}
+                        <Text style={styles.surpriseProductName} numberOfLines={2}>{surpriseDeal?.name}</Text>
+
+                        <View style={styles.surprisePriceRow}>
+                            {surpriseDeal && (
+                                <>
+                                    <Text style={styles.surprisePrice}>
+                                        ${(surpriseDeal.price * (1 - surpriseDeal.discountPercentage / 100)).toFixed(2)}
+                                    </Text>
+                                    <Text style={styles.surpriseOriginalPrice}>
+                                        ${surpriseDeal.price.toFixed(2)}
+                                    </Text>
+                                    <View style={styles.surpriseDiscountBadge}>
+                                        <Text style={styles.surpriseDiscountText}>-{surpriseDeal.discountPercentage}%</Text>
+                                    </View>
+                                </>
+                            )}
+                        </View>
+
+                        {/* CTA button */}
+                        <Pressable
+                            onPress={() => {
+                                Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                                const dealId = surpriseDeal?.id;
+                                dismissDeal();
+                                if (dealId) {
+                                    router.push({
+                                        pathname: '/(buyer)/(tabs)/product/[id]',
+                                        params: { id: dealId, returnTo: pathname },
+                                    } as any);
+                                }
+                            }}
+                            style={styles.surpriseCtaButton}
+                        >
+                            <Text style={styles.surpriseCtaText}>Check it out</Text>
+                        </Pressable>
+
+                        {/* Progress bar */}
+                        <View style={styles.surpriseProgressTrack}>
+                            <Animated.View
+                                style={[
+                                    styles.surpriseProgressFill,
+                                    { width: `${(dealCountdown / 10) * 100}%` },
+                                ]}
+                            />
+                        </View>
+                    </Animated.View>
                 </View>
             </Modal>
         </View>
@@ -1617,49 +2198,59 @@ export default function HomeAIInterface({
 }
 
 const styles = StyleSheet.create({
-    thinkingDotsContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginVertical: 8, gap: 4 },
-    thinkingDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: GIFTYY_THEME.colors.primary },
-    input: { flex: 1, minHeight: 24, maxHeight: 120, color: GIFTYY_THEME.colors.text, fontFamily: 'Outfit-Regular', fontSize: 15, padding: 0 },
+    thinkingDotsContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginVertical: GIFTYY_THEME.spacing.sm, gap: GIFTYY_THEME.spacing.xs },
+    thinkingDot: { width: scale(8), height: scale(8), borderRadius: scale(4), backgroundColor: GIFTYY_THEME.colors.primary },
+    input: { flex: 1, minHeight: scale(24), maxHeight: verticalScale(120), color: GIFTYY_THEME.colors.text, fontFamily: 'Outfit-Regular', fontSize: normalizeFont(15), padding: 0, textAlignVertical: 'center' },
     backdrop: { backgroundColor: 'rgba(0,0,0,0.3)' },
-    container: { flex: 1, backgroundColor: GIFTYY_THEME.colors.cream },
-    contentContainer: { flex: 1, paddingHorizontal: 0, paddingBottom: 0, paddingTop: 0 },
-    expandedMain: { backgroundColor: GIFTYY_THEME.colors.cream, flex: 1 },
-    expandedHeader: { paddingHorizontal: 20, paddingTop: 16, paddingBottom: 12, flexDirection: 'row', alignItems: 'flex-start', borderBottomWidth: 1, borderBottomColor: GIFTYY_THEME.colors.gray50 },
-    headerTitle: { fontSize: 20, fontFamily: 'Outfit-Bold', color: GIFTYY_THEME.colors.text, marginBottom: 2 },
-    headerSubtitle: { fontSize: 13, fontFamily: 'Outfit-Medium', color: GIFTYY_THEME.colors.gray500, lineHeight: 18 },
-    headerCloseBtn: { width: 32, height: 32, borderRadius: 16, backgroundColor: GIFTYY_THEME.colors.gray50, alignItems: 'center', justifyContent: 'center' },
-    tabsWrapper: { flexDirection: 'row', paddingHorizontal: 20, paddingTop: 8, paddingBottom: 0, gap: 20, backgroundColor: 'transparent' },
-    tabButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: 12, gap: 8, position: 'relative' },
+    container: { flex: 1, backgroundColor: '#FFFFFF' },
+    contentContainer: { flex: 1 },
+    expandedMain: { backgroundColor: '#FFF5F0', flex: 1 }, // Subtle peach/cream "Aura"
+    expandedHeader: { paddingHorizontal: GIFTYY_THEME.spacing.xl, paddingTop: GIFTYY_THEME.spacing.lg, paddingBottom: GIFTYY_THEME.spacing.md, flexDirection: 'row', alignItems: 'flex-start', borderBottomWidth: 1, borderBottomColor: GIFTYY_THEME.colors.gray50 },
+    headerTitle: { fontSize: GIFTYY_THEME.typography.sizes.xl, fontFamily: 'Outfit-Bold', color: GIFTYY_THEME.colors.text, marginBottom: scale(2) },
+    headerSubtitle: { fontSize: normalizeFont(13), fontFamily: 'Outfit-Medium', color: GIFTYY_THEME.colors.gray500, lineHeight: normalizeFont(18) },
+    headerCloseBtn: { width: scale(32), height: scale(32), borderRadius: scale(16), backgroundColor: GIFTYY_THEME.colors.gray50, alignItems: 'center', justifyContent: 'center' },
+    tabsWrapper: { flexDirection: 'row', paddingHorizontal: GIFTYY_THEME.spacing.xl, paddingTop: GIFTYY_THEME.spacing.sm, paddingBottom: 0, gap: GIFTYY_THEME.spacing.xl, backgroundColor: 'transparent' },
+    tabButton: { flexDirection: 'row', alignItems: 'center', paddingVertical: GIFTYY_THEME.spacing.md, gap: GIFTYY_THEME.spacing.sm, position: 'relative' },
     activeTabButton: { backgroundColor: 'transparent' },
-    tabButtonText: { fontSize: 14, fontFamily: 'Outfit-Medium', color: GIFTYY_THEME.colors.gray400 },
+    tabButtonText: { fontSize: GIFTYY_THEME.typography.sizes.base, fontFamily: 'Outfit-Medium', color: GIFTYY_THEME.colors.gray400 },
     activeTabButtonText: { color: GIFTYY_THEME.colors.text, fontFamily: 'Outfit-Bold' },
-    activeTabIndicator: { position: 'absolute', bottom: 0, left: 0, right: 0, height: 3, backgroundColor: GIFTYY_THEME.colors.orange, borderRadius: 3 },
+    activeTabIndicator: { position: 'absolute', bottom: 0, left: 0, right: 0, height: scale(3), backgroundColor: GIFTYY_THEME.colors.orange, borderRadius: scale(3) },
     chatArea: { flex: 1 },
-    chatContent: { paddingBottom: 80, paddingHorizontal: 16 },
-    messageContainer: { marginBottom: 20, maxWidth: '82%', flexShrink: 0, flex: 0 },
+    chatContent: { paddingBottom: verticalScale(80), paddingHorizontal: GIFTYY_THEME.spacing.lg },
+    messageContainer: { marginBottom: GIFTYY_THEME.spacing.xl, maxWidth: '82%', flexShrink: 1 },
     aiMessageContainer: { alignSelf: 'flex-start' },
     userMessageContainer: { alignSelf: 'flex-end' },
     aiMessageRow: { flexDirection: 'row', alignItems: 'flex-end' },
-    aiAvatarContainer: { width: 36, height: 36, borderRadius: 18, backgroundColor: GIFTYY_THEME.colors.gray50, marginRight: 10, overflow: 'hidden', borderWidth: 1, borderColor: GIFTYY_THEME.colors.gray100 },
+    aiAvatarContainer: {
+        width: scale(40),
+        height: scale(40),
+        borderRadius: scale(20),
+        backgroundColor: '#FFFFFF',
+        marginRight: GIFTYY_THEME.spacing.sm,
+        overflow: 'hidden',
+        borderWidth: 1.5,
+        borderColor: 'rgba(247, 85, 7, 0.1)',
+        ...GIFTYY_THEME.shadows.sm
+    },
     messageAvatar: { width: '100%', height: '100%' },
     bubbleWrapper: { position: 'relative', flexShrink: 1 },
-    messageBubble: { paddingHorizontal: 16, paddingVertical: 12, borderRadius: 24 },
-    aiBubble: { backgroundColor: '#F4F4F5', borderBottomLeftRadius: 4 },
-    userBubble: { backgroundColor: GIFTYY_THEME.colors.orange, borderBottomRightRadius: 4 },
-    messageText: { fontSize: 15, lineHeight: 22, fontFamily: 'Outfit-Medium' },
+    messageBubble: { paddingHorizontal: GIFTYY_THEME.spacing.lg, paddingVertical: GIFTYY_THEME.spacing.md, borderRadius: GIFTYY_THEME.radius.xl },
+    aiBubble: { backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#F0F0F0', borderBottomLeftRadius: scale(4), minHeight: scale(40) },
+    userBubble: { backgroundColor: GIFTYY_THEME.colors.orange, borderBottomRightRadius: scale(4), ...GIFTYY_THEME.shadows.sm, minHeight: scale(40) },
+    messageText: { fontSize: normalizeFont(15), lineHeight: normalizeFont(22), fontFamily: 'Outfit-Medium' },
     aiMessageText: { color: GIFTYY_THEME.colors.text },
     userMessageText: { color: '#FFFFFF' },
-    recommendationCarousel: { marginTop: 0, marginHorizontal: -16, flexGrow: 0 },
-    recommendationScrollContent: { paddingHorizontal: 16, gap: 12, paddingBottom: 12, alignItems: 'flex-start' },
-    recommendationGroup: { marginTop: 16, marginBottom: 8, marginLeft: 0, flexShrink: 0, flexGrow: 0 },
-    recommendationHeader: { flexDirection: 'row', alignItems: 'center', gap: 6, marginLeft: 46, marginBottom: 12 },
-    recommendationHeaderText: { fontSize: 12, fontFamily: 'Outfit-Bold', color: GIFTYY_THEME.colors.gray500, textTransform: 'uppercase', letterSpacing: 0.5 },
-    followupContainer: { marginLeft: 46, marginTop: 8 },
+    recommendationCarousel: { marginTop: 0, marginHorizontal: -GIFTYY_THEME.spacing.lg, flexGrow: 0 },
+    recommendationScrollContent: { paddingHorizontal: GIFTYY_THEME.spacing.lg, gap: GIFTYY_THEME.spacing.md, paddingBottom: GIFTYY_THEME.spacing.md, alignItems: 'flex-start' },
+    recommendationGroup: { marginTop: GIFTYY_THEME.spacing.lg, marginBottom: GIFTYY_THEME.spacing.sm, marginLeft: 0, flexShrink: 0, flexGrow: 0 },
+    recommendationHeader: { flexDirection: 'row', alignItems: 'center', gap: scale(6), marginLeft: scale(46), marginBottom: GIFTYY_THEME.spacing.md },
+    recommendationHeaderText: { fontSize: GIFTYY_THEME.typography.sizes.sm, fontFamily: 'Outfit-Bold', color: GIFTYY_THEME.colors.gray500, textTransform: 'uppercase', letterSpacing: 0.5 },
+    followupContainer: { marginLeft: scale(46), marginTop: GIFTYY_THEME.spacing.sm },
     followupBubble: { backgroundColor: '#F8F9FA', borderColor: GIFTYY_THEME.colors.gray100, borderWidth: 1, borderTopLeftRadius: 4 },
-    actionButton: { 
-        paddingHorizontal: 18, 
-        paddingVertical: 11, 
-        borderRadius: 26, 
+    actionButton: {
+        paddingHorizontal: scale(18),
+        paddingVertical: scale(11),
+        borderRadius: scale(26),
         backgroundColor: '#FFFFFF',
         borderWidth: 1,
         borderColor: '#F0F0F0',
@@ -1676,94 +2267,291 @@ const styles = StyleSheet.create({
         transform: [{ scale: 0.98 }],
         opacity: 0.9
     },
-    actionButtonText: { 
-        fontSize: 14, 
-        fontFamily: 'Outfit-SemiBold', 
-        color: GIFTYY_THEME.colors.gray800 
+    actionButtonText: {
+        fontSize: GIFTYY_THEME.typography.sizes.base,
+        fontFamily: 'Outfit-SemiBold',
+        color: GIFTYY_THEME.colors.gray800
     },
-    typingIndicatorRow: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 6, backgroundColor: '#FFFFFF', borderRadius: 16, alignSelf: 'flex-start', borderWidth: 1, borderColor: GIFTYY_THEME.colors.gray100, ...GIFTYY_THEME.shadows.sm, marginLeft: 16, marginBottom: 16 },
-    typingDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: GIFTYY_THEME.colors.gray400 },
-    thinkingText: {
-        fontSize: 14,
-        fontFamily: 'Outfit-Medium',
-        color: GIFTYY_THEME.colors.primary,
-        marginRight: 8,
-    },
+    typingIndicatorRow: { flexDirection: 'row', alignItems: 'center', gap: GIFTYY_THEME.spacing.xs, paddingHorizontal: GIFTYY_THEME.spacing.sm, paddingVertical: scale(6), backgroundColor: '#FFFFFF', borderRadius: GIFTYY_THEME.radius.lg, alignSelf: 'flex-start', borderWidth: 1, borderColor: GIFTYY_THEME.colors.gray100, ...GIFTYY_THEME.shadows.sm, marginLeft: GIFTYY_THEME.spacing.lg, marginBottom: GIFTYY_THEME.spacing.lg },
+    typingDot: { width: scale(6), height: scale(6), borderRadius: scale(3), backgroundColor: GIFTYY_THEME.colors.gray400 },
     inputWrapper: {
         flexDirection: 'row',
         alignItems: 'flex-end',
-        paddingHorizontal: 16,
-        paddingTop: 8,
+        paddingHorizontal: GIFTYY_THEME.spacing.lg,
+        paddingTop: GIFTYY_THEME.spacing.sm,
         backgroundColor: 'transparent',
-        gap: 8,
+        gap: GIFTYY_THEME.spacing.sm,
     },
     plusButton: {
-        width: 32,
-        height: 32,
-        borderRadius: 16,
-        backgroundColor: '#F8F9FA',
+        width: scale(52),
+        height: scale(52),
+        borderRadius: scale(26),
+        backgroundColor: '#FFFFFF',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 4,
-        borderWidth: 1,
-        borderColor: '#F0F0F0',
+        marginBottom: 0,
+        borderWidth: 1.5,
+        borderColor: 'rgba(247, 85, 7, 0.05)',
+        ...GIFTYY_THEME.shadows.sm,
     },
     textInputContainer: {
         flex: 1,
-        backgroundColor: '#F8F9FA',
-        borderRadius: 24,
-        paddingLeft: 16,
-        paddingRight: 6,
-        paddingVertical: 6,
-        minHeight: 48,
-        maxHeight: 120,
+        backgroundColor: '#FFFFFF',
+        borderRadius: scale(28),
+        paddingLeft: GIFTYY_THEME.spacing.xl,
+        paddingRight: scale(6),
+        paddingVertical: scale(10),
+        minHeight: scale(56),
+        maxHeight: verticalScale(140),
         flexDirection: 'row',
-        alignItems: 'flex-end',
-        borderWidth: 1,
-        borderColor: '#F0F0F0',
+        alignItems: 'center',
+        borderWidth: 1.5,
+        borderColor: 'rgba(247, 85, 7, 0.1)', // Subtle brand tint
+        ...GIFTYY_THEME.shadows.md,
     },
     initialGreetingContainer: {
         alignItems: 'center',
         justifyContent: 'center',
-        paddingHorizontal: 20,
-        paddingTop: 140,
-        paddingBottom: 24,
+        paddingHorizontal: GIFTYY_THEME.spacing.xl,
+        paddingTop: verticalScale(140),
+        paddingBottom: GIFTYY_THEME.spacing['2xl'],
     },
     initialGreetingAvatarWrapper: {
-        width: 180,
-        height: 180,
+        width: scale(200),
+        height: scale(200),
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 16,
+        marginBottom: GIFTYY_THEME.spacing['2xl'],
+        backgroundColor: 'rgba(247, 85, 7, 0.03)',
+        borderRadius: scale(100),
     },
     initialGreetingAvatar: {
-        width: 154,
-        height: 154,
+        width: scale(140),
+        height: scale(140),
+    },
+    surpriseModalOverlay: {
+        flex: 1,
+        backgroundColor: 'rgba(0,0,0,0.55)',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: GIFTYY_THEME.spacing['3xl'],
+    },
+    surpriseModalCard: {
+        backgroundColor: '#fff',
+        borderRadius: GIFTYY_THEME.radius['2xl'],
+        padding: GIFTYY_THEME.spacing['2xl'],
+        width: '100%',
+        maxWidth: scale(340),
+        alignItems: 'center',
+        shadowColor: '#f75507',
+        shadowOpacity: 0.2,
+        shadowRadius: 20,
+        shadowOffset: { width: 0, height: 8 },
+        elevation: 8,
+    },
+    surpriseTimerBadge: {
+        position: 'absolute',
+        top: GIFTYY_THEME.spacing.lg,
+        left: GIFTYY_THEME.spacing.lg,
+        backgroundColor: '#FFF5F0',
+        borderRadius: GIFTYY_THEME.radius.md,
+        paddingHorizontal: GIFTYY_THEME.spacing.sm,
+        paddingVertical: GIFTYY_THEME.spacing.xs,
+        borderWidth: 1,
+        borderColor: '#f75507',
+    },
+    surpriseTimerText: {
+        fontSize: normalizeFont(13),
+        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+        color: '#f75507',
+        fontFamily: 'Outfit-Bold',
+    },
+    surpriseCloseBtn: {
+        position: 'absolute',
+        top: GIFTYY_THEME.spacing.md,
+        right: GIFTYY_THEME.spacing.md,
+        width: scale(28),
+        height: scale(28),
+        borderRadius: scale(14),
+        backgroundColor: '#F0E8E0',
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    surpriseCloseBtnText: {
+        fontSize: GIFTYY_THEME.typography.sizes.base,
+        fontWeight: GIFTYY_THEME.typography.weights.bold,
+        color: '#766A61',
+    },
+    surpriseTitle: {
+        fontSize: normalizeFont(22),
+        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+        fontFamily: 'Outfit-Bold',
+        color: '#2F2318',
+        marginTop: GIFTYY_THEME.spacing.sm,
+    },
+    surpriseSubtitle: {
+        fontSize: GIFTYY_THEME.typography.sizes.base,
+        color: '#766A61',
+        marginTop: GIFTYY_THEME.spacing.xs,
+        marginBottom: GIFTYY_THEME.spacing.lg,
+    },
+    surpriseProductImage: {
+        width: scale(160),
+        height: scale(160),
+        borderRadius: GIFTYY_THEME.radius.lg,
+        backgroundColor: '#f0e8e0',
+        marginBottom: GIFTYY_THEME.spacing.lg,
+    },
+    surpriseProductName: {
+        fontSize: GIFTYY_THEME.typography.sizes.md,
+        fontWeight: GIFTYY_THEME.typography.weights.bold,
+        fontFamily: 'Outfit-SemiBold',
+        color: '#2F2318',
+        textAlign: 'center',
+        marginBottom: GIFTYY_THEME.spacing.sm,
+    },
+    surprisePriceRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: GIFTYY_THEME.spacing.sm,
+        marginBottom: GIFTYY_THEME.spacing.lg,
+    },
+    surprisePrice: {
+        fontSize: normalizeFont(22),
+        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+        color: '#f75507',
+        fontFamily: 'Outfit-Bold',
+    },
+    surpriseOriginalPrice: {
+        fontSize: normalizeFont(15),
+        color: '#999',
+        textDecorationLine: 'line-through',
+    },
+    surpriseDiscountBadge: {
+        backgroundColor: '#14b8a6',
+        paddingHorizontal: GIFTYY_THEME.spacing.sm,
+        paddingVertical: scale(3),
+        borderRadius: GIFTYY_THEME.radius.sm,
+    },
+    surpriseDiscountText: {
+        color: '#fff',
+        fontSize: GIFTYY_THEME.typography.sizes.sm,
+        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+    },
+    surpriseCtaButton: {
+        backgroundColor: '#f75507',
+        paddingVertical: scale(14),
+        paddingHorizontal: GIFTYY_THEME.spacing['4xl'],
+        borderRadius: scale(14),
+        width: '100%',
+        alignItems: 'center',
+        marginBottom: GIFTYY_THEME.spacing.lg,
+    },
+    surpriseCtaText: {
+        color: '#fff',
+        fontSize: GIFTYY_THEME.typography.sizes.md,
+        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+        fontFamily: 'Outfit-Bold',
+    },
+    surpriseProgressTrack: {
+        width: '100%',
+        height: scale(4),
+        backgroundColor: '#F0E8E0',
+        borderRadius: scale(2),
+        overflow: 'hidden',
+    },
+    surpriseProgressFill: {
+        height: '100%',
+        backgroundColor: '#f75507',
+        borderRadius: scale(2),
+    },
+    tapCountBadge: {
+        position: 'absolute',
+        top: scale(-4),
+        right: scale(-4),
+        backgroundColor: '#f75507',
+        borderRadius: scale(12),
+        width: scale(24),
+        height: scale(24),
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: '#fff',
+    },
+    tapCountText: {
+        color: '#fff',
+        fontSize: GIFTYY_THEME.typography.sizes.sm,
+        fontWeight: GIFTYY_THEME.typography.weights.extrabold,
+    },
+    confettiContainer: {
+        position: 'absolute',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        alignItems: 'center',
+        justifyContent: 'center',
+        overflow: 'visible',
+        zIndex: 999,
+    },
+    confettiRect: {
+        position: 'absolute',
+        width: scale(10),
+        height: scale(6),
+        borderRadius: scale(2),
+    },
+    confettiCircle: {
+        position: 'absolute',
+        width: scale(9),
+        height: scale(9),
+        borderRadius: scale(5),
+    },
+    confettiStar: {
+        position: 'absolute',
+        width: scale(12),
+        height: scale(12),
+        borderRadius: scale(1),
+    },
+    confettiStreamer: {
+        position: 'absolute',
+        width: scale(4),
+        height: scale(18),
+        borderRadius: scale(2),
+    },
+    confettiRibbon: {
+        position: 'absolute',
+        width: scale(16),
+        height: scale(5),
+        borderRadius: scale(3),
+    },
+    confettiEmoji: {
+        position: 'absolute',
     },
     initialGreetingTitle: {
-        fontSize: 28,
+        fontSize: GIFTYY_THEME.typography.sizes['4xl'],
         fontFamily: 'Outfit-Bold',
-        color: GIFTYY_THEME.colors.gray500,
-        marginBottom: 4,
-        textAlign: 'center'
+        color: GIFTYY_THEME.colors.gray900,
+        marginBottom: GIFTYY_THEME.spacing.sm,
+        textAlign: 'center',
+        letterSpacing: -0.5,
     },
     initialGreetingText: {
-        fontSize: 15,
+        fontSize: GIFTYY_THEME.typography.sizes.md,
         fontFamily: 'Outfit-Medium',
         color: GIFTYY_THEME.colors.gray500,
         textAlign: 'center',
-        lineHeight: 22,
-        maxWidth: 280,
-        fontWeight: '500'
+        lineHeight: normalizeFont(24),
+        maxWidth: scale(300),
+        opacity: 0.8
     },
     sendButton: {
-        width: 36,
-        height: 36,
-        borderRadius: 18,
+        width: scale(36),
+        height: scale(36),
+        borderRadius: scale(18),
         backgroundColor: GIFTYY_THEME.colors.primary,
         alignItems: 'center',
         justifyContent: 'center',
-        marginLeft: 8,
+        marginLeft: GIFTYY_THEME.spacing.sm,
     },
     sendButtonPressed: {
         backgroundColor: GIFTYY_THEME.colors.primaryDark,
@@ -1774,34 +2562,36 @@ const styles = StyleSheet.create({
     },
     actionMenu: {
         position: 'absolute',
-        bottom: 108,
-        left: 16,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        padding: 8,
-        width: 220,
-        ...GIFTYY_THEME.shadows.md,
+        bottom: verticalScale(110),
+        left: GIFTYY_THEME.spacing.lg,
+        backgroundColor: 'rgba(255, 255, 255, 0.95)',
+        borderRadius: GIFTYY_THEME.radius['2xl'],
+        padding: GIFTYY_THEME.spacing.md,
+        width: scale(240),
+        borderWidth: 1,
+        borderColor: 'rgba(0, 0, 0, 0.05)',
+        ...GIFTYY_THEME.shadows.lg,
         zIndex: 50,
     },
     actionMenuItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 12,
-        borderRadius: 12,
-        gap: 12,
+        padding: GIFTYY_THEME.spacing.md,
+        borderRadius: GIFTYY_THEME.radius.md,
+        gap: GIFTYY_THEME.spacing.md,
     },
     actionMenuItemPressed: {
         backgroundColor: GIFTYY_THEME.colors.gray50,
     },
     actionMenuIcon: {
-        width: 32,
-        height: 32,
-        borderRadius: 8,
+        width: scale(32),
+        height: scale(32),
+        borderRadius: GIFTYY_THEME.radius.sm,
         alignItems: 'center',
         justifyContent: 'center',
     },
     actionMenuText: {
-        fontSize: 15,
+        fontSize: normalizeFont(15),
         fontFamily: 'Outfit-Medium',
         color: GIFTYY_THEME.colors.text,
     },
@@ -1814,53 +2604,23 @@ const styles = StyleSheet.create({
         backgroundColor: 'transparent',
         zIndex: 40,
     },
-    suggestionsRow: {
-        paddingTop: 8,
-        paddingBottom: 4,
-        backgroundColor: 'transparent',
-        borderTopWidth: 0,
-    },
-    suggestionsScroll: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        gap: 10,
-    },
-    suggestionChip: {
-        backgroundColor: '#FFFFFF',
-        paddingHorizontal: 18,
-        paddingVertical: 11,
-        borderRadius: 26,
-        borderWidth: 1.5,
-        borderColor: '#F8F9FA',
-        ...GIFTYY_THEME.shadows.sm,
-        elevation: 2,
-    },
-    suggestionChipPressed: {
-        backgroundColor: '#F8F9FA',
-        transform: [{ scale: 0.98 }],
-    },
-    suggestionText: {
-        fontSize: 14,
-        fontFamily: 'Outfit-SemiBold',
-        color: GIFTYY_THEME.colors.gray800,
-    },
     mentionDropdown: {
         position: 'absolute',
         bottom: '100%',
-        left: 16,
-        right: 16,
+        left: GIFTYY_THEME.spacing.lg,
+        right: GIFTYY_THEME.spacing.lg,
         backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        maxHeight: 250,
-        marginBottom: 8,
+        borderRadius: GIFTYY_THEME.radius.lg,
+        maxHeight: verticalScale(250),
+        marginBottom: GIFTYY_THEME.spacing.sm,
         ...GIFTYY_THEME.shadows.md,
         zIndex: 100,
     },
     mentionItem: {
         flexDirection: 'row',
         alignItems: 'center',
-        padding: 12,
-        gap: 12,
+        padding: GIFTYY_THEME.spacing.md,
+        gap: GIFTYY_THEME.spacing.md,
     },
     mentionItemPressed: {
         backgroundColor: GIFTYY_THEME.colors.gray50,
@@ -1870,41 +2630,41 @@ const styles = StyleSheet.create({
         borderBottomColor: GIFTYY_THEME.colors.gray50,
     },
     mentionAvatar: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
+        width: scale(40),
+        height: scale(40),
+        borderRadius: scale(20),
         backgroundColor: '#FFF5F0',
         alignItems: 'center',
         justifyContent: 'center',
     },
     mentionAvatarText: {
-        fontSize: 16,
+        fontSize: GIFTYY_THEME.typography.sizes.md,
         fontFamily: 'Outfit-Bold',
         color: GIFTYY_THEME.colors.orange,
     },
     mentionName: {
-        fontSize: 15,
+        fontSize: normalizeFont(15),
         fontFamily: 'Outfit-Bold',
         color: GIFTYY_THEME.colors.text,
-        marginBottom: 2,
+        marginBottom: scale(2),
     },
     mentionRel: {
-        fontSize: 13,
+        fontSize: normalizeFont(13),
         fontFamily: 'Outfit-Medium',
         color: GIFTYY_THEME.colors.gray500,
     },
     loadingBubble: {
-        paddingHorizontal: 20,
-        paddingVertical: 14,
+        paddingHorizontal: GIFTYY_THEME.spacing.xl,
+        paddingVertical: scale(14),
     },
     headerActions: {
         flexDirection: 'row',
-        gap: 12,
+        gap: GIFTYY_THEME.spacing.md,
         alignItems: 'center',
     },
     headerActionBtn: {
-        padding: 8,
-        borderRadius: 20,
+        padding: GIFTYY_THEME.spacing.sm,
+        borderRadius: GIFTYY_THEME.radius.xl,
         backgroundColor: '#FFFFFF',
         ...GIFTYY_THEME.shadows.sm,
     },
@@ -1912,48 +2672,48 @@ const styles = StyleSheet.create({
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        paddingVertical: 40,
-        paddingHorizontal: 20,
+        paddingVertical: GIFTYY_THEME.spacing['4xl'],
+        paddingHorizontal: GIFTYY_THEME.spacing.xl,
     },
     emptyHistoryIconContainer: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
+        width: scale(80),
+        height: scale(80),
+        borderRadius: scale(40),
         backgroundColor: '#F8F9FA',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 24,
+        marginBottom: GIFTYY_THEME.spacing['2xl'],
     },
     emptyHistoryTitle: {
-        fontSize: 20,
+        fontSize: GIFTYY_THEME.typography.sizes.xl,
         fontFamily: 'Outfit-Bold',
         color: GIFTYY_THEME.colors.text,
-        marginBottom: 8,
+        marginBottom: GIFTYY_THEME.spacing.sm,
         textAlign: 'center',
     },
     emptyHistoryText: {
-        fontSize: 15,
+        fontSize: normalizeFont(15),
         fontFamily: 'Outfit-Medium',
         color: GIFTYY_THEME.colors.gray500,
         textAlign: 'center',
-        marginBottom: 32,
-        lineHeight: 22,
+        marginBottom: GIFTYY_THEME.spacing['3xl'],
+        lineHeight: normalizeFont(22),
     },
     startChatBtn: {
         backgroundColor: GIFTYY_THEME.colors.orange,
-        paddingHorizontal: 24,
-        paddingVertical: 14,
-        borderRadius: 24,
+        paddingHorizontal: GIFTYY_THEME.spacing['2xl'],
+        paddingVertical: scale(14),
+        borderRadius: GIFTYY_THEME.radius['2xl'],
         ...GIFTYY_THEME.shadows.md,
     },
     startChatBtnText: {
         color: '#FFFFFF',
-        fontSize: 16,
+        fontSize: GIFTYY_THEME.typography.sizes.md,
         fontFamily: 'Outfit-Bold',
     },
 
     mentionSubtext: {
-        fontSize: 12,
+        fontSize: GIFTYY_THEME.typography.sizes.sm,
         fontFamily: 'Outfit-Medium',
         color: GIFTYY_THEME.colors.gray400,
     },
@@ -1965,23 +2725,23 @@ const styles = StyleSheet.create({
     navMenu: {
         flexDirection: 'row',
         justifyContent: 'space-around',
-        paddingVertical: 12,
+        paddingVertical: GIFTYY_THEME.spacing.md,
         borderTopWidth: 1,
         borderTopColor: GIFTYY_THEME.colors.gray100,
         backgroundColor: '#FFFFFF',
     },
     navMenuItem: {
         alignItems: 'center',
-        padding: 8,
+        padding: GIFTYY_THEME.spacing.sm,
     },
     navMenuText: {
-        fontSize: 12,
+        fontSize: GIFTYY_THEME.typography.sizes.sm,
         fontFamily: 'Outfit-Medium',
         color: GIFTYY_THEME.colors.gray500,
-        marginTop: 4,
+        marginTop: GIFTYY_THEME.spacing.xs,
     },
     historyDeleteBtn: {
-        padding: 8,
+        padding: GIFTYY_THEME.spacing.sm,
     },
     historyItemMeta: {
         flexDirection: 'row',
@@ -1989,10 +2749,10 @@ const styles = StyleSheet.create({
     },
     floatingHistoryButton: {
         position: 'absolute',
-        right: 20,
-        width: 50,
-        height: 50,
-        borderRadius: 25,
+        right: GIFTYY_THEME.spacing.xl,
+        width: scale(50),
+        height: scale(50),
+        borderRadius: scale(25),
         backgroundColor: GIFTYY_THEME.colors.primary,
         alignItems: 'center',
         justifyContent: 'center',
@@ -2011,121 +2771,236 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 20,
+        padding: GIFTYY_THEME.spacing.xl,
     },
     historyPopupContainer: {
         width: '92%',
-        maxWidth: 420,
+        maxWidth: scale(440),
         maxHeight: '82%',
         backgroundColor: '#FFFFFF',
-        borderRadius: 32,
-        padding: 24,
+        borderRadius: scale(40),
+        padding: scale(30),
         shadowColor: '#000',
-        shadowOffset: { width: 0, height: 20 },
-        shadowOpacity: 0.15,
-        shadowRadius: 30,
-        elevation: 15,
+        shadowOffset: { width: 0, height: 25 },
+        shadowOpacity: 0.2,
+        shadowRadius: 40,
+        elevation: 20,
+    },
+    modalOverlay: {
+        flex: 1,
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: GIFTYY_THEME.spacing.xl,
+    },
+    modalBackdropFallback: {
+        ...StyleSheet.absoluteFillObject,
+        backgroundColor: 'rgba(0,0,0,0.6)',
     },
     historyHeader: {
         flexDirection: 'row',
         justifyContent: 'space-between',
         alignItems: 'flex-start',
-        marginBottom: 24,
+        marginBottom: GIFTYY_THEME.spacing['3xl'],
     },
-    historyHeaderText: {
-        fontSize: 22,
+    historyTitleText: {
+        fontSize: GIFTYY_THEME.typography.sizes['2xl'],
         fontFamily: 'Outfit-Bold',
         color: GIFTYY_THEME.colors.text,
+        letterSpacing: -0.5,
     },
-    historyHeaderSessionCount: {
-        fontSize: 13,
+    historySubtitleText: {
+        fontSize: GIFTYY_THEME.typography.sizes.base,
         fontFamily: 'Outfit-Medium',
-        color: GIFTYY_THEME.colors.gray400,
-        marginTop: 2,
+        color: GIFTYY_THEME.colors.gray500,
+        marginTop: scale(2),
     },
-    historyCloseBtn: {
-        padding: 6,
-        backgroundColor: '#F8F9FA',
-        borderRadius: 20,
+    historyCloseCircle: {
+        width: scale(36),
+        height: scale(36),
+        borderRadius: scale(18),
+        backgroundColor: '#F1F5F9',
+        alignItems: 'center',
+        justifyContent: 'center',
     },
-    historyLoadingContainer: {
-        paddingVertical: 60,
+    startChatGradient: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingVertical: GIFTYY_THEME.spacing.lg,
+        borderRadius: GIFTYY_THEME.radius.xl,
+        gap: GIFTYY_THEME.spacing.sm,
+        ...GIFTYY_THEME.shadows.md,
+    },
+    startChatGradientText: {
+        color: '#FFFFFF',
+        fontSize: GIFTYY_THEME.typography.sizes.md,
+        fontFamily: 'Outfit-Bold',
+    },
+    historyLoadingBox: {
+        paddingVertical: verticalScale(80),
         alignItems: 'center',
     },
-    emptyHistoryPopup: {
-        paddingVertical: 60,
+    emptyHistoryState: {
+        paddingVertical: verticalScale(60),
         alignItems: 'center',
     },
-    emptyHistoryIconWrapper: {
-        width: 80,
-        height: 80,
-        borderRadius: 40,
+    emptyHistoryIconOuter: {
+        width: scale(100),
+        height: scale(100),
+        borderRadius: scale(50),
         backgroundColor: '#FFF5F0',
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 20,
+        marginBottom: GIFTYY_THEME.spacing['2xl'],
     },
-    historySearchWrapper: {
+    emptyHistoryBody: {
+        fontSize: normalizeFont(15),
+        fontFamily: 'Outfit-Medium',
+        color: GIFTYY_THEME.colors.gray400,
+        textAlign: 'center',
+        marginTop: GIFTYY_THEME.spacing.sm,
+        lineHeight: normalizeFont(22),
+    },
+    historySearchContainer: {
         flexDirection: 'row',
         alignItems: 'center',
-        backgroundColor: '#F4F4F5',
-        borderRadius: 16,
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        marginBottom: 24,
+        backgroundColor: '#F8FAFC',
+        borderRadius: scale(18),
+        paddingHorizontal: scale(18),
+        paddingVertical: scale(14),
+        marginBottom: GIFTYY_THEME.spacing['3xl'],
+        borderWidth: 1,
+        borderColor: '#F1F5F9',
     },
     historySearchInput: {
         flex: 1,
-        marginLeft: 10,
-        fontSize: 15,
+        marginLeft: GIFTYY_THEME.spacing.md,
+        fontSize: normalizeFont(15),
         fontFamily: 'Outfit-Medium',
         color: GIFTYY_THEME.colors.text,
         padding: 0,
     },
     historyGroupTitle: {
-        fontSize: 11,
+        fontSize: GIFTYY_THEME.typography.sizes.sm,
         fontFamily: 'Outfit-Bold',
-        color: GIFTYY_THEME.colors.gray300,
+        color: GIFTYY_THEME.colors.gray400,
         textTransform: 'uppercase',
-        letterSpacing: 1.5,
-        marginBottom: 16,
-        marginLeft: 2,
+        letterSpacing: 2,
+        marginBottom: scale(18),
+        opacity: 0.8,
     },
-    historyItemRow: {
+    historyItemCard: {
         flexDirection: 'row',
         alignItems: 'center',
-        paddingVertical: 14,
+        paddingVertical: GIFTYY_THEME.spacing.lg,
+        paddingHorizontal: GIFTYY_THEME.spacing.lg,
+        borderRadius: GIFTYY_THEME.radius.xl,
+        backgroundColor: 'transparent',
+        marginBottom: GIFTYY_THEME.spacing.sm,
     },
-    historyItemMainContent: {
-        flex: 1,
-        flexDirection: 'row',
-        alignItems: 'center',
+    historyItemCardPressed: {
+        backgroundColor: '#F8FAFC',
     },
-    historyItemAvatar: {
-        width: 36,
-        height: 36,
-        borderRadius: 12,
-        backgroundColor: '#F8F9FA',
+    historyItemIconBox: {
+        width: scale(44),
+        height: scale(44),
+        borderRadius: scale(14),
+        backgroundColor: '#FFF5F0',
         alignItems: 'center',
         justifyContent: 'center',
-        marginRight: 14,
+        marginRight: GIFTYY_THEME.spacing.lg,
     },
-    historyItemTitle: {
-        fontSize: 15,
-        fontFamily: 'Outfit-Bold',
+    historyItemPreview: {
+        fontSize: GIFTYY_THEME.typography.sizes.md,
+        fontFamily: 'Outfit-SemiBold',
         color: GIFTYY_THEME.colors.text,
-        lineHeight: 20,
-        marginBottom: 4,
+        marginBottom: GIFTYY_THEME.spacing.xs,
     },
-    historyItemDate: {
-        fontSize: 12,
+    historyItemMetaText: {
+        fontSize: normalizeFont(13),
         fontFamily: 'Outfit-Medium',
         color: GIFTYY_THEME.colors.gray400,
     },
-    historyItemDivider: {
-        height: 1,
-        backgroundColor: '#F1F1F1',
-        marginLeft: 50,
+    historyNoResults: {
+        paddingVertical: GIFTYY_THEME.spacing['4xl'],
+        alignItems: 'center',
+    },
+    historyNoResultsText: {
+        color: GIFTYY_THEME.colors.gray400,
+        fontFamily: 'Outfit-Medium',
+        fontSize: GIFTYY_THEME.typography.sizes.base,
+    },
+    profileScoreContainer: {
+        marginLeft: scale(46),
+        marginTop: GIFTYY_THEME.spacing.md,
+        marginBottom: GIFTYY_THEME.spacing.sm,
+        padding: GIFTYY_THEME.spacing.md,
+        backgroundColor: '#FFFFFF',
+        borderRadius: GIFTYY_THEME.radius.lg,
+        borderWidth: 1,
+        borderColor: '#F0F0F0',
+        ...GIFTYY_THEME.shadows.sm,
+    },
+    profileScoreTrack: {
+        height: scale(6),
+        backgroundColor: '#F1F5F9',
+        borderRadius: scale(3),
+        overflow: 'hidden',
+        marginBottom: GIFTYY_THEME.spacing.sm,
+    },
+    profileScoreFill: {
+        height: '100%',
+        backgroundColor: GIFTYY_THEME.colors.orange,
+        borderRadius: scale(3),
+    },
+    profileScoreText: {
+        fontSize: GIFTYY_THEME.typography.sizes.sm,
+        fontFamily: 'Outfit-Bold',
+        color: GIFTYY_THEME.colors.gray500,
+        textTransform: 'uppercase',
+        letterSpacing: 0.5,
+    },
+    signalBadge: {
+        position: 'absolute',
+        bottom: scale(-6),
+        right: scale(-6),
+        width: scale(20),
+        height: scale(20),
+        borderRadius: scale(10),
+        backgroundColor: GIFTYY_THEME.colors.orange,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 2,
+        borderColor: '#FFFFFF',
+    },
+    quickRepliesContainer: {
+        marginTop: GIFTYY_THEME.spacing.sm,
+        marginLeft: scale(46),
+        marginRight: GIFTYY_THEME.spacing.lg,
+    },
+    quickRepliesContent: {
+        flexDirection: 'row',
+        flexWrap: 'wrap',
+        gap: GIFTYY_THEME.spacing.sm,
+    },
+    quickReplyButton: {
+        paddingHorizontal: scale(14),
+        paddingVertical: scale(9),
+        borderRadius: scale(18),
+        backgroundColor: '#F8F9FA',
+        borderWidth: 1,
+        borderColor: '#E8EAED',
+        ...GIFTYY_THEME.shadows.sm,
+    },
+    quickReplyButtonPressed: {
+        backgroundColor: GIFTYY_THEME.colors.cream,
+        borderColor: GIFTYY_THEME.colors.primaryLight,
+        transform: [{ scale: 0.96 }],
+    },
+    quickReplyText: {
+        fontSize: normalizeFont(13),
+        fontFamily: 'Outfit-Medium',
+        color: GIFTYY_THEME.colors.gray700,
     },
 });
 

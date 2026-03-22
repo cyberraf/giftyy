@@ -1,20 +1,42 @@
 import React from 'react';
-import { DevSettings, StyleSheet, View, Text, Pressable, Image, SafeAreaView, StatusBar } from 'react-native';
+import { StyleSheet, View, Text, Pressable, Image, SafeAreaView, StatusBar } from 'react-native';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
+import { scale, normalizeFont } from '@/utils/responsive';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNetwork } from '@/contexts/NetworkContext';
+import { getQueue } from '@/lib/offline/queue';
 import Animated, { FadeInDown, FadeInUp } from 'react-native-reanimated';
 
 export default function OfflineScreen() {
     const router = useRouter();
     const { syncAuth } = useAuth();
+    const { isConnected } = useNetwork();
     const [retrying, setRetrying] = React.useState(false);
+    const [queueCount, setQueueCount] = React.useState(0);
 
-    const handleRetry = () => {
+    // Load queued operation count
+    React.useEffect(() => {
+        getQueue().then((q) => setQueueCount(q.length));
+    }, []);
+
+    // Auto-retry when connectivity restores
+    React.useEffect(() => {
+        if (isConnected) {
+            syncAuth().catch(() => {});
+        }
+    }, [isConnected, syncAuth]);
+
+    const handleRetry = async () => {
         setRetrying(true);
-        // Force reload the entire application
-        DevSettings.reload();
+        try {
+            await syncAuth();
+        } catch {
+            // If it still fails, allow the user to try again
+        } finally {
+            setRetrying(false);
+        }
     };
 
     return (
@@ -28,7 +50,7 @@ export default function OfflineScreen() {
                     <View style={styles.iconCircle}>
                         <Image 
                             source={require('@/assets/images/giftyy.png')} 
-                            style={{ width: 80, height: 80 }} 
+                            style={{ width: scale(80), height: scale(80) }}
                             resizeMode="contain" 
                         />
                     </View>
@@ -44,6 +66,11 @@ export default function OfflineScreen() {
                     <Text style={styles.description}>
                         Giftyy needs an active internet connection to find the perfect gifts for your loved ones. Please check your network and try again.
                     </Text>
+                    {queueCount > 0 && (
+                        <Text style={styles.queueInfo}>
+                            {queueCount} action{queueCount !== 1 ? 's' : ''} will sync when you reconnect.
+                        </Text>
+                    )}
                 </Animated.View>
 
                 <Animated.View 
@@ -62,7 +89,7 @@ export default function OfflineScreen() {
                             <Text style={styles.retryButtonText}>Connecting...</Text>
                         ) : (
                             <>
-                                <IconSymbol name="arrow.clockwise" size={18} color="#FFFFFF" />
+                                <IconSymbol name="arrow.clockwise" size={scale(18)} color="#FFFFFF" />
                                 <Text style={styles.retryButtonText}>Try Again</Text>
                             </>
                         )}
@@ -76,25 +103,25 @@ export default function OfflineScreen() {
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: '#fff5f0', // GIFTYY_THEME.colors.cream
+        backgroundColor: GIFTYY_THEME.colors.cream,
     },
     content: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        paddingHorizontal: 40,
+        paddingHorizontal: GIFTYY_THEME.spacing['4xl'],
     },
     iconContainer: {
         alignItems: 'center',
         justifyContent: 'center',
-        marginBottom: 40,
+        marginBottom: GIFTYY_THEME.spacing['4xl'],
         position: 'relative',
     },
     iconCircle: {
-        width: 120,
-        height: 120,
-        borderRadius: 60,
-        backgroundColor: '#FFFFFF',
+        width: scale(120),
+        height: scale(120),
+        borderRadius: scale(60),
+        backgroundColor: GIFTYY_THEME.colors.white,
         alignItems: 'center',
         justifyContent: 'center',
         zIndex: 2,
@@ -102,39 +129,45 @@ const styles = StyleSheet.create({
     },
     pulse1: {
         position: 'absolute',
-        width: 160,
-        height: 160,
-        borderRadius: 80,
+        width: scale(160),
+        height: scale(160),
+        borderRadius: scale(80),
         backgroundColor: GIFTYY_THEME.colors.primary,
         opacity: 0.1,
         zIndex: 1,
     },
     pulse2: {
         position: 'absolute',
-        width: 200,
-        height: 200,
-        borderRadius: 100,
+        width: scale(200),
+        height: scale(200),
+        borderRadius: scale(100),
         backgroundColor: GIFTYY_THEME.colors.primary,
         opacity: 0.05,
         zIndex: 0,
     },
     textContainer: {
         alignItems: 'center',
-        marginBottom: 40,
+        marginBottom: GIFTYY_THEME.spacing['4xl'],
     },
     title: {
-        fontSize: 28,
-        fontFamily: 'Cooper BT',
+        fontSize: GIFTYY_THEME.typography.sizes['3xl'],
         color: GIFTYY_THEME.colors.gray900,
-        marginBottom: 16,
+        marginBottom: GIFTYY_THEME.spacing.lg,
         textAlign: 'center',
     },
     description: {
-        fontSize: 16,
-        fontFamily: 'System', // Fallback as Cooper BT might be too heavy for body here
+        fontSize: GIFTYY_THEME.typography.sizes.md,
+        fontFamily: GIFTYY_THEME.typography.fontFamily,
         color: GIFTYY_THEME.colors.gray500,
         textAlign: 'center',
-        lineHeight: 24,
+        lineHeight: normalizeFont(24),
+    },
+    queueInfo: {
+        fontSize: GIFTYY_THEME.typography.sizes.sm,
+        fontFamily: GIFTYY_THEME.typography.fontFamily,
+        color: GIFTYY_THEME.colors.primary,
+        textAlign: 'center',
+        marginTop: GIFTYY_THEME.spacing.md,
     },
     buttonContainer: {
         width: '100%',
@@ -142,11 +175,11 @@ const styles = StyleSheet.create({
     retryButton: {
         flexDirection: 'row',
         backgroundColor: GIFTYY_THEME.colors.primary,
-        paddingVertical: 16,
-        borderRadius: 30,
+        paddingVertical: GIFTYY_THEME.spacing.lg,
+        borderRadius: scale(30),
         alignItems: 'center',
         justifyContent: 'center',
-        gap: 10,
+        gap: scale(10),
         ...GIFTYY_THEME.shadows.md,
     },
     retryButtonPressed: {
@@ -154,9 +187,9 @@ const styles = StyleSheet.create({
         transform: [{ scale: 0.98 }],
     },
     retryButtonText: {
-        color: '#FFFFFF',
-        fontSize: 18,
-        fontWeight: 'bold',
-        fontFamily: 'System',
+        color: GIFTYY_THEME.colors.white,
+        fontSize: GIFTYY_THEME.typography.sizes.lg,
+        fontWeight: GIFTYY_THEME.typography.weights.bold,
+        fontFamily: GIFTYY_THEME.typography.fontFamily,
     },
 });

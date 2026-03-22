@@ -12,6 +12,7 @@ import { useCheckout } from '@/lib/CheckoutContext';
 import { calculateVendorShippingByZone } from '@/lib/shipping-utils';
 import { supabase } from '@/lib/supabase';
 import { parsePrice } from '@/lib/utils/currency';
+import { safeGoBack } from '@/lib/utils/navigation';
 import { useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -486,7 +487,7 @@ export default function RecipientScreen() {
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                          <Pressable
                             style={{ paddingVertical: 12, paddingRight: 16 }}
-                            onPress={() => router.back()}
+                            onPress={() => safeGoBack(router, '/(buyer)/checkout/cart')}
                         >
                             <Text style={{ color: '#64748b', fontWeight: '800', fontSize: 13 }}>{t('checkout.common.back')}</Text>
                         </Pressable>

@@ -6,6 +6,7 @@ import { supabase } from '@/lib/supabase';
 import { responsiveFontSize, scale, verticalScale } from '@/utils/responsive';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Linking from 'expo-linking';
+import { safeGoBack } from '@/lib/utils/navigation';
 import { Redirect, Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import {
@@ -33,9 +34,21 @@ interface GiftData {
     reactionVideoUrl: string | null;
 }
 
+// Validate gift code: only allow alphanumeric, hyphens, underscores, max 100 chars
+const GIFT_CODE_REGEX = /^[a-zA-Z0-9\-_]{1,100}$/;
+
+function sanitizeGiftCode(raw: string | undefined): string | null {
+    if (!raw) return null;
+    const trimmed = raw.trim();
+    if (!trimmed || trimmed.length > 100) return null;
+    if (!GIFT_CODE_REGEX.test(trimmed)) return null;
+    return trimmed;
+}
+
 export default function GiftViewScreen() {
     const { code } = useLocalSearchParams<{ code: string }>();
-    const giftCodeStr = Array.isArray(code) ? code[0] : code;
+    const rawCode = Array.isArray(code) ? code[0] : code;
+    const giftCodeStr = sanitizeGiftCode(rawCode);
     const router = useRouter();
     const insets = useSafeAreaInsets();
 
@@ -63,7 +76,7 @@ export default function GiftViewScreen() {
 
     useEffect(() => {
         if (!giftCodeStr) {
-            setError('No gift code provided.');
+            setError(rawCode ? 'Invalid gift code format.' : 'No gift code provided.');
             setLoading(false);
             return;
         }

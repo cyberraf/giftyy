@@ -1,6 +1,7 @@
-import { useRouter } from 'expo-router';
+import { usePathname, useRouter } from 'expo-router';
+import { OptimizedImage } from '@/components/OptimizedImage';
 import React from 'react';
-import { Image, Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
+import { Pressable, StyleSheet, Text, View, type StyleProp, type ViewStyle } from 'react-native';
 
 import { getReadableTextColor, withAlpha } from '@/lib/color-utils';
 import type { SimpleProduct } from '@/lib/gift-data';
@@ -16,14 +17,15 @@ type GiftCollectionCardProps = {
 
 export function GiftCollectionCard({ title, description, color, products, style, onPress }: GiftCollectionCardProps) {
 	const router = useRouter();
+	const pathname = usePathname();
 	const textColor = getReadableTextColor(color);
 	const patternColor = withAlpha(color, 0.2) ?? 'rgba(255, 255, 255, 0.18)';
 
 	const handleProductPress = (item: SimpleProduct) => {
 		router.push({
 			pathname: '/(buyer)/(tabs)/product/[id]',
-			params: { id: item.id, name: item.name, price: item.price, image: item.image },
-		});
+			params: { id: item.id, name: item.name, price: item.price, image: item.image, returnTo: pathname },
+		} as any);
 	};
 
 	return (
@@ -49,7 +51,7 @@ export function GiftCollectionCard({ title, description, color, products, style,
 							handleProductPress(item);
 						}}
 					>
-						<Image source={{ uri: item.image }} style={styles.productImage} resizeMode="cover" />
+						<OptimizedImage source={{ uri: item.image }} style={styles.productImage} contentFit="cover" />
 					</Pressable>
 				))}
 			</View>

@@ -9,6 +9,12 @@
     "scheme": "giftyy",
     "userInterfaceStyle": "automatic",
     "primaryColor": "#f75507",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "fallbackToCacheTimeout": 0
+    },
     "ios": {
       "supportsTablet": true,
       "associatedDomains": [
@@ -18,9 +24,10 @@
         "NSCameraUsageDescription": "This app uses the camera to record a short video message for the gift.",
         "NSMicrophoneUsageDescription": "This app uses the microphone while recording your video message.",
         "NSPhotoLibraryUsageDescription": "This app uses your photo library to allow you to upload memories for your gifts.",
+        "NSContactsUsageDescription": "Giftyy uses your contacts to help you find friends and send them gifts.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.anonymous.giftyy"
+      "bundleIdentifier": "com.giftyy.app"
     },
     "android": {
       "adaptiveIcon": {
@@ -31,12 +38,14 @@
       },
       "softwareKeyboardLayoutMode": "resize",
       "versionCode": 25,
-      "predictiveBackGestureEnabled": false,
+      "predictiveBackGestureEnabled": true,
       "permissions": [
         "CAMERA",
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "POST_NOTIFICATIONS",
+        "READ_CONTACTS"
       ],
-      "package": "com.anonymous.giftyy",
+      "package": "com.giftyy.app",
       "playStoreUrl": "https://play.google.com/store/apps/details?id=com.giftyy.app",
       "intentFilters": [
         {
@@ -94,10 +103,10 @@
       [
         "@stripe/stripe-react-native",
         {
-          "merchantIdentifier": "merchant.com.anonymous.giftyy",
           "enableGooglePay": true
         }
-      ]
+      ],
+      "@sentry/react-native"
     ],
     "experiments": {
       "typedRoutes": true,
@@ -106,6 +115,9 @@
     },
     "extra": {
       "router": {},
+      "notes": {
+        "associatedDomains": "The apple-app-site-association file must exist at https://giftyy.store/.well-known/apple-app-site-association"
+      },
       "eas": {
         "projectId": "67ba6b4a-d0c0-4d22-89f3-8a2d2fc09a36"
       }

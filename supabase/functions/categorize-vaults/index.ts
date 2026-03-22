@@ -7,6 +7,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
+import { verifyServiceRole, unauthorizedResponse } from '../_shared/auth.ts';
 
 const OPENAI_API_KEY = Deno.env.get('OPENAI_API_KEY') || '';
 const OPENAI_MODEL = Deno.env.get('OPENAI_MODEL') || 'gpt-4o-mini';
@@ -33,6 +34,12 @@ Deno.serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
+  }
+
+  // Verify caller has service_role authorization (admin/batch only)
+  const { authorized, error: authError } = verifyServiceRole(req);
+  if (!authorized) {
+    return unauthorizedResponse(authError || 'Forbidden', corsHeaders, 403);
   }
 
   try {

@@ -165,7 +165,6 @@ const styles = StyleSheet.create({
 		fontWeight: '800',
 		color: '#111',
 		marginBottom: 10,
-		fontFamily: 'Cooper BT',
 	},
 	tooltipBody: {
 		fontSize: 16,

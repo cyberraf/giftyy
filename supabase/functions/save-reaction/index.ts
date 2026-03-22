@@ -1,11 +1,19 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.0'
 import { corsHeaders } from '../_shared/cors.ts'
+import { unauthorizedResponse } from '../_shared/auth.ts'
 
 console.log('Save reaction function up and running')
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
+  }
+
+  // Require Authorization header (anon key + optional user JWT)
+  // Recipients may not be logged in, so we accept any valid Supabase auth header
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader) {
+    return unauthorizedResponse('Missing Authorization header', corsHeaders)
   }
 
   try {
