@@ -1,5 +1,6 @@
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { useNotifications } from '@/contexts/NotificationsContext';
+import { useNotifications, type AppNotification } from '@/contexts/NotificationsContext';
+import { useRecipients, type Recipient } from '@/contexts/RecipientsContext';
 import { useFocusEffect } from '@react-navigation/native';
 import { useRouter } from 'expo-router';
 import React from 'react';
@@ -15,6 +16,7 @@ export default function NotificationsScreen() {
   const { top, bottom } = useSafeAreaInsets();
   const router = useRouter();
   const { notifications, unreadCount, markRead, markAllRead, loading, loadingMore, hasMore, refresh, loadMore } = useNotifications();
+  const { recipients } = useRecipients();
   const [mode, setMode] = React.useState<'all' | 'unread'>('all');
   const [expanded, setExpanded] = React.useState<Set<string>>(new Set());
   const [refreshing, setRefreshing] = React.useState(false);
@@ -48,6 +50,20 @@ export default function NotificationsScreen() {
     if (days < 7) return t('notifications.time.days_ago', { count: days });
     return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
   };
+
+  const isActionCompleted = React.useCallback(
+    (item: AppNotification) => {
+      if (item.type === 'connection_request') {
+        const senderId = item.data?.senderId;
+        if (!senderId) return false;
+        // Check if there is an approved connection with this sender
+        return recipients.some((r) => r.profileId === senderId && r.status === 'approved');
+      }
+      // For other types, we might not have a clear "completed" state yet
+      return false;
+    },
+    [recipients]
+  );
 
   return (
     <View style={[styles.container, { paddingTop: top + 72 }]}>
@@ -208,14 +224,33 @@ export default function NotificationsScreen() {
                     <Pressable
                       onPress={(e) => {
                         e.stopPropagation();
-                        router.push(item.actionHref as any);
+                        if (!item.read) {
+                          markRead(item.id);
+                        }
+                        if (!isActionCompleted(item)) {
+                          router.push(item.actionHref as any);
+                        }
                       }}
-                      style={styles.actionButton}
+                      style={[
+                        styles.actionButton,
+                        isActionCompleted(item) && styles.actionButtonDisabled
+                      ]}
+                      disabled={isActionCompleted(item)}
                     >
                       <Text style={styles.actionButtonText}>
-                        {item.actionLabel ? t(`notifications.actions.${item.actionLabel.toLowerCase()}`, { defaultValue: item.actionLabel }) : t('notifications.actions.view')}
+                        {isActionCompleted(item)
+                          ? t('notifications.actions.completed', { defaultValue: 'Completed' })
+                          : (item.actionLabel
+                            ? t(`notifications.actions.${item.actionLabel.toLowerCase().replace(/\s+/g, '_')}`, { defaultValue: item.actionLabel })
+                            : t('notifications.actions.view'))
+                        }
                       </Text>
-                      <IconSymbol name="arrow.right" size={16} color="white" weight="semibold" />
+                      <IconSymbol
+                        name={isActionCompleted(item) ? "checkmark" : "arrow.right"}
+                        size={16}
+                        color="white"
+                        weight="semibold"
+                      />
                     </Pressable>
                   )}
                 </View>
@@ -431,6 +466,9 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginTop: 8,
     alignSelf: 'flex-start',
+  },
+  actionButtonDisabled: {
+    backgroundColor: '#9ca3af',
   },
   actionButtonText: {
     color: 'white',

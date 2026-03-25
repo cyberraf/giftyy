@@ -58,6 +58,9 @@ export default function OccasionsScreen() {
             // Filter out our own occasions
             if (occ.recipientId === myProfileId) return false;
 
+            // Filter out ignored occasions
+            if (occ.isIgnored) return false;
+
             // Recipient filter (from params)
             if (recipientId && occ.recipientId !== recipientId) return false;
 

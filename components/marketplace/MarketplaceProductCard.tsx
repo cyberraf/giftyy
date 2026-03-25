@@ -117,7 +117,7 @@ export const MarketplaceProductCard = memo(({
 			onPressOut={handlePressOut}
 			style={[styles.card, animatedCardStyle, width ? { width } : {}]}
 			accessibilityRole="button"
-			accessibilityLabel={`${name}, $${displayPrice.toFixed(2)}${discountPercentage > 0 ? `, ${discountPercentage}% off` : ''}${vendorName ? `, by ${vendorName}` : ''}`}
+			accessibilityLabel={`${name}, $${finalPrice.toFixed(2)}${discountPercentage > 0 ? `, ${discountPercentage}% off` : ''}${vendorName ? `, by ${vendorName}` : ''}`}
 			accessibilityHint="View product details"
 		>
 			{/* Product Image */}

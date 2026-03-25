@@ -309,7 +309,10 @@ export default function RecipientsScreen() {
 
 	const { upcomingOccasions, myProfileOccasions, refreshOccasions, myPreferences, myProfileId } = useHome();
 
-	const { tab } = useLocalSearchParams<{ tab?: 'circle' | 'occasions' | 'preferences' | 'me' }>();
+	const { tab, findFriends } = useLocalSearchParams<{ 
+		tab?: 'circle' | 'occasions' | 'preferences' | 'me',
+		findFriends?: 'true' | 'false'
+	}>();
 
 	// Tab state
 	const [activeTab, setActiveTab] = useState<'circle' | 'occasions' | 'preferences'>(() => {
@@ -326,7 +329,14 @@ export default function RecipientsScreen() {
 		} else if (tab === 'circle') {
 			setActiveTab('circle');
 		}
-	}, [tab]);
+
+		// Handle deep link to Find Friends modal
+		if (findFriends === 'true') {
+			setFindFriendsModalVisible(true);
+			// Clean up the param so it doesn't re-open on every re-render or tab switch
+			router.setParams({ findFriends: undefined });
+		}
+	}, [tab, findFriends]);
 
 	// Recipient related state
 	const [recipientModalVisible, setRecipientModalVisible] = useState(false);
@@ -363,7 +373,7 @@ export default function RecipientsScreen() {
 		return DEFAULT_HOLIDAYS.filter(h => !addedNames.has(h.title.toLowerCase()));
 	}, [myOccasions]);
 
-	const displayedOccasions = upcomingOccasions;
+	const displayedOccasions = useMemo(() => upcomingOccasions.filter(o => !o.isIgnored), [upcomingOccasions]);
 
 	const fetchGiftingProfile = async () => {
 		if (!user) return;
@@ -523,9 +533,16 @@ export default function RecipientsScreen() {
 		try {
 			if (contact.isIncomingInvitation && contact.connectionId) {
 				const { error } = await approveConnection(contact.connectionId, { relationship, nickname });
-				if (error) GiftyyAlert(t('auth.error'), t('recipients.alerts.error_approving', { message: error.message }));
+				if (error) {
+					GiftyyAlert(t('auth.error'), t('recipients.alerts.error_approving', { message: error.message }));
+				} else {
+					setFindFriendsModalVisible(false);
+					if (contact.userId) {
+						router.push(`/(buyer)/occasions-onboarding?recipientProfileId=${contact.userId}`);
+					}
+				}
 			} else {
-				const { error } = await addRecipient({
+				const { id, error } = await addRecipient({
 					fullName: contact.name,
 					phone: contact.phone,
 					relationship,
@@ -664,6 +681,11 @@ export default function RecipientsScreen() {
 		const { error } = await approveConnection(pendingApprovalId, { relationship, nickname });
 		if (error) {
 			GiftyyAlert(t('auth.error'), t('recipients.alerts.error_approving', { message: error.message }));
+		} else {
+			const approvedRecipient = recipients.find(r => r.id === pendingApprovalId);
+			if (approvedRecipient?.actualProfileId) {
+				router.push(`/(buyer)/occasions-onboarding?recipientProfileId=${approvedRecipient.actualProfileId}`);
+			}
 		}
 		setRelationshipModalVisible(false);
 		setPendingApprovalId(null);

@@ -55,14 +55,14 @@ export function TourOverlay() {
     if (!isActive || !currentStep) return null;
 
     // Helpers that close the tour and go home
-    const handleSkip = () => {
-        skipTour();
+    const handleSkip = async () => {
+        await skipTour();
         router.replace('/(buyer)/(tabs)' as any);
     };
-    const handleFinish = () => {
+    const handleFinish = async () => {
         if (isLastStep) {
             // Mark tour as completed and prevent future auto-starts
-            completeTour();
+            await completeTour();
             router.replace('/(buyer)/(tabs)' as any);
         } else {
             nextStep();

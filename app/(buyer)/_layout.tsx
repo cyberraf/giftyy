@@ -45,6 +45,7 @@ export default function BuyerRootLayout() {
 						<Stack.Screen name="checkout/shared-memory" />
 						<Stack.Screen name="checkout/payment" />
 						<Stack.Screen name="checkout/confirmation" />
+						<Stack.Screen name="occasions-onboarding" options={{ presentation: 'modal' }} />
 					</Stack>
 				</View>
 			</BottomBarVisibilityProvider>

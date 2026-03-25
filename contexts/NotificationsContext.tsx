@@ -1,5 +1,7 @@
 import { useAuth } from '@/contexts/AuthContext';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import * as Notifications from 'expo-notifications';
+import { Platform } from 'react-native';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
 export type AppNotification = {
@@ -190,6 +192,13 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   }, [user, hasMore, loadingMore, currentOffset, fetchNotifications]);
 
   const unreadCount = useMemo(() => notifications.filter(n => !n.read).length, [notifications]);
+
+  // Sync app icon badge count with unread notifications
+  useEffect(() => {
+    if (Platform.OS !== 'web') {
+      Notifications.setBadgeCountAsync(unreadCount).catch(() => {});
+    }
+  }, [unreadCount]);
 
   return (
     <NotificationsContext.Provider value={{

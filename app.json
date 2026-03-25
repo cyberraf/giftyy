@@ -45,8 +45,8 @@
         "POST_NOTIFICATIONS",
         "READ_CONTACTS"
       ],
-      "package": "com.giftyy.app",
-      "playStoreUrl": "https://play.google.com/store/apps/details?id=com.giftyy.app",
+      "package": "com.anonymous.giftyy",
+      "playStoreUrl": "https://play.google.com/store/apps/details?id=com.anonymous.giftyy",
       "intentFilters": [
         {
           "action": "VIEW",

@@ -304,6 +304,9 @@ export default function ProfilePreferencesScreen() {
                                     placeholder="555-000-0000"
                                     keyboardType="phone-pad"
                                     placeholderTextColor={GIFTYY_THEME.colors.gray400}
+                                    autoComplete="off"
+                                    textContentType="none"
+                                    autoCorrect={false}
                                 />
                             </View>
                         </View>
@@ -493,7 +496,7 @@ const styles = StyleSheet.create({
     phoneInputContainer: { flexDirection: 'row', alignItems: 'center', backgroundColor: GIFTYY_THEME.colors.gray50, borderRadius: 12 },
     countryCodeButton: { flexDirection: 'row', alignItems: 'center', paddingLeft: 16, paddingRight: 8, paddingVertical: 12, borderRightWidth: 1, borderRightColor: GIFTYY_THEME.colors.gray200 },
     countryCodeText: { fontSize: 15, color: GIFTYY_THEME.colors.gray900, fontWeight: '600', marginRight: 4 },
-    phoneInput: { flex: 1, paddingHorizontal: 12, paddingVertical: 12, fontSize: 15, color: GIFTYY_THEME.colors.gray900 },
+    phoneInput: { flex: 1, paddingHorizontal: 12, paddingVertical: 12, fontSize: 15, color: GIFTYY_THEME.colors.gray900, backgroundColor: 'transparent' },
     pickerModalOverlay: { flex: 1, backgroundColor: 'rgba(0, 0, 0, 0.5)', justifyContent: 'flex-end' },
     pickerModalContent: { backgroundColor: 'white', borderTopLeftRadius: 24, borderTopRightRadius: 24, padding: 24, maxHeight: '70%' },
     pickerModalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },

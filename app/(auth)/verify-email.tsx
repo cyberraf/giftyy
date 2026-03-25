@@ -36,6 +36,9 @@ export default function VerifyEmailScreen() {
 			const { error } = await supabase.auth.resend({
 				type: 'signup',
 				email,
+				options: {
+					emailRedirectTo: 'https://giftyy.store/auth/confirm',
+				},
 			});
 
 			if (error) {

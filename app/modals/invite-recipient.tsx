@@ -70,6 +70,15 @@ export default function InviteRecipientModal() {
 
     const selectedRecipientId = watch('recipientId');
 
+    const invitableRecipients = useMemo(() => {
+        return recipients.filter((r) => {
+            if (r.status === 'approved') return false;
+            // Prevent inviting if they are the ones who invited us
+            if (r.status === 'pending' && !r.isOutgoing) return false;
+            return true;
+        });
+    }, [recipients]);
+
     useEffect(() => {
         if (initialRecipientId) {
             const recipient = recipients.find((r) => r.id === initialRecipientId);
@@ -144,7 +153,7 @@ export default function InviteRecipientModal() {
                     <View style={styles.fieldSection}>
                         <Text style={styles.label}>Recipient</Text>
                         <View style={styles.recipientPicker}>
-                            {recipients.map((r) => (
+                            {invitableRecipients.map((r) => (
                                 <Pressable
                                     key={r.id}
                                     style={[

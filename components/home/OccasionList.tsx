@@ -24,6 +24,9 @@ type Props = {
 	loading: boolean;
 	onPressOccasion: (recipientId: string, occasionId: string) => void;
 	onAddOccasion: () => void;
+	emptyTitle?: string;
+	emptySubtitle?: string;
+	actionLabel?: string;
 };
 
 export function formatDateLabel(dateIso: string): string {
@@ -91,7 +94,15 @@ function isUrgent(inDays: number) {
 	return inDays <= 7;
 }
 
-export function OccasionList({ occasions, loading, onPressOccasion, onAddOccasion }: Props) {
+export function OccasionList({ 
+	occasions, 
+	loading, 
+	onPressOccasion, 
+	onAddOccasion,
+	emptyTitle,
+	emptySubtitle,
+	actionLabel
+}: Props) {
 	const { t } = useTranslation();
 
 	if (loading) {
@@ -112,15 +123,15 @@ export function OccasionList({ occasions, loading, onPressOccasion, onAddOccasio
 				<Text style={styles.title}>{t('occasions.coming_up')}</Text>
 				<View style={styles.emptyWrapper}>
 					<EmptyState
-						title={t('occasions.empty_title')}
-						description={t('occasions.empty_subtitle')}
+						title={emptyTitle || t('occasions.empty_title')}
+						description={emptySubtitle || t('occasions.empty_subtitle')}
 					/>
 					<Pressable
 						onPress={onAddOccasion}
 						style={({ pressed }) => [styles.addOccasionButton, pressed && styles.addOccasionButtonPressed]}
 						accessibilityRole="button"
 					>
-						<Text style={styles.addOccasionText}>{t('occasions.add_button')}</Text>
+						<Text style={styles.addOccasionText}>{actionLabel || t('occasions.add_button')}</Text>
 					</Pressable>
 				</View>
 			</View>

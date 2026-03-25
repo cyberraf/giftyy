@@ -2,9 +2,10 @@ import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
 import { useOrders } from '@/contexts/OrdersContext';
 import { useVideoMessages } from '@/contexts/VideoMessagesContext';
 import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useCallback, useMemo } from 'react';
-import { ActivityIndicator, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MessageVideoViewer } from '@/app/(buyer)/(tabs)/memory';
 
 type MemoryVideoItem = {
   id: string;
@@ -31,6 +32,7 @@ export default function OrderDetailsScreen() {
   const { getOrderById, loading } = useOrders();
   const { videoMessages } = useVideoMessages();
   const { bottom, top } = useSafeAreaInsets();
+  const [videoViewerVisible, setVideoViewerVisible] = useState(false);
 
   const order = id ? getOrderById(id) : null;
   const orderCode = order?.orderCode || (id ?? 'GIF-0000000').toUpperCase();
@@ -61,7 +63,7 @@ export default function OrderDetailsScreen() {
 
   const handleOpenVideo = useCallback(() => {
     if (videoItem?.videoUrl) {
-      Linking.openURL(videoItem.videoUrl).catch(() => { });
+      setVideoViewerVisible(true);
     }
   }, [videoItem]);
 
@@ -182,6 +184,16 @@ export default function OrderDetailsScreen() {
         )}
 
       </ScrollView>
+
+      {/* Fullscreen Video Message Viewer */}
+      {videoItem && (
+        <MessageVideoViewer
+          visible={videoViewerVisible}
+          initialIndex={0}
+          data={[videoItem as any]}
+          onClose={() => setVideoViewerVisible(false)}
+        />
+      )}
     </View>
   );
 }

@@ -13,6 +13,7 @@ export type UpcomingOccasion = {
 	label: string;
 	date: string; // ISO date YYYY-MM-DD
 	inDays: number;
+	isIgnored?: boolean;
 };
 
 export type HomeGiftSuggestion = {
@@ -37,6 +38,7 @@ type UseHomeResult = {
 	myProfileOccasions: any[];
 	myPreferences: any | null;
 	circleOccasions: any[];
+	ignoredOccasionIds: string[];
 	refreshOccasions: () => Promise<void>;
 };
 
@@ -90,6 +92,7 @@ export function useHome(): UseHomeResult {
 
 	const [myProfileOccasions, setMyProfileOccasions] = useState<any[]>(homeDataCache?.myProfileOccasions || []);
 	const [circleOccasions, setCircleOccasions] = useState<any[]>(homeDataCache?.circleOccasions || []);
+	const [ignoredOccasionIds, setIgnoredOccasionIds] = useState<string[]>(homeDataCache?.ignoredOccasionIds || []);
 	const [myPreferences, setMyPreferences] = useState<any | null>(homeDataCache?.myPreferences || null);
 
 	// Fetch current user's profile, occasions, and preferences
@@ -181,15 +184,17 @@ export function useHome(): UseHomeResult {
 	//   - Occasions created BY the user (covers phantoms and self-created entries)
 	//   - Occasions belonging to connected members' profiles (covers shared circle occasions)
 	useEffect(() => {
+		// Wait for recipients and profile to load before fetching occasions
+		// to avoid caching incomplete results
+		if (recipientsLoading || profileLoading) return;
+
 		const fetchCircleOccasions = async () => {
-			// Skip fetch if cache is still fresh
-			if (homeDataCache && homeDataCache.circleOccasions && (Date.now() - homeDataCache.lastFetched < 1000 * 60 * 5)) {
+			setCircleOccasionsLoading(true);
+			const { data: { user: currentUser } } = await supabase.auth.getUser();
+			if (!currentUser) {
 				setCircleOccasionsLoading(false);
 				return;
 			}
-			setCircleOccasionsLoading(true);
-			const { data: { user: currentUser } } = await supabase.auth.getUser();
-			if (!currentUser) return;
 
 			// Build list of all recipient_profile_ids from connections
 			const connProfileIds = visibleRecipients
@@ -223,14 +228,23 @@ export function useHome(): UseHomeResult {
 				if (sharedOccs) allOccs = [...allOccs, ...sharedOccs];
 			}
 
+			// 3. Fetch user's ignored occasions
+			const { data: ignoredData } = await supabase
+				.from('ignored_occasions')
+				.select('occasion_id')
+				.eq('user_id', currentUser.id);
+			
+			const ignoredIds = ignoredData?.map((item: any) => item.occasion_id) || [];
+			setIgnoredOccasionIds(ignoredIds);
+
 			setCircleOccasions(allOccs);
-			setHomeDataCache({ circleOccasions: allOccs, lastFetched: Date.now() });
+			setHomeDataCache({ circleOccasions: allOccs, ignoredOccasionIds: ignoredIds, lastFetched: Date.now() });
 			setCircleOccasionsLoading(false);
 		};
 
 
 		fetchCircleOccasions();
-	}, [visibleRecipients, myProfileId]);
+	}, [visibleRecipients, myProfileId, recipientsLoading, profileLoading]);
 
 	// Master loading state tracker
 	useEffect(() => {
@@ -303,6 +317,7 @@ export function useHome(): UseHomeResult {
 				label: occ.title || occ.label || 'Occasion',
 				date: next.date.toISOString().slice(0, 10),
 				inDays: next.inDays,
+				isIgnored: ignoredOccasionIds.includes(occ.id),
 			});
 		}
 
@@ -324,7 +339,7 @@ export function useHome(): UseHomeResult {
 		return all
 			.sort((a, b) => a.inDays - b.inDays)
 			.slice(0, 50);
-	}, [visibleRecipients, myProfileId, circleOccasions]);
+	}, [visibleRecipients, myProfileId, circleOccasions, ignoredOccasionIds]);
 
 	const activeRecipientNextOccasion = useMemo<UpcomingOccasion | null>(() => {
 		if (!activeRecipient) return null;
@@ -386,6 +401,7 @@ export function useHome(): UseHomeResult {
 		myProfileOccasions,
 		myPreferences,
 		circleOccasions,
+		ignoredOccasionIds,
 		refreshOccasions,
 	};
 }

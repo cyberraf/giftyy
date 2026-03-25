@@ -1,7 +1,32 @@
 // @ts-nocheck
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { verifyUserAuth, unauthorizedResponse } from '../_shared/auth.ts';
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL') ?? ''
+const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
 
+async function verifyUserAuth(req: Request): Promise<{ user: any; error?: string }> {
+  const authHeader = req.headers.get('Authorization')
+  if (!authHeader) {
+    return { user: null, error: 'Missing Authorization header' }
+  }
+
+  const supabaseClient = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    global: { headers: { Authorization: authHeader } },
+  })
+
+  const { data: { user }, error } = await supabaseClient.auth.getUser()
+  if (error || !user) {
+    return { user: null, error: error?.message || 'Invalid or expired token' }
+  }
+
+  return { user }
+}
+
+function unauthorizedResponse(message: string, corsHeaders: Record<string, string>, status = 401): Response {
+  return new Response(
+    JSON.stringify({ error: message }),
+    { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status }
+  )
+}
 const corsHeaders = {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -236,7 +261,12 @@ Deno.serve(async (req) => {
                     type: 'connection_accepted',
                     title,
                     body: bodyNotif,
-                    data: { acceptorId: acceptorUserId, connectionId }
+                    data: { 
+                        acceptorId: acceptorUserId, 
+                        connectionId,
+                        action_label: "Review Occasions",
+                        action_href: `/(buyer)/occasions-onboarding?recipientProfileId=${connection.recipient_profile_id}`
+                    }
                 });
 
                 // Send PUSH to original sender
@@ -251,7 +281,11 @@ Deno.serve(async (req) => {
                         sound: 'default',
                         title: 'Connection accepted! 🎁',
                         body: `${acceptorDisplayName} accepted your invite! ✨`,
-                        data: { type: 'connection_accepted', acceptorId: acceptorUserId }
+                        data: { 
+                            type: 'connection_accepted', 
+                            acceptorId: acceptorUserId,
+                            action_href: `/(buyer)/occasions-onboarding?recipientProfileId=${connection.recipient_profile_id}`
+                        }
                     }));
 
                     await fetch('https://exp.host/--/api/v2/push/send', {

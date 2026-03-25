@@ -151,7 +151,7 @@ export default function RecipientDetailScreen() {
     const { t, i18n } = useTranslation();
     const { alert } = useAlert();
     const { recipients, loading: recipientsLoading, deleteRecipient, updateRecipient } = useRecipients();
-    const { upcomingOccasions } = useHome();
+    const { upcomingOccasions, refreshOccasions } = useHome();
     const { products, loading: productsLoading } = useProducts();
     const { orders } = useOrders();
     const recipient = useMemo(() =>
@@ -163,7 +163,7 @@ export default function RecipientDetailScreen() {
     const displayName = recipient?.displayName || 'Recipient';
 
     const recipientOccasions = useMemo(() =>
-        upcomingOccasions.filter((o: any) => o.recipientId === id),
+        upcomingOccasions.filter((o: any) => o.recipientId === id && !o.isIgnored),
         [upcomingOccasions, id]
     );
 
@@ -497,6 +497,34 @@ export default function RecipientDetailScreen() {
         return durationParts.length > 0 ? durationParts.join(' ') : `${diff}d`;
     };
 
+    const handleIgnoreOccasion = (occId: string, label: string) => {
+        alert(t('recipient.ui.ignore_occasion_title', { defaultValue: 'Ignore Occasion' }), 
+              t('recipient.ui.ignore_occasion_confirm', { defaultValue: `Stop receiving reminders for ${label}?` }), [
+            { text: t('settings.cancel'), style: 'cancel' },
+            {
+                text: t('recipient.ui.ignore_btn', { defaultValue: 'Ignore' }),
+                style: 'destructive',
+                onPress: async () => {
+                    if (!session?.user) return;
+                    try {
+                        const { error } = await supabase
+                            .from('ignored_occasions')
+                            .upsert({ 
+                                user_id: session.user.id, 
+                                occasion_id: occId 
+                            }, { onConflict: 'user_id,occasion_id' });
+                        
+                        if (error) throw error;
+                        await refreshOccasions();
+                    } catch (err) {
+                        console.error('[Ignore Occasion] Error:', err);
+                        alert('Error', 'Failed to ignore occasion.');
+                    }
+                }
+            }
+        ]);
+    };
+
     const handleDelete = () => {
         alert(t('recipient.errors.remove_title'), t('recipient.errors.remove_confirm'), [
             { text: t('settings.cancel'), style: 'cancel' },
@@ -786,6 +814,12 @@ export default function RecipientDetailScreen() {
                                         key={occ.id}
                                         style={[styles.occasionCard, isUrgent && styles.occasionCardUrgent]}
                                     >
+                                        <Pressable 
+                                            style={styles.ignoreBtn}
+                                            onPress={() => handleIgnoreOccasion(occ.id, occ.label)}
+                                        >
+                                            <IconSymbol name="eye" size={16} color={GIFTYY_THEME.colors.gray400} />
+                                        </Pressable>
                                         <Text style={styles.occasionEmoji}>{getOccasionEmoji(occ.label)}</Text>
                                         <Text style={styles.occasionCardLabel} numberOfLines={1}>{occ.label}</Text>
                                         <Text style={styles.occasionCardDate}>{formatOccasionDate(occ.date)}</Text>
@@ -1549,5 +1583,12 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
+    },
+    ignoreBtn: {
+        position: 'absolute',
+        top: 8,
+        right: 8,
+        padding: 4,
+        zIndex: 10,
     },
 });

@@ -29,7 +29,7 @@ export default function BuyerHomeIndexScreen() {
 		myPreferences,
 		myProfileOccasions,
 	} = useHome();
-	const homeOccasions = upcomingOccasions.slice(0, 6);
+	const homeOccasions = upcomingOccasions.filter((o) => !o.isIgnored).slice(0, 6);
 
 	const router = useRouter();
 	const { setVisible } = useBottomBarVisibility();
@@ -94,8 +94,11 @@ export default function BuyerHomeIndexScreen() {
 		[router],
 	);
 
-	const handleAddOccasion = useCallback(() => {
-		router.push('/(buyer)/(tabs)/recipients');
+	const handleFindFriends = useCallback(() => {
+		router.push({
+			pathname: '/(buyer)/(tabs)/recipients',
+			params: { tab: 'circle', findFriends: 'true' }
+		});
 	}, [router]);
 
 	// --- Onboarding progress ---
@@ -107,14 +110,14 @@ export default function BuyerHomeIndexScreen() {
 
 	const { startTour } = useTour();
 
-	// Auto-start tour for new users
 	useEffect(() => {
+		let timeoutId: NodeJS.Timeout;
 		const checkTour = async () => {
 			try {
 				const completed = await AsyncStorage.getItem('giftyy_interactive_tour_completed_v1');
 				if (!completed && user) {
 					// Add a small delay for the app to settle
-					setTimeout(() => {
+					timeoutId = setTimeout(() => {
 						startTour();
 					}, 2000);
 				}
@@ -123,6 +126,10 @@ export default function BuyerHomeIndexScreen() {
 			}
 		};
 		checkTour();
+
+		return () => {
+			if (timeoutId) clearTimeout(timeoutId);
+		};
 	}, [user, startTour]);
 
 	// Robust preference check: Ensure at least some key fields are populated
@@ -236,7 +243,10 @@ export default function BuyerHomeIndexScreen() {
 							occasions={homeOccasions}
 							loading={recipientsLoading}
 							onPressOccasion={handlePressOccasion}
-							onAddOccasion={handleAddOccasion}
+							onAddOccasion={handleFindFriends}
+							emptyTitle={t('occasions.home_empty_title')}
+							emptySubtitle={t('occasions.home_empty_subtitle')}
+							actionLabel={t('occasions.find_friends_button')}
 						/>
 
 						{/* Onboarding Steps (hide once fully complete) */}

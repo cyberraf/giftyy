@@ -10,6 +10,7 @@ import { useRecipients } from '@/contexts/RecipientsContext';
 import {
     callAIRecommendFunction,
     createAISession,
+    deleteAISession,
     getAIFeedback,
     getAISessionMessages,
     getUserAISessions,
@@ -228,17 +229,26 @@ export default function HomeAIInterface({
     const firstName = profile?.first_name || user?.email?.split('@')[0] || 'friend';
     const { addRecipient } = useRecipients();
     const { products: allProducts } = useProducts();
-    const { homeAiState, setHomeAiState } = useAppStore();
+    const { homeAiState, setHomeAiState, clearHomeAiState } = useAppStore();
 
-    const [text, setText] = useState(homeAiState?.text ?? initialPrompt);
-    const [isExpanded, setIsExpanded] = useState(homeAiState?.isExpanded ?? false);
+    // Auto-reset stale sessions (inactive for 4+ hours)
+    const SESSION_STALE_MS = 4 * 60 * 60 * 1000; // 4 hours
+    const isSessionStale = homeAiState?.lastActiveAt
+        ? (Date.now() - homeAiState.lastActiveAt) > SESSION_STALE_MS
+        : false;
+
+    // If session is stale, ignore cached state
+    const cachedState = isSessionStale ? null : homeAiState;
+
+    const [text, setText] = useState(cachedState?.text ?? initialPrompt);
+    const [isExpanded, setIsExpanded] = useState(cachedState?.isExpanded ?? false);
     const [loading, setLoading] = useState(false);
     const [mentionQuery, setMentionQuery] = useState('');
     const [selection, setSelection] = useState({ start: 0, end: 0 });
     const [showMentions, setShowMentions] = useState(false);
     const [isHistoryVisible, setIsHistoryVisible] = useState(false);
-    const [sessionId, setSessionId] = useState<string | null>(homeAiState?.sessionId ?? null);
-    const [sessionState, setSessionState] = useState<any | null>(homeAiState?.sessionState ?? null);
+    const [sessionId, setSessionId] = useState<string | null>(cachedState?.sessionId ?? null);
+    const [sessionState, setSessionState] = useState<any | null>(cachedState?.sessionState ?? null);
     const [lastRecommendations, setLastRecommendations] = useState<{ product_id: string; title: string }[]>([]);
 
     const defaultMessages: Message[] = [
@@ -249,7 +259,14 @@ export default function HomeAIInterface({
         }
     ];
 
-    const [messages, setMessages] = useState<Message[]>(homeAiState?.messages ?? defaultMessages);
+    const [messages, setMessages] = useState<Message[]>(cachedState?.messages ?? defaultMessages);
+
+    // Clear stale state from store on mount
+    useEffect(() => {
+        if (isSessionStale) {
+            clearHomeAiState();
+        }
+    }, []);
     const [feedbackHistory, setFeedbackHistory] = useState<Array<{
         productId: string;
         productName: string;
@@ -510,7 +527,8 @@ export default function HomeAIInterface({
             isExpanded,
             sessionId,
             messages,
-            sessionState
+            sessionState,
+            lastActiveAt: Date.now(),
         });
     }, [text, isExpanded, sessionId, messages, sessionState, setHomeAiState]);
 
@@ -748,44 +766,66 @@ export default function HomeAIInterface({
         router.push(route as any);
     };
 
+    const THINKING_KEYWORDS = [
+        'Thinking...',
+        'Unwrapping...',
+        'Gift hunting...',
+        'Wrapping up...',
+        'Curating picks...',
+        'Sprinkling magic...',
+        'Matching vibes...',
+        'Almost there...',
+        'Browsing gifts...',
+        'Picking favorites...',
+        'Tying bows...',
+        'Adding sparkle...',
+        'Finding gems...',
+        'Spreading joy...',
+        'Reading minds...',
+        'Shaking boxes...',
+        'Crafting ideas...',
+        'Making magic...',
+        'Opening hearts...',
+        'Sorting surprises...',
+    ];
+
     const ThinkingDots = () => {
-        const dot1 = useSharedValue(0.4);
-        const dot2 = useSharedValue(0.4);
-        const dot3 = useSharedValue(0.4);
+        const [keywordIndex, setKeywordIndex] = useState(
+            () => Math.floor(Math.random() * THINKING_KEYWORDS.length)
+        );
+        const opacity = useSharedValue(0);
 
         useEffect(() => {
-            const animate = (val: any, delay: number) => {
-                val.value = withRepeat(
-                    withSequence(
-                        withTiming(1, { duration: 800, easing: Easing.inOut(Easing.quad) }),
-                        withTiming(0.4, { duration: 800, easing: Easing.inOut(Easing.quad) })
-                    ),
-                    -1,
-                    true
-                );
-            };
+            // Fade in the first keyword
+            opacity.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) });
 
-            const t1 = setTimeout(() => animate(dot1, 0), 0);
-            const t2 = setTimeout(() => animate(dot2, 400), 400);
-            const t3 = setTimeout(() => animate(dot3, 800), 800);
+            const interval = setInterval(() => {
+                // Fade out
+                opacity.value = withTiming(0, { duration: 300, easing: Easing.in(Easing.ease) });
+                // After fade-out completes, update keyword and fade in
+                const timeout = setTimeout(() => {
+                    setKeywordIndex(prev => (prev + 1) % THINKING_KEYWORDS.length);
+                    opacity.value = withTiming(1, { duration: 300, easing: Easing.out(Easing.ease) });
+                }, 300);
+                return () => clearTimeout(timeout);
+            }, 1800);
 
-            return () => {
-                clearTimeout(t1);
-                clearTimeout(t2);
-                clearTimeout(t3);
-            };
+            return () => clearInterval(interval);
         }, []);
 
-        const dotStyle = (val: any) => useAnimatedStyle(() => ({
-            opacity: val.value,
-            transform: [{ scale: val.value }]
+        const animatedTextStyle = useAnimatedStyle(() => ({
+            opacity: opacity.value,
+            transform: [{ translateY: interpolate(opacity.value, [0, 1], [4, 0]) }],
         }));
 
         return (
             <View style={styles.thinkingDotsContainer}>
-                <Animated.View style={[styles.thinkingDot, dotStyle(dot1)]} />
-                <Animated.View style={[styles.thinkingDot, dotStyle(dot2)]} />
-                <Animated.View style={[styles.thinkingDot, dotStyle(dot3)]} />
+                <Animated.Text
+                    style={[styles.thinkingKeywordText, animatedTextStyle]}
+                    numberOfLines={1}
+                >
+                    {THINKING_KEYWORDS[keywordIndex]}
+                </Animated.Text>
             </View>
         );
     };
@@ -1147,10 +1187,29 @@ export default function HomeAIInterface({
         let currentSessionId = sessionId;
         if (!currentSessionId && user?.id) {
             console.log('[DEBUG] Creating new AI session...');
-            const { data, error: sessionError } = await createAISession({
+            let { data, error: sessionError } = await createAISession({
                 userId: user.id,
                 title: searchText.trim().slice(0, 200) || 'Giftyy Chat',
             });
+
+            // Auto-delete oldest session if limit reached, then retry
+            if (sessionError?.code === 'SESSION_LIMIT_REACHED') {
+                console.log('[DEBUG] Session limit reached, auto-deleting oldest session...');
+                const { data: sessions } = await getUserAISessions(user.id);
+                if (sessions && sessions.length > 0) {
+                    // Sessions are sorted by last_active_at desc — delete the last (oldest)
+                    const oldest = sessions[sessions.length - 1];
+                    await deleteAISession(oldest.id);
+                    // Retry creation
+                    const retry = await createAISession({
+                        userId: user.id,
+                        title: searchText.trim().slice(0, 200) || 'Giftyy Chat',
+                    });
+                    data = retry.data;
+                    sessionError = retry.error;
+                }
+            }
+
             if (!sessionError && data?.id) {
                 currentSessionId = data.id;
                 setSessionId(currentSessionId);
@@ -1161,16 +1220,14 @@ export default function HomeAIInterface({
                 loadSessions();
             } else if (sessionError) {
                 console.warn('[FloatingAIInput] Failed to create AI session:', sessionError.message, sessionError.code);
-                if (sessionError.code === 'SESSION_LIMIT_REACHED') {
-                    const limitMsg: Message = {
-                        id: (Date.now() + 5).toString(),
-                        text: sessionError.message,
-                        sender: 'ai',
-                    };
-                    setMessages(prev => [...prev, limitMsg]);
-                    setLoading(false);
-                    return;
-                }
+                const limitMsg: Message = {
+                    id: (Date.now() + 5).toString(),
+                    text: sessionError.message,
+                    sender: 'ai',
+                };
+                setMessages(prev => [...prev, limitMsg]);
+                setLoading(false);
+                return;
             }
         }
 
@@ -1563,63 +1620,7 @@ export default function HomeAIInterface({
                                                                     />
                                                                 </Animated.View>
                                                             </Pressable>
-                                                            {confettiParticles.length > 0 && (
-                                                                <View style={styles.confettiContainer} pointerEvents="none">
-                                                                    {confettiParticles.map((p) => {
-                                                                        const entryDelay = p.wave * 250 + p.index * 12;
-
-                                                                        if (p.shape === 'emoji') {
-                                                                            return (
-                                                                                <Animated.View
-                                                                                    key={p.key}
-                                                                                    entering={ZoomIn.delay(entryDelay).duration(300)}
-                                                                                    exiting={FadeOutDown.duration(800)}
-                                                                                    style={[
-                                                                                        styles.confettiEmoji,
-                                                                                        {
-                                                                                            transform: [
-                                                                                                { translateX: p.x },
-                                                                                                { translateY: p.y },
-                                                                                                { rotate: `${p.rotation}deg` },
-                                                                                                { scale: p.scale },
-                                                                                            ],
-                                                                                        },
-                                                                                    ]}
-                                                                                >
-                                                                                    <Text style={{ fontSize: GIFTYY_THEME.typography.sizes.md }}>{p.emoji}</Text>
-                                                                                </Animated.View>
-                                                                            );
-                                                                        }
-
-                                                                        const shapeStyle =
-                                                                            p.shape === 'circle' ? styles.confettiCircle :
-                                                                            p.shape === 'star' ? styles.confettiStar :
-                                                                            p.shape === 'streamer' ? styles.confettiStreamer :
-                                                                            p.shape === 'ribbon' ? styles.confettiRibbon :
-                                                                            styles.confettiRect;
-
-                                                                        return (
-                                                                            <Animated.View
-                                                                                key={p.key}
-                                                                                entering={ZoomIn.delay(entryDelay).duration(250)}
-                                                                                exiting={FadeOutDown.duration(800)}
-                                                                                style={[
-                                                                                    shapeStyle,
-                                                                                    {
-                                                                                        backgroundColor: p.color,
-                                                                                        transform: [
-                                                                                            { translateX: p.x },
-                                                                                            { translateY: p.y },
-                                                                                            { rotate: `${p.rotation}deg` },
-                                                                                            { scale: p.scale },
-                                                                                        ],
-                                                                                    },
-                                                                                ]}
-                                                                            />
-                                                                        );
-                                                                    })}
-                                                                </View>
-                                                            )}
+                                                            {/* Confetti rendered as full-screen overlay outside ScrollView */}
                                                         </View>
 
 
@@ -2193,13 +2194,77 @@ export default function HomeAIInterface({
                     </Animated.View>
                 </View>
             </Modal>
+
+            {/* Confetti overlay — rendered outside ScrollView so iOS doesn't clip it */}
+            {confettiParticles.length > 0 && (() => {
+                // Avatar center is roughly at screen center X, ~38% from top
+                const centerX = SCREEN_WIDTH / 2;
+                const centerY = SCREEN_HEIGHT * 0.38;
+                return (
+                    <View style={styles.confettiOverlay} pointerEvents="none">
+                        {confettiParticles.map((p) => {
+                            const entryDelay = p.wave * 250 + p.index * 12;
+
+                            if (p.shape === 'emoji') {
+                                return (
+                                    <Animated.View
+                                        key={p.key}
+                                        entering={ZoomIn.delay(entryDelay).duration(300)}
+                                        exiting={FadeOutDown.duration(800)}
+                                        style={[
+                                            styles.confettiEmoji,
+                                            {
+                                                left: centerX + p.x,
+                                                top: centerY + p.y,
+                                                transform: [
+                                                    { rotate: `${p.rotation}deg` },
+                                                    { scale: p.scale },
+                                                ],
+                                            },
+                                        ]}
+                                    >
+                                        <Text style={{ fontSize: GIFTYY_THEME.typography.sizes.md }}>{p.emoji}</Text>
+                                    </Animated.View>
+                                );
+                            }
+
+                            const shapeStyle =
+                                p.shape === 'circle' ? styles.confettiCircle :
+                                p.shape === 'star' ? styles.confettiStar :
+                                p.shape === 'streamer' ? styles.confettiStreamer :
+                                p.shape === 'ribbon' ? styles.confettiRibbon :
+                                styles.confettiRect;
+
+                            return (
+                                <Animated.View
+                                    key={p.key}
+                                    entering={ZoomIn.delay(entryDelay).duration(250)}
+                                    exiting={FadeOutDown.duration(800)}
+                                    style={[
+                                        shapeStyle,
+                                        {
+                                            backgroundColor: p.color,
+                                            left: centerX + p.x,
+                                            top: centerY + p.y,
+                                            transform: [
+                                                { rotate: `${p.rotation}deg` },
+                                                { scale: p.scale },
+                                            ],
+                                        },
+                                    ]}
+                                />
+                            );
+                        })}
+                    </View>
+                );
+            })()}
         </View>
     );
 }
 
 const styles = StyleSheet.create({
-    thinkingDotsContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginVertical: GIFTYY_THEME.spacing.sm, gap: GIFTYY_THEME.spacing.xs },
-    thinkingDot: { width: scale(8), height: scale(8), borderRadius: scale(4), backgroundColor: GIFTYY_THEME.colors.primary },
+    thinkingDotsContainer: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-start', minHeight: scale(22), paddingVertical: GIFTYY_THEME.spacing.xs },
+    thinkingKeywordText: { fontSize: normalizeFont(14), fontFamily: 'Outfit-Medium', color: GIFTYY_THEME.colors.primary, letterSpacing: 0.3 },
     input: { flex: 1, minHeight: scale(24), maxHeight: verticalScale(120), color: GIFTYY_THEME.colors.text, fontFamily: 'Outfit-Regular', fontSize: normalizeFont(15), padding: 0, textAlignVertical: 'center' },
     backdrop: { backgroundColor: 'rgba(0,0,0,0.3)' },
     container: { flex: 1, backgroundColor: '#FFFFFF' },
@@ -2494,6 +2559,10 @@ const styles = StyleSheet.create({
         overflow: 'visible',
         zIndex: 999,
     },
+    confettiOverlay: {
+        ...StyleSheet.absoluteFillObject,
+        zIndex: 9999,
+    },
     confettiRect: {
         position: 'absolute',
         width: scale(10),
@@ -2654,8 +2723,8 @@ const styles = StyleSheet.create({
         color: GIFTYY_THEME.colors.gray500,
     },
     loadingBubble: {
-        paddingHorizontal: GIFTYY_THEME.spacing.xl,
-        paddingVertical: scale(14),
+        paddingHorizontal: GIFTYY_THEME.spacing.lg,
+        paddingVertical: scale(10),
     },
     headerActions: {
         flexDirection: 'row',

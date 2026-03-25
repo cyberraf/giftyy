@@ -509,19 +509,20 @@ export default function MarketplaceHomeScreen() {
 										}
 									})() : undefined;
 
+									const bundleColor = item.color || '#f75507'; // Fallback to primary color
 									return (
 										<View
 											style={{ marginRight: 16 }}
 										>
 											<Pressable
-												style={[styles.collectionCard, { backgroundColor: item.color }]}
+												style={[styles.collectionCard, { backgroundColor: bundleColor }]}
 												onPress={() => router.push({
 													pathname: '/(buyer)/bundle/[id]',
 													params: { id: item.id },
 												})}
 											>
 												<LinearGradient
-													colors={[item.color, item.color + 'DD']}
+													colors={[bundleColor, bundleColor + 'DD']}
 													style={styles.collectionGradient}
 												>
 													{firstProductImage && (

@@ -11,13 +11,16 @@ type AppState = {
 		text: string;
 		isExpanded: boolean;
 		sessionState: any | null;
+		lastActiveAt: number | null;
 	} | null;
 	setHomeAiState: (state: Partial<NonNullable<AppState['homeAiState']>>) => void;
+	clearHomeAiState: () => void;
 	
 	homeDataCache: {
 		myProfileId: string | null;
 		circleOccasions: any[];
 		myProfileOccasions: any[];
+		ignoredOccasionIds: string[];
 		myPreferences: any | null;
 		lastFetched: number;
 	} | null;
@@ -40,15 +43,16 @@ export const useAppStore = create<AppState>((set) => ({
 	homeAiState: null,
 	setHomeAiState: (newState) => set((s) => ({
 		homeAiState: {
-			...(s.homeAiState || { messages: null, sessionId: null, text: '', isExpanded: false, sessionState: null }),
+			...(s.homeAiState || { messages: null, sessionId: null, text: '', isExpanded: false, sessionState: null, lastActiveAt: null }),
 			...newState
 		}
 	})),
+	clearHomeAiState: () => set({ homeAiState: null }),
 
 	homeDataCache: null,
 	setHomeDataCache: (newCache) => set((s) => ({
 		homeDataCache: {
-			...(s.homeDataCache || { myProfileId: null, circleOccasions: [], myProfileOccasions: [], myPreferences: null, lastFetched: 0 }),
+			...(s.homeDataCache || { myProfileId: null, circleOccasions: [], myProfileOccasions: [], ignoredOccasionIds: [], myPreferences: null, lastFetched: 0 }),
 			...newCache
 		}
 	})),

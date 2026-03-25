@@ -873,10 +873,12 @@ export function Step3_Address({ formData, updateFormData, onNext, isSelf, ...pro
                         <TextInput
                             value={zip}
                             onChangeText={setZip}
-                            style={styles.textInput}
+                            style={[styles.textInput, { backgroundColor: 'transparent' }]}
                             placeholder="94103"
                             placeholderTextColor="rgba(47,35,24,0.4)"
                             keyboardType="number-pad"
+                            autoComplete="off"
+                            textContentType="none"
                         />
                     </View>
                 </View>
@@ -1069,12 +1071,14 @@ export function Step3_Contact({ formData, updateFormData, isSelf, ...props }: St
                         <Text style={styles.dropdownArrow}>▼</Text>
                     </TouchableOpacity>
                     <TextInput
-                        style={styles.phoneInput}
+                        style={[styles.phoneInput, { backgroundColor: 'transparent' }]}
                         value={phone}
                         onChangeText={(text) => setPhone(formatPhoneField(text, countryCode))}
                         placeholder="123 456 7890"
                         placeholderTextColor="rgba(47,35,24,0.4)"
                         keyboardType="phone-pad"
+                        autoComplete="off"
+                        textContentType="none"
                     />
                 </View>
             </View>
@@ -1553,7 +1557,7 @@ const styles = StyleSheet.create({
         paddingVertical: 14,
         fontSize: 16,
         color: '#1F2937',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'transparent',
     },
     chipsContainer: {
         flexDirection: 'row',
@@ -1691,7 +1695,7 @@ const styles = StyleSheet.create({
         paddingVertical: 14,
         fontSize: 16,
         color: '#1F2937',
-        backgroundColor: '#FFFFFF',
+        backgroundColor: 'transparent',
     },
     dropdownArrow: {
         fontSize: 10,

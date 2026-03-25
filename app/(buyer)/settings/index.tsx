@@ -39,6 +39,16 @@ export default function SettingsScreen() {
                         <SettingsNotificationsPanel />
                     </View>
 
+                    <View style={styles.groupCard}>
+                        <Text style={styles.groupTitle}>Occasions & Celebrations</Text>
+                        <SettingsLinkRow
+                            onPress={() => router.push('/(buyer)/settings/ignored-occasions')}
+                            label="Ignored Occasions"
+                            icon="eye.slash.fill"
+                            subtitle="Manage occasions you've hidden from your feed"
+                        />
+                    </View>
+
                     <TourAnchor step="settings_reminders">
                         <View style={styles.groupCard}>
                             <Text style={styles.groupTitle}>{t('settings.reminder_schedule')}</Text>

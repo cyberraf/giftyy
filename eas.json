@@ -8,7 +8,8 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_IMAGE_UTILS_CACHE_DIR": "/tmp/expo-image-cache"
+        "EXPO_IMAGE_UTILS_CACHE_DIR": "/tmp/expo-image-cache",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "preview": {
@@ -16,7 +17,8 @@
       "env": {
         "NODE_ENV": "production",
         "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
-        "EXPO_IMAGE_UTILS_CACHE_DIR": "/tmp/expo-image-cache"
+        "EXPO_IMAGE_UTILS_CACHE_DIR": "/tmp/expo-image-cache",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "internal": {
@@ -27,7 +29,8 @@
       "env": {
         "NODE_ENV": "production",
         "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
-        "EXPO_IMAGE_UTILS_CACHE_DIR": "/tmp/expo-image-cache"
+        "EXPO_IMAGE_UTILS_CACHE_DIR": "/tmp/expo-image-cache",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       }
     },
     "production": {
@@ -38,7 +41,8 @@
       "env": {
         "NODE_ENV": "production",
         "EAS_BUILD_NO_EXPO_GO_WARNING": "true",
-        "EXPO_IMAGE_UTILS_CACHE_DIR": "/tmp/expo-image-cache"
+        "EXPO_IMAGE_UTILS_CACHE_DIR": "/tmp/expo-image-cache",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       },
       "ios": {
         "autoIncrement": true
