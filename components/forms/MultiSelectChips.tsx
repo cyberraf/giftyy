@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ScrollView, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
 type MultiSelectChipsProps = {
     label: string;
@@ -11,10 +11,6 @@ type MultiSelectChipsProps = {
     maxSelections?: number;
 };
 
-/**
- * Multi-select chips component for preference selection
- * Allows users to select multiple options from a curated list
- */
 export function MultiSelectChips({
     label,
     options,
@@ -27,22 +23,23 @@ export function MultiSelectChips({
     const [customInput, setCustomInput] = useState('');
     const [showCustomInput, setShowCustomInput] = useState(false);
 
-    // Normalize options to { value, label } format
     const normalizedOptions = options.map(opt =>
         typeof opt === 'string' ? { value: opt, label: opt } : opt
     );
 
+    // Custom values not in the predefined options
+    const customValues = selected.filter(
+        v => !normalizedOptions.some(opt => opt.value === v)
+    );
+
     const handleToggle = (value: string) => {
         if (selected.includes(value)) {
-            // Deselect
             onChange(selected.filter(v => v !== value));
         } else {
-            // Select
             if (maxSelections === 1) {
-                // For single select, replace the current selection
                 onChange([value]);
             } else if (maxSelections && selected.length >= maxSelections) {
-                return; // Don't allow more selections
+                return;
             } else {
                 onChange([...selected, value]);
             }
@@ -62,229 +59,178 @@ export function MultiSelectChips({
         }
     };
 
-    const handleRemoveCustom = (value: string) => {
-        // Remove custom values that aren't in the predefined options
-        const isPredefined = normalizedOptions.some(opt => opt.value === value);
-        if (!isPredefined) {
-            onChange(selected.filter(v => v !== value));
-        }
-    };
-
     return (
         <View style={styles.container}>
-            <Text style={styles.label}>{label}</Text>
-            {selected.length > 0 && (
-                <Text style={styles.selectedCount}>
-                    {selected.length} selected
-                    {maxSelections ? ` (max ${maxSelections})` : ''}
-                </Text>
-            )}
+            <View style={styles.labelRow}>
+                <Text style={styles.label}>{label}</Text>
+                {selected.length > 0 && (
+                    <Text style={styles.count}>
+                        {selected.length}{maxSelections ? `/${maxSelections}` : ''}
+                    </Text>
+                )}
+            </View>
 
-            {/* Selected chips (at top for visibility) */}
-            {selected.length > 0 && (
-                <View style={styles.selectedChipsContainer}>
-                    {selected.map(value => {
-                        const option = normalizedOptions.find(opt => opt.value === value);
-                        const isCustom = !option;
-                        return (
-                            <TouchableOpacity
-                                key={value}
-                                style={[styles.chip, styles.chipSelected]}
-                                onPress={() => handleToggle(value)}
-                            >
-                                <Text style={styles.chipTextSelected}>
-                                    {option?.label || value}
-                                </Text>
-                                {isCustom && (
-                                    <TouchableOpacity
-                                        onPress={() => handleRemoveCustom(value)}
-                                        style={styles.removeButton}
-                                    >
-                                        <Text style={styles.removeButtonText}>×</Text>
-                                    </TouchableOpacity>
-                                )}
-                            </TouchableOpacity>
-                        );
-                    })}
-                </View>
-            )}
-
-            {/* Available options */}
-            <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={styles.optionsScroll}
-                contentContainerStyle={styles.optionsContainer}
-            >
+            {/* All chips in a wrap layout — everything visible at once */}
+            <View style={styles.chipsWrap}>
                 {normalizedOptions.map(option => {
                     const isSelected = selected.includes(option.value);
-                    if (isSelected) return null; // Don't show selected items in available list
-
                     return (
                         <TouchableOpacity
                             key={option.value}
-                            style={[styles.chip, styles.chipAvailable]}
+                            style={[styles.chip, isSelected && styles.chipSelected]}
                             onPress={() => handleToggle(option.value)}
+                            activeOpacity={0.7}
                         >
-                            <Text style={styles.chipTextAvailable}>{option.label}</Text>
+                            {isSelected && <Text style={styles.checkIcon}>✓</Text>}
+                            <Text style={[styles.chipText, isSelected && styles.chipTextSelected]}>
+                                {option.label}
+                            </Text>
                         </TouchableOpacity>
                     );
                 })}
 
-                {/* Add custom button */}
+                {/* Custom values */}
+                {customValues.map(value => (
+                    <TouchableOpacity
+                        key={value}
+                        style={[styles.chip, styles.chipSelected]}
+                        onPress={() => handleToggle(value)}
+                        activeOpacity={0.7}
+                    >
+                        <Text style={styles.checkIcon}>✓</Text>
+                        <Text style={styles.chipTextSelected}>{value}</Text>
+                    </TouchableOpacity>
+                ))}
+
+                {/* Add custom */}
                 {allowCustom && (
                     <TouchableOpacity
-                        style={[styles.chip, styles.chipCustom]}
+                        style={[styles.chip, styles.chipAdd]}
                         onPress={() => setShowCustomInput(!showCustomInput)}
+                        activeOpacity={0.7}
                     >
-                        <Text style={styles.chipTextCustom}>+ Add Custom</Text>
+                        <Text style={styles.chipAddText}>+ Custom</Text>
                     </TouchableOpacity>
                 )}
-            </ScrollView>
+            </View>
 
-            {/* Custom input field */}
+            {/* Custom input */}
             {showCustomInput && (
-                <View style={styles.customInputContainer}>
+                <View style={styles.customRow}>
                     <TextInput
                         style={styles.customInput}
                         value={customInput}
                         onChangeText={setCustomInput}
-                        placeholder="Enter custom option..."
-                        placeholderTextColor="rgba(47,35,24,0.4)"
+                        placeholder="Type here..."
+                        placeholderTextColor="#9CA3AF"
                         onSubmitEditing={handleAddCustom}
                         returnKeyType="done"
                         autoFocus
                     />
-                    <TouchableOpacity
-                        style={styles.addButton}
-                        onPress={handleAddCustom}
-                    >
-                        <Text style={styles.addButtonText}>Add</Text>
+                    <TouchableOpacity style={styles.addBtn} onPress={handleAddCustom}>
+                        <Text style={styles.addBtnText}>Add</Text>
                     </TouchableOpacity>
                 </View>
-            )}
-
-            {selected.length === 0 && (
-                <Text style={styles.placeholder}>{placeholder}</Text>
             )}
         </View>
     );
 }
 
-const BRAND_COLOR = '#f75507';
+const BRAND = '#f75507';
 
 const styles = StyleSheet.create({
     container: {
-        marginBottom: 20,
+        marginBottom: 24,
+    },
+    labelRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: 10,
     },
     label: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#2F2318',
-        marginBottom: 8,
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#374151',
+        letterSpacing: 0.3,
+        textTransform: 'uppercase',
     },
-    selectedCount: {
+    count: {
         fontSize: 13,
-        color: BRAND_COLOR,
-        marginBottom: 8,
-        fontWeight: '500',
+        color: BRAND,
+        fontWeight: '600',
     },
-    selectedChipsContainer: {
+    chipsWrap: {
         flexDirection: 'row',
         flexWrap: 'wrap',
         gap: 8,
-        marginBottom: 12,
-        paddingBottom: 12,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(0,0,0,0.06)',
-    },
-    optionsScroll: {
-        marginBottom: 8,
-    },
-    optionsContainer: {
-        flexDirection: 'row',
-        gap: 8,
-        paddingVertical: 4,
     },
     chip: {
-        paddingHorizontal: 16,
-        paddingVertical: 8,
-        borderRadius: 20,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 6,
-    },
-    chipAvailable: {
-        backgroundColor: '#374151',
+        gap: 5,
+        paddingHorizontal: 14,
+        paddingVertical: 9,
+        borderRadius: 20,
+        backgroundColor: '#F3F4F6',
+        borderWidth: 1.5,
+        borderColor: 'transparent',
     },
     chipSelected: {
-        backgroundColor: BRAND_COLOR,
+        backgroundColor: 'rgba(247, 85, 7, 0.08)',
+        borderColor: 'rgba(247, 85, 7, 0.35)',
     },
-    chipCustom: {
-        backgroundColor: '#4B5563',
-    },
-    chipTextAvailable: {
+    chipText: {
         fontSize: 14,
-        color: '#FFFFFF',
+        color: '#4B5563',
         fontWeight: '500',
     },
     chipTextSelected: {
         fontSize: 14,
-        color: '#FFFFFF',
+        color: BRAND,
         fontWeight: '600',
     },
-    chipTextCustom: {
-        fontSize: 14,
-        color: '#FFFFFF',
+    checkIcon: {
+        fontSize: 11,
+        color: BRAND,
+        fontWeight: '700',
+    },
+    chipAdd: {
+        backgroundColor: 'transparent',
+        borderColor: '#D1D5DB',
+        borderStyle: 'dashed',
+    },
+    chipAddText: {
+        fontSize: 13,
+        color: '#9CA3AF',
         fontWeight: '500',
     },
-    removeButton: {
-        width: 18,
-        height: 18,
-        borderRadius: 9,
-        backgroundColor: 'rgba(255,255,255,0.3)',
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    removeButtonText: {
-        fontSize: 16,
-        color: '#FFFFFF',
-        fontWeight: '600',
-        lineHeight: 18,
-    },
-    customInputContainer: {
+    customRow: {
         flexDirection: 'row',
         gap: 8,
-        marginTop: 8,
+        marginTop: 12,
     },
     customInput: {
         flex: 1,
         borderWidth: 1,
         borderColor: '#E5E7EB',
-        borderRadius: 8,
-        paddingHorizontal: 12,
+        borderRadius: 12,
+        paddingHorizontal: 14,
         paddingVertical: 10,
         fontSize: 14,
         color: '#1F2937',
         backgroundColor: '#FFFFFF',
     },
-    addButton: {
-        backgroundColor: BRAND_COLOR,
+    addBtn: {
+        backgroundColor: BRAND,
         paddingHorizontal: 20,
         paddingVertical: 10,
-        borderRadius: 8,
+        borderRadius: 12,
         justifyContent: 'center',
     },
-    addButtonText: {
+    addBtnText: {
         color: '#FFFFFF',
         fontSize: 14,
         fontWeight: '600',
-    },
-    placeholder: {
-        fontSize: 14,
-        color: 'rgba(0,0,0,0.3)',
-        fontStyle: 'italic',
-        marginTop: 4,
-        display: 'none', // Hide placeholder
     },
 });

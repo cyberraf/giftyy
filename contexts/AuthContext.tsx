@@ -19,6 +19,7 @@ export type Profile = {
 	profile_image_url: string | null;
 	store_name?: string | null;
 	role: 'buyer';
+	onboarding_completed_at: string | null;
 	created_at: string;
 	updated_at: string;
 };
@@ -78,6 +79,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 	const retryTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const retryCountRef = useRef(0);
 	const syncSessionFromSupabaseRef = useRef<((cancelled?: () => boolean) => Promise<void>) | null>(null);
+	// Tracks whether onAuthStateChange already applied a valid session.
+	// When true, syncSessionFromSupabase can skip retries if getSession() fails.
+	const sessionAppliedByEventRef = useRef(false);
 	const MAX_AUTH_RETRIES = 5;
 	const AUTH_RETRY_DELAYS = [2000, 4000, 8000, 15000, 30000]; // Exponential backoff
 
@@ -318,7 +322,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				if (error) {
 					console.warn('Error getting session:', error.message);
 					if (isNetworkError(error)) {
-						// Offline state now derived from NetworkContext
+						if (sessionAppliedByEventRef.current) {
+							if (__DEV__) console.log('[AuthContext] Session already applied via event — skipping retry');
+							setLoading(false);
+							return;
+						}
 						setLoading(false);
 						scheduleAuthRetry();
 						return;
@@ -350,6 +358,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				await applySession(currentSession ?? null, cancelled);
 			} catch (err: any) {
 				const errorMessage = err?.message?.toLowerCase() || '';
+				if (__DEV__) console.log('[AuthContext] getSession error:', errorMessage);
+
+				// If onAuthStateChange already established a valid session, don't retry —
+				// getSession() can fail (timeout, stale state) even when the session is fine.
+				if (sessionAppliedByEventRef.current) {
+					if (__DEV__) console.log('[AuthContext] Session already applied via event — skipping retry');
+					setLoading(false);
+					return;
+				}
+
 				if (isNetworkError(err)) {
 					// Offline state now derived from NetworkContext
 					setLoading(false);
@@ -414,11 +432,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 					retryTimerRef.current = null;
 				}
 				hasRegisteredPushRef.current = false;
+				sessionAppliedByEventRef.current = false;
 			}
 
 			if (event === 'TOKEN_REFRESHED') {
 				// Token was successfully refreshed — reset retry counters
 				retryCountRef.current = 0;
+			}
+
+			if (session) {
+				sessionAppliedByEventRef.current = true;
+				// Cancel any pending retries — the event handler has a valid session
+				if (retryTimerRef.current) {
+					clearTimeout(retryTimerRef.current);
+					retryTimerRef.current = null;
+				}
 			}
 
 			await applySession(session ?? null);
@@ -836,7 +864,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 					email,
 					password,
 					options: {
-						emailRedirectTo: 'https://giftyy.store/auth/confirm',
+						emailRedirectTo: 'https://giftyy.store/auth/confirm?source=mobile',
 						data: {
 							first_name: firstName,
 							last_name: lastName,

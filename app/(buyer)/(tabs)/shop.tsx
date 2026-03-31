@@ -35,6 +35,7 @@ import { VendorCard } from '@/components/marketplace/VendorCard';
 import { FilterModal } from '@/components/search/FilterModal';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { TourAnchor } from '@/components/tour/TourAnchor';
+import { useTour } from '@/contexts/TourContext';
 
 // Contexts & Utils
 import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
@@ -72,6 +73,14 @@ export default function MarketplaceHomeScreen() {
 	const pathname = usePathname();
 	const { setVisible } = useBottomBarVisibility();
 	const { t } = useTranslation();
+
+	// Per-screen tour
+	const { startTour, isGroupCompleted } = useTour();
+	useEffect(() => {
+		isGroupCompleted('shop').then(done => {
+			if (!done) setTimeout(() => startTour('shop'), 1000);
+		});
+	}, []);
 
 	// Contexts
 	const { products, collections, loading, hasMore, refreshProducts, loadMoreProducts, refreshCollections } = useProducts();

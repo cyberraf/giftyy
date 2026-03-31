@@ -25,10 +25,6 @@ type ConversationalStepProps = {
     loading?: boolean;
 };
 
-/**
- * Conversational Step Component
- * Displays a single question in chat-like format
- */
 export function ConversationalStep({
     question,
     emoji,
@@ -50,12 +46,9 @@ export function ConversationalStep({
     const scrollRef = useRef<ScrollView>(null);
 
     const handleContinue = () => {
-        if (onNext) {
-            onNext();
-        }
+        if (onNext) onNext();
     };
 
-    // Dynamic bottom padding based on safe area
     const navBottomPadding = Math.max(bottom, Platform.OS === 'ios' ? 24 : 16) + 8;
 
     return (
@@ -75,60 +68,52 @@ export function ConversationalStep({
                 keyboardShouldPersistTaps="handled"
                 automaticallyAdjustKeyboardInsets={Platform.OS === 'ios'}
             >
-                {/* Question Bubble */}
-                <View style={styles.questionBubble}>
-                    {avatarSource ? (
-                        <Image source={avatarSource} style={styles.avatar} resizeMode="contain" />
-                    ) : emoji ? (
-                        <Text style={styles.emoji}>{emoji}</Text>
-                    ) : null}
-                    <Text style={styles.question}>{question}</Text>
-                    {description && (
-                        <Text style={styles.description}>{description}</Text>
-                    )}
+                {/* Compact question header */}
+                <View style={styles.questionHeader}>
+                    <View style={styles.questionRow}>
+                        {avatarSource ? (
+                            <Image source={avatarSource} style={styles.avatar} resizeMode="contain" />
+                        ) : emoji ? (
+                            <Text style={styles.emoji}>{emoji}</Text>
+                        ) : null}
+                        <View style={styles.questionTextWrap}>
+                            <Text style={styles.question}>{question}</Text>
+                            {description && (
+                                <Text style={styles.description}>{description}</Text>
+                            )}
+                        </View>
+                    </View>
                 </View>
 
-                {/* Answer Area */}
+                {/* Form fields */}
                 <View style={styles.answerArea}>
                     {children}
                 </View>
             </ScrollView>
 
-            {/* Navigation - single row, never wraps */}
+            {/* Navigation */}
             {!hideFooter && (
                 <View style={[styles.navigation, { paddingBottom: navBottomPadding }]}>
                     <View style={styles.navRow}>
-                        {/* Back button */}
                         {!isFirstStep && onBack ? (
-                            <TouchableOpacity
-                                style={styles.backButton}
-                                onPress={onBack}
-                            >
-                                <Text style={styles.backButtonText} numberOfLines={1}>Back</Text>
+                            <TouchableOpacity style={styles.backButton} onPress={onBack}>
+                                <Text style={styles.backButtonText}>Back</Text>
                             </TouchableOpacity>
                         ) : <View style={{ width: 4 }} />}
 
-                        {/* Center: Save & Exit + Skip */}
                         <View style={styles.centerGroup}>
                             {onSaveAndExit && (
-                                <TouchableOpacity
-                                    style={styles.saveButton}
-                                    onPress={onSaveAndExit}
-                                >
-                                    <Text style={styles.saveButtonText} numberOfLines={1}>Save</Text>
+                                <TouchableOpacity style={styles.saveButton} onPress={onSaveAndExit}>
+                                    <Text style={styles.saveButtonText}>Save</Text>
                                 </TouchableOpacity>
                             )}
                             {!required && onSkip && (
-                                <TouchableOpacity
-                                    style={styles.skipButton}
-                                    onPress={onSkip}
-                                >
-                                    <Text style={styles.skipButtonText} numberOfLines={1}>Skip</Text>
+                                <TouchableOpacity style={styles.skipButton} onPress={onSkip}>
+                                    <Text style={styles.skipButtonText}>Skip</Text>
                                 </TouchableOpacity>
                             )}
                         </View>
 
-                        {/* Continue button */}
                         <TouchableOpacity
                             style={[styles.continueButton, loading && styles.disabledButton]}
                             onPress={handleContinue}
@@ -137,7 +122,7 @@ export function ConversationalStep({
                             {loading ? (
                                 <ActivityIndicator size="small" color="#FFFFFF" />
                             ) : (
-                                <Text style={styles.continueButtonText} numberOfLines={1}>
+                                <Text style={styles.continueButtonText}>
                                     {nextLabel || (isLastStep ? 'Finish' : 'Continue')}
                                 </Text>
                             )}
@@ -152,57 +137,48 @@ export function ConversationalStep({
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: GIFTYY_THEME.colors.cream,
+        backgroundColor: '#FFFFFF',
     },
     scrollView: {
         flex: 1,
     },
     scrollContent: {
         padding: 20,
-        paddingTop: 24,
+        paddingTop: 20,
         paddingBottom: 120,
     },
-    questionBubble: {
-        backgroundColor: '#FFFFFF',
-        borderRadius: 20,
-        padding: 24,
-        marginBottom: 24,
-        borderWidth: 1,
-        borderColor: 'rgba(0,0,0,0.04)',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.03,
-        shadowRadius: 12,
-        elevation: 2,
+    questionHeader: {
+        marginBottom: 20,
     },
-    emoji: {
-        fontSize: 36,
-        marginBottom: 12,
+    questionRow: {
+        flexDirection: 'row',
+        alignItems: 'flex-start',
+        gap: 12,
     },
     avatar: {
         width: 36,
         height: 36,
-        marginBottom: 12,
         borderRadius: 18,
+        marginTop: 2,
+    },
+    emoji: {
+        fontSize: 28,
+        marginTop: 2,
+    },
+    questionTextWrap: {
+        flex: 1,
     },
     question: {
-        fontSize: 26,
-        fontWeight: '800',
+        fontSize: 20,
+        fontWeight: '700',
         color: GIFTYY_THEME.colors.gray900,
-        lineHeight: 32,
-        marginBottom: 8,
-        letterSpacing: -0.5,
-    },
-    optional: {
-        fontSize: 14,
-        color: GIFTYY_THEME.colors.gray400,
-        marginTop: 12,
-        fontWeight: '600',
+        lineHeight: 26,
+        letterSpacing: -0.3,
     },
     description: {
-        fontSize: 15,
+        fontSize: 14,
         color: GIFTYY_THEME.colors.gray500,
-        lineHeight: 22,
+        lineHeight: 20,
         marginTop: 4,
     },
     answerArea: {

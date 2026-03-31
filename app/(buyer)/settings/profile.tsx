@@ -201,6 +201,12 @@ export default function ProfilePreferencesScreen() {
             alert('Validation error', 'First name is required.');
             return;
         }
+
+        const phoneDigitsCheck = profile.phone.replace(/\D/g, '');
+        if (!phoneDigitsCheck && authProfile?.phone) {
+            alert('Phone Required', 'You cannot remove your phone number. Please enter a valid phone number.');
+            return;
+        }
         
         if (saving) {
             console.warn('[Profile] Save already in progress, ignoring request');

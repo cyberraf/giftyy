@@ -924,19 +924,28 @@ async function searchRAG(params: {
   embedding: number[]; maxPrice: number;
   giftWrap: boolean | null; personalization: boolean | null; limit: number;
 }) {
-  const { data, error } = await supabaseAdmin.rpc('match_products_rag', {
-    p_query_embedding: params.embedding,
-    p_limit: params.limit,
-    p_min_price: null,
-    p_max_price: params.maxPrice,
-    p_category: null,
-    p_subcategory: null,
-    p_gift_wrap: params.giftWrap,
-    p_personalization: params.personalization,
-    p_require_in_stock: false,
-  });
-  if (error) throw new Error(`RAG RPC error: ${error.message}`);
-  return data ?? [];
+  const MAX_RETRIES = 2;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    const { data, error } = await supabaseAdmin.rpc('match_products_rag', {
+      p_query_embedding: params.embedding,
+      p_limit: params.limit,
+      p_min_price: null,
+      p_max_price: params.maxPrice,
+      p_category: null,
+      p_subcategory: null,
+      p_gift_wrap: params.giftWrap,
+      p_personalization: params.personalization,
+      p_require_in_stock: false,
+    });
+    if (!error) return data ?? [];
+    if (attempt < MAX_RETRIES && /connection|reset|timeout/i.test(error.message)) {
+      console.warn(`[RAG] Retry ${attempt + 1}/${MAX_RETRIES}: ${error.message}`);
+      await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+      continue;
+    }
+    throw new Error(`RAG RPC error: ${error.message}`);
+  }
+  return [];
 }
 
 function serializeCandidates(products: any[]): string {

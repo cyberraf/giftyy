@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import React, { createContext, useCallback, useContext, useState } from 'react';
 import { TourOverlay } from '@/components/tour/TourOverlay';
 
-// The steps of our interactive tour mapping to specific features
+// All possible tour steps
 export type TourStep =
 	| 'welcome'
 	| 'home_ai_chat'
@@ -14,155 +14,146 @@ export type TourStep =
 	| 'occasions_tab'
 	| 'preferences_tab'
 	| 'memories_intro'
-	| 'settings_reminders'
-	| 'tour_complete';
+	| 'settings_reminders';
 
-// Order of the tour
-const TOUR_SEQUENCE: TourStep[] = [
-	'welcome',
-	'home_ai_chat',
-	'home_tagging',
-	'home_burger_menu',
-	'global_profile',
-	'shop_intro',
-	'circle_tab',
-	'occasions_tab',
-	'preferences_tab',
-	'memories_intro',
-	'settings_reminders',
-	'tour_complete',
-];
+// Per-screen tour groups
+export type TourGroup = 'home' | 'shop' | 'recipients' | 'memories' | 'settings';
 
-// Mapping from step -> the screen route that must be visible for that step
-const STEP_ROUTES: Partial<Record<TourStep, string>> = {
-	'welcome': '/(buyer)/(tabs)',
-	'home_ai_chat': '/(buyer)/(tabs)',
-	'home_tagging': '/(buyer)/(tabs)',
-	'home_burger_menu': '/(buyer)/(tabs)',
-	'global_profile': '/(buyer)/(tabs)',
-	'shop_intro': '/(buyer)/(tabs)/shop',
-	'circle_tab': '/(buyer)/(tabs)/recipients?tab=circle',
-	'occasions_tab': '/(buyer)/(tabs)/recipients?tab=occasions',
-	'preferences_tab': '/(buyer)/(tabs)/recipients?tab=preferences',
-	'memories_intro': '/(buyer)/(tabs)/memory',
-	'settings_reminders': '/(buyer)/settings',
-	'tour_complete': '/(buyer)/(tabs)',
+const TOUR_GROUPS: Record<TourGroup, TourStep[]> = {
+	home: ['welcome', 'home_ai_chat', 'home_tagging', 'home_burger_menu', 'global_profile'],
+	shop: ['shop_intro'],
+	recipients: ['circle_tab', 'occasions_tab', 'preferences_tab'],
+	memories: ['memories_intro'],
+	settings: ['settings_reminders'],
 };
+
+const TOUR_STORAGE_PREFIX = 'giftyy_tour_';
 
 export type TourElementMap = Record<TourStep, { x: number; y: number; width: number; height: number; ready: boolean } | null>;
 
 interface TourContextType {
-    isActive: boolean;
-    currentStep: TourStep | null;
-    elements: TourElementMap;
-    registerElement: (step: TourStep, layout: { x: number; y: number; width: number; height: number }) => void;
-    unregisterElement: (step: TourStep) => void;
-    startTour: () => void;
-    nextStep: () => void;
-    prevStep: () => void;
-    skipTour: () => void;
-    completeTour: () => void;
-    targetRoute: string | null;
+	isActive: boolean;
+	currentStep: TourStep | null;
+	currentGroup: TourGroup | null;
+	elements: TourElementMap;
+	registerElement: (step: TourStep, layout: { x: number; y: number; width: number; height: number }) => void;
+	unregisterElement: (step: TourStep) => void;
+	startTour: (group: TourGroup) => void;
+	nextStep: () => void;
+	prevStep: () => void;
+	skipTour: () => void;
+	isGroupCompleted: (group: TourGroup) => Promise<boolean>;
 }
 
 const TourContext = createContext<TourContextType | undefined>(undefined);
 
-const TOUR_COMPLETED_KEY = 'giftyy_interactive_tour_completed_v1';
+function storageKey(group: TourGroup) {
+	return `${TOUR_STORAGE_PREFIX}${group}_v1`;
+}
 
 export function TourProvider({ children }: { children: React.ReactNode }) {
-    const [isActive, setIsActive] = useState(false);
-    const [currentStep, setCurrentStep] = useState<TourStep | null>(null);
-    const [elements, setElements] = useState<TourElementMap>({} as TourElementMap);
-    const [targetRoute, setTargetRoute] = useState<string | null>(null);
+	const [isActive, setIsActive] = useState(false);
+	const [currentStep, setCurrentStep] = useState<TourStep | null>(null);
+	const [currentGroup, setCurrentGroup] = useState<TourGroup | null>(null);
+	const [elements, setElements] = useState<TourElementMap>({} as TourElementMap);
 
-    const registerElement = useCallback((step: TourStep, layout: { x: number; y: number; width: number; height: number }) => {
-        setElements(prev => ({
-            ...prev,
-            [step]: { ...layout, ready: true }
-        }));
-    }, []);
+	const registerElement = useCallback((step: TourStep, layout: { x: number; y: number; width: number; height: number }) => {
+		setElements(prev => ({
+			...prev,
+			[step]: { ...layout, ready: true }
+		}));
+	}, []);
 
-    const unregisterElement = useCallback((step: TourStep) => {
-        setElements(prev => ({
-            ...prev,
-            [step]: null
-        }));
-    }, []);
+	const unregisterElement = useCallback((step: TourStep) => {
+		setElements(prev => ({
+			...prev,
+			[step]: null
+		}));
+	}, []);
 
-    const startTour = useCallback(() => {
-        const firstStep = TOUR_SEQUENCE[0];
-        setIsActive(true);
-        setCurrentStep(firstStep);
-        setTargetRoute(STEP_ROUTES[firstStep] ?? null);
-    }, []);
+	const markGroupComplete = useCallback(async (group: TourGroup) => {
+		try {
+			await AsyncStorage.setItem(storageKey(group), 'true');
+		} catch (e) {
+			console.warn('Failed to save tour completion', e);
+		}
+	}, []);
 
-    const skipTour = useCallback(async () => {
-        setIsActive(false);
-        setCurrentStep(null);
-        setTargetRoute(null);
-        try {
-            await AsyncStorage.setItem(TOUR_COMPLETED_KEY, 'true');
-        } catch (e) {
-            console.warn('Failed to save tour completion', e);
-        }
-    }, []);
+	const startTour = useCallback((group: TourGroup) => {
+		const steps = TOUR_GROUPS[group];
+		if (!steps || steps.length === 0) return;
+		setCurrentGroup(group);
+		setCurrentStep(steps[0]);
+		setIsActive(true);
+	}, []);
 
-    const completeTour = skipTour;
+	const skipTour = useCallback(async () => {
+		if (currentGroup) {
+			await markGroupComplete(currentGroup);
+		}
+		setIsActive(false);
+		setCurrentStep(null);
+		setCurrentGroup(null);
+	}, [currentGroup, markGroupComplete]);
 
-    const nextStep = useCallback(() => {
-        setCurrentStep(prev => {
-            if (!prev) return null;
-            const currentIndex = TOUR_SEQUENCE.indexOf(prev);
-            if (currentIndex === -1 || currentIndex === TOUR_SEQUENCE.length - 1) {
-                // Done — persist and close
-                AsyncStorage.setItem(TOUR_COMPLETED_KEY, 'true').catch(() => { });
-                setIsActive(false);
-                setTargetRoute(null);
-                return null;
-            }
-            const next = TOUR_SEQUENCE[currentIndex + 1];
-            setTargetRoute(STEP_ROUTES[next] ?? null);
-            return next;
-        });
-    }, []);
+	const nextStep = useCallback(() => {
+		if (!currentGroup || !currentStep) return;
+		const steps = TOUR_GROUPS[currentGroup];
+		const idx = steps.indexOf(currentStep);
+		if (idx === -1 || idx === steps.length - 1) {
+			// Last step in group — complete
+			markGroupComplete(currentGroup);
+			setIsActive(false);
+			setCurrentStep(null);
+			setCurrentGroup(null);
+		} else {
+			setCurrentStep(steps[idx + 1]);
+		}
+	}, [currentGroup, currentStep, markGroupComplete]);
 
-    const prevStep = useCallback(() => {
-        setCurrentStep(prev => {
-            if (!prev) return null;
-            const currentIndex = TOUR_SEQUENCE.indexOf(prev);
-            if (currentIndex <= 0) return prev; // Already on first step
-            const previous = TOUR_SEQUENCE[currentIndex - 1];
-            setTargetRoute(STEP_ROUTES[previous] ?? null);
-            return previous;
-        });
-    }, []);
+	const prevStep = useCallback(() => {
+		if (!currentGroup || !currentStep) return;
+		const steps = TOUR_GROUPS[currentGroup];
+		const idx = steps.indexOf(currentStep);
+		if (idx <= 0) return;
+		setCurrentStep(steps[idx - 1]);
+	}, [currentGroup, currentStep]);
 
-    return (
-        <TourContext.Provider
-            value={{
-                isActive,
-                currentStep,
-                elements,
-                registerElement,
-                unregisterElement,
-                startTour,
-                nextStep,
-                prevStep,
-                skipTour,
-                completeTour,
-                targetRoute
-            }}
-        >
-            {children}
-            <TourOverlay />
-        </TourContext.Provider>
-    );
+	const isGroupCompleted = useCallback(async (group: TourGroup): Promise<boolean> => {
+		try {
+			const val = await AsyncStorage.getItem(storageKey(group));
+			return val === 'true';
+		} catch {
+			return false;
+		}
+	}, []);
+
+	return (
+		<TourContext.Provider
+			value={{
+				isActive,
+				currentStep,
+				currentGroup,
+				elements,
+				registerElement,
+				unregisterElement,
+				startTour,
+				nextStep,
+				prevStep,
+				skipTour,
+				isGroupCompleted,
+			}}
+		>
+			{children}
+			<TourOverlay />
+		</TourContext.Provider>
+	);
 }
 
 export const useTour = () => {
-    const context = useContext(TourContext);
-    if (context === undefined) {
-        throw new Error('useTour must be used within a TourProvider');
-    }
-    return context;
+	const context = useContext(TourContext);
+	if (context === undefined) {
+		throw new Error('useTour must be used within a TourProvider');
+	}
+	return context;
 };

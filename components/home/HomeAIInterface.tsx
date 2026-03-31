@@ -1614,7 +1614,7 @@ export default function HomeAIInterface({
                                                             <Pressable onPress={handleAvatarTap} style={{ alignItems: 'center', justifyContent: 'center' }}>
                                                                 <Animated.View style={[styles.initialGreetingAvatarWrapper, animatedEasterEggStyle]}>
                                                                     <Image
-                                                                        source={require('@/assets/images/giftyy.png')}
+                                                                        source={require('@/assets/images/tap-me.png')}
                                                                         style={styles.initialGreetingAvatar}
                                                                         resizeMode="cover"
                                                                     />
@@ -1660,7 +1660,7 @@ export default function HomeAIInterface({
                                             {msg.sender === 'ai' && (
                                                 <View style={styles.aiAvatarContainer}>
                                                     <Image
-                                                        source={require('@/assets/images/giftyy.png')}
+                                                        source={require('@/assets/images/chat-bot.png')}
                                                         style={styles.messageAvatar}
                                                         resizeMode="cover"
                                                     />
@@ -1803,7 +1803,7 @@ export default function HomeAIInterface({
                                         <View style={styles.aiMessageRow}>
                                             <View style={styles.aiAvatarContainer}>
                                                 <Animated.Image
-                                                    source={require('@/assets/images/giftyy.png')}
+                                                    source={require('@/assets/images/chat-bot.png')}
                                                     style={[styles.messageAvatar, animatedAvatarStyle]}
                                                     resizeMode="cover"
                                                 />
@@ -2378,21 +2378,19 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'center',
         paddingHorizontal: GIFTYY_THEME.spacing.xl,
-        paddingTop: verticalScale(140),
+        paddingTop: verticalScale(80),
         paddingBottom: GIFTYY_THEME.spacing['2xl'],
     },
     initialGreetingAvatarWrapper: {
-        width: scale(200),
-        height: scale(200),
+        width: scale(180),
+        height: scale(180),
         alignItems: 'center',
         justifyContent: 'center',
         marginBottom: GIFTYY_THEME.spacing['2xl'],
-        backgroundColor: 'rgba(247, 85, 7, 0.03)',
-        borderRadius: scale(100),
     },
     initialGreetingAvatar: {
-        width: scale(140),
-        height: scale(140),
+        width: scale(180),
+        height: scale(180),
     },
     surpriseModalOverlay: {
         flex: 1,

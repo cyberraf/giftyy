@@ -213,6 +213,7 @@ function RootLayout() {
                                             <Stack>
                                               <Stack.Screen name="index" options={{ headerShown: false }} />
                                               <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                                              <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
                                               <Stack.Screen name="(buyer)" options={{ headerShown: false }} />
                                               <Stack.Screen name="(vendor)" options={{ headerShown: false }} />
                                               <Stack.Screen name="offline" options={{ headerShown: false }} />
@@ -345,7 +346,7 @@ function LanguageSync() {
 }
 
 function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { user, loading, isOffline } = useAuth();
+  const { user, profile, loading, isOffline } = useAuth();
   const segments = useSegments();
   const router = useRouter();
 
@@ -378,6 +379,7 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
     const s = segments as any;
     const inAuthGroup = s[0] === '(auth)';
+    const inOnboardingGroup = s[0] === '(onboarding)';
     const isIndex = s.length === 0 || s.includes('index');
     const isOfflineScreen = (segments as any).includes('offline');
 
@@ -389,14 +391,23 @@ function AuthGuard({ children }: { children: React.ReactNode }) {
 
     if (isOfflineScreen) return;
 
+    const needsOnboarding = user && profile && !profile.onboarding_completed_at;
+
     if (!user && !inAuthGroup && !isIndex) {
       // Redirect to login if user is not authenticated and not in auth group
       router.replace('/(auth)/login');
     } else if (user && inAuthGroup) {
-      // Redirect to buyer home if authenticated user tries to access auth screens
-      router.replace('/(buyer)/(tabs)');
+      // Redirect authenticated user away from auth screens
+      if (needsOnboarding) {
+        router.replace('/(onboarding)/' as any);
+      } else {
+        router.replace('/(buyer)/(tabs)');
+      }
+    } else if (needsOnboarding && isIndex) {
+      // User landed on index but needs onboarding
+      router.replace('/(onboarding)/' as any);
     }
-  }, [user, loading, isOffline, segments, router]);
+  }, [user, profile, loading, isOffline, segments, router]);
 
   return <>{children}</>;
 }

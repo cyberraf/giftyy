@@ -7,7 +7,7 @@ import React from 'react';
 import { ActivityIndicator, View } from 'react-native';
 
 export default function BuyerRootLayout() {
-	const { user, loading } = useAuth();
+	const { user, profile, loading } = useAuth();
 
 	if (loading) {
 		return (
@@ -19,6 +19,10 @@ export default function BuyerRootLayout() {
 
 	if (!user) {
 		return <Redirect href="/(auth)/login" />;
+	}
+
+	if (profile && !profile.onboarding_completed_at) {
+		return <Redirect href={"/(onboarding)/" as any} />;
 	}
 
 	return (

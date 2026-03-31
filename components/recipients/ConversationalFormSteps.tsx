@@ -48,6 +48,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/lib/supabase';
 
 const BRAND_COLOR = '#f75507';
+const GIFTYY_AVATAR = require('@/assets/images/giftyy.png');
 /** Invite link - Universal Links open app when installed; otherwise users get web fallback. */
 const INVITE_BASE_URL = 'https://giftyy.store/invite';
 
@@ -1373,8 +1374,10 @@ export function Step4_Demographics({ formData, updateFormData, isSelf, ...props 
 
     return (
         <ConversationalStep
-            question={isSelf ? "Help me understand you better" : `Help me understand ${formData?.firstName || 'them'} better`}
-            emoji="✨"
+            question={isSelf ? "Hey! Let's start with the basics so I can get to know you." : `Help me understand ${formData?.firstName || 'them'} better`}
+            avatarSource={isSelf ? GIFTYY_AVATAR : undefined}
+            emoji={isSelf ? undefined : "✨"}
+            description={isSelf ? "This helps me suggest gifts that truly match who you are." : undefined}
             required={false}
             {...props}
             onNext={handleNext}
@@ -1426,13 +1429,10 @@ export function Step4_Demographics({ formData, updateFormData, isSelf, ...props 
 }
 
 // ============================================
-// STEP 5: Interests
+// STEP 5a: Interests — Activities
 // ============================================
-export function Step5_Interests({ formData, updateFormData, isSelf, ...props }: StepProps) {
+export function Step5a_Interests({ formData, updateFormData, isSelf, ...props }: StepProps) {
     const [sports, setSports] = useState(formData?.preferences?.sportsActivities || []);
-    const [hobbies, setHobbies] = useState(formData?.preferences?.creativeHobbies || []);
-    const [collecting, setCollecting] = useState(formData?.preferences?.collectingInterests || []);
-    const [tech, setTech] = useState(formData?.preferences?.techInterests || []);
     const [outdoor, setOutdoor] = useState(formData?.preferences?.outdoorActivities || []);
     const [indoor, setIndoor] = useState(formData?.preferences?.indoorActivities || []);
 
@@ -1441,9 +1441,6 @@ export function Step5_Interests({ formData, updateFormData, isSelf, ...props }: 
             preferences: {
                 ...formData?.preferences,
                 sportsActivities: sports,
-                creativeHobbies: hobbies,
-                collectingInterests: collecting,
-                techInterests: tech,
                 outdoorActivities: outdoor,
                 indoorActivities: indoor,
             },
@@ -1457,9 +1454,6 @@ export function Step5_Interests({ formData, updateFormData, isSelf, ...props }: 
             preferences: {
                 ...formData?.preferences,
                 sportsActivities: sports,
-                creativeHobbies: hobbies,
-                collectingInterests: collecting,
-                techInterests: tech,
                 outdoorActivities: outdoor,
                 indoorActivities: indoor,
             },
@@ -1469,9 +1463,10 @@ export function Step5_Interests({ formData, updateFormData, isSelf, ...props }: 
 
     return (
         <ConversationalStep
-            question={isSelf ? "What brings joy to your life?" : `What brings joy to ${formData?.firstName || 'their'} life?`}
-            emoji="🌟"
-            description={isSelf ? "The things that make you come alive" : "The things that make them come alive"}
+            question={isSelf ? "What do you love doing?" : `What brings joy to ${formData?.firstName || 'their'} life?`}
+            avatarSource={isSelf ? GIFTYY_AVATAR : undefined}
+            emoji={isSelf ? undefined : "🌟"}
+            description={isSelf ? "Sports and activities you enjoy" : "The activities that make them come alive"}
             required={false}
             {...props}
             onNext={handleNext}
@@ -1482,15 +1477,6 @@ export function Step5_Interests({ formData, updateFormData, isSelf, ...props }: 
                 options={SPORTS_ACTIVITIES_OPTIONS}
                 selected={sports}
                 onChange={setSports}
-                placeholder="Select sports..."
-            />
-
-            <MultiSelectChips
-                label="Creative Hobbies"
-                options={CREATIVE_HOBBIES_OPTIONS}
-                selected={hobbies}
-                onChange={setHobbies}
-                placeholder="Select hobbies..."
             />
 
             <MultiSelectChips
@@ -1498,7 +1484,6 @@ export function Step5_Interests({ formData, updateFormData, isSelf, ...props }: 
                 options={OUTDOOR_ACTIVITIES_OPTIONS}
                 selected={outdoor}
                 onChange={setOutdoor}
-                placeholder="Select outdoor activities..."
             />
 
             <MultiSelectChips
@@ -1506,7 +1491,60 @@ export function Step5_Interests({ formData, updateFormData, isSelf, ...props }: 
                 options={INDOOR_ACTIVITIES_OPTIONS}
                 selected={indoor}
                 onChange={setIndoor}
-                placeholder="Select indoor activities..."
+            />
+        </ConversationalStep>
+    );
+}
+
+// ============================================
+// STEP 5b: Interests — Hobbies & Tech
+// ============================================
+export function Step5b_Interests({ formData, updateFormData, isSelf, ...props }: StepProps) {
+    const [hobbies, setHobbies] = useState(formData?.preferences?.creativeHobbies || []);
+    const [tech, setTech] = useState(formData?.preferences?.techInterests || []);
+    const [collecting, setCollecting] = useState(formData?.preferences?.collectingInterests || []);
+
+    const handleNext = () => {
+        const updates = {
+            preferences: {
+                ...formData?.preferences,
+                creativeHobbies: hobbies,
+                techInterests: tech,
+                collectingInterests: collecting,
+            },
+        };
+        updateFormData?.(updates);
+        props.onNext?.(updates);
+    };
+
+    const handleSaveAndExit = () => {
+        const updates = {
+            preferences: {
+                ...formData?.preferences,
+                creativeHobbies: hobbies,
+                techInterests: tech,
+                collectingInterests: collecting,
+            },
+        };
+        props.onSaveAndExit?.(updates);
+    };
+
+    return (
+        <ConversationalStep
+            question={isSelf ? "Any creative or tech hobbies?" : `Creative side of ${formData?.firstName || 'them'}?`}
+            avatarSource={isSelf ? GIFTYY_AVATAR : undefined}
+            emoji={isSelf ? undefined : "🌟"}
+            description={isSelf ? "Creative, tech, and collecting interests" : "Hobbies, tech, and things they collect"}
+            required={false}
+            {...props}
+            onNext={handleNext}
+            onSaveAndExit={handleSaveAndExit}
+        >
+            <MultiSelectChips
+                label="Creative Hobbies"
+                options={CREATIVE_HOBBIES_OPTIONS}
+                selected={hobbies}
+                onChange={setHobbies}
             />
 
             <MultiSelectChips
@@ -1514,7 +1552,6 @@ export function Step5_Interests({ formData, updateFormData, isSelf, ...props }: 
                 options={TECH_INTERESTS_OPTIONS}
                 selected={tech}
                 onChange={setTech}
-                placeholder="Select tech interests..."
             />
 
             <MultiSelectChips
@@ -1522,7 +1559,6 @@ export function Step5_Interests({ formData, updateFormData, isSelf, ...props }: 
                 options={COLLECTING_INTERESTS_OPTIONS}
                 selected={collecting}
                 onChange={setCollecting}
-                placeholder="Select collecting interests..."
             />
         </ConversationalStep>
     );

@@ -1,143 +1,123 @@
-import { TourStep, useTour } from '@/contexts/TourContext';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useRef } from 'react';
+import { TourStep, TourGroup, useTour } from '@/contexts/TourContext';
+import React from 'react';
 import {
-    Dimensions,
-    Modal,
-    StatusBar,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+	Dimensions,
+	StatusBar,
+	StyleSheet,
+	Text,
+	TouchableOpacity,
+	View,
 } from 'react-native';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('screen');
 
-// On Android, measureInWindow returns Y relative to the app window (below status bar).
-// A Modal with statusBarTranslucent renders from Y=0 = physical screen top.
-// Adding status bar height bridges the two coordinate systems.
 const STATUS_BAR_HEIGHT = StatusBar.currentHeight ?? 0;
 const OVERLAY_COLOR = 'rgba(0,0,0,0.72)';
 
-const STEP_CONTENT: Record<TourStep, { title: string; body: string }> = {
-	'welcome': { title: '👋 Welcome to Giftyy', body: 'Let’s take a quick tour to show you how to find the perfect gifts for your loved ones.' },
+const STEP_CONTENT: Partial<Record<TourStep, { title: string; body: string }>> = {
+	'welcome': { title: '👋 Welcome to Giftyy', body: "Let's take a quick tour of this screen to show you how it works." },
 	'home_ai_chat': { title: '🎁 AI Gift Concierge', body: 'Type anything here! Ask for gift ideas for any occasion, person, or budget. Giftyy AI is here to help.' },
 	'home_tagging': { title: '@ Tag Your Loved Ones', body: 'Use @ to mention a recipient in your prompt. Start typing a name after @ and pick the person you want to include.' },
 	'home_burger_menu': { title: '🍔 Quick Navigation', body: 'Access all areas of the app quickly through the side menu.' },
 	'global_profile': { title: '👤 Your Profile', body: 'Manage your settings, notifications, and orders from your profile menu.' },
-	'shop_intro': { title: '🛍️ Premium Shop', body: 'Browse curated gifts from top vendors. We’ve handpicked the best items for your Circle.' },
+	'shop_intro': { title: '🛍️ Premium Shop', body: "Browse curated gifts from top vendors. We've handpicked the best items for your Circle." },
 	'circle_tab': { title: '🫂 My Circle', body: 'This is where your loved ones live. Add friends and family to see their preferences and occasions.' },
 	'occasions_tab': { title: '📅 My Occasions', body: 'Keep track of your own important dates so your Circle never misses a celebration!' },
 	'preferences_tab': { title: '⭐ My Preferences', body: 'Tell your Circle what you love. We use these to suggest the perfect gifts for you.' },
 	'memories_intro': { title: '📼 Digital Memories', body: 'Relive the joy! Every gift card comes with photos, videos, and reactions saved forever.' },
 	'settings_reminders': { title: '🔔 Reminder Settings', body: 'Choose when you want gift reminders to arrive so you never miss an important celebration.' },
-	'tour_complete': { title: "🎉 You're All Set!", body: 'You’re ready to start gifting. Add someone to your Circle to get started!' }
+};
+
+// Duplicated here to avoid circular import — must stay in sync with TourContext
+const TOUR_GROUP_STEPS: Record<TourGroup, TourStep[]> = {
+	home: ['welcome', 'home_ai_chat', 'home_tagging', 'home_burger_menu', 'global_profile'],
+	shop: ['shop_intro'],
+	recipients: ['circle_tab', 'occasions_tab', 'preferences_tab'],
+	memories: ['memories_intro'],
+	settings: ['settings_reminders'],
 };
 
 export function TourOverlay() {
-    const { isActive, currentStep, elements, nextStep, prevStep, skipTour, completeTour, targetRoute } = useTour();
-    const router = useRouter();
-    const lastRoute = useRef<string | null>(null);
+	const { isActive, currentStep, currentGroup, elements, nextStep, prevStep, skipTour } = useTour();
 
-    useEffect(() => {
-        if (!isActive || !targetRoute) return;
-        if (targetRoute !== lastRoute.current) {
-            lastRoute.current = targetRoute;
-            router.push(targetRoute as any);
-        }
-    }, [isActive, targetRoute]);
+	if (!isActive || !currentStep || !currentGroup) return null;
 
-    if (isActive) {
-        console.log('[TOUR] Overlay Rendering! isActive=true, currentStep=', currentStep);
-    }
+	const target = elements[currentStep];
+	const content = STEP_CONTENT[currentStep];
 
-    if (!isActive || !currentStep) return null;
+	const groupSteps = TOUR_GROUP_STEPS[currentGroup] || [];
+	const stepIdx = groupSteps.indexOf(currentStep);
+	const isFirstStep = stepIdx === 0;
+	const isLastStep = stepIdx === groupSteps.length - 1;
 
-    // Helpers that close the tour and go home
-    const handleSkip = async () => {
-        await skipTour();
-        router.replace('/(buyer)/(tabs)' as any);
-    };
-    const handleFinish = async () => {
-        if (isLastStep) {
-            // Mark tour as completed and prevent future auto-starts
-            await completeTour();
-            router.replace('/(buyer)/(tabs)' as any);
-        } else {
-            nextStep();
-        }
-    };
+	// Element coordinates, corrected for Modal's physical screen origin
+	const rawY = target?.ready ? target.y : SCREEN_HEIGHT / 2;
+	const cx = target?.ready ? target.x : SCREEN_WIDTH / 2;
+	const cy = rawY + STATUS_BAR_HEIGHT;
+	const cw = target?.ready ? target.width : 0;
+	const ch = target?.ready ? target.height : 0;
 
-    const target = elements[currentStep];
-    const content = STEP_CONTENT[currentStep];
+	// Tooltip placement: above element when bottom space is tight
+	const spaceBelow = SCREEN_HEIGHT - (cy + ch);
+	const tooltipTop = spaceBelow < 300
+		? Math.max(STATUS_BAR_HEIGHT + 20, cy - 30 - 240)
+		: cy + ch + 20;
 
-    // Element coordinates, corrected for Modal's physical screen origin
-    const rawY = target?.ready ? target.y : SCREEN_HEIGHT / 2;
-    const cx = target?.ready ? target.x : SCREEN_WIDTH / 2;
-    const cy = rawY + STATUS_BAR_HEIGHT;
-    const cw = target?.ready ? target.width : 0;
-    const ch = target?.ready ? target.height : 0;
+	const handleFinish = () => {
+		if (isLastStep) {
+			skipTour(); // marks group complete and closes
+		} else {
+			nextStep();
+		}
+	};
 
-    // Tooltip placement: above element when bottom space is tight
-    const spaceBelow = SCREEN_HEIGHT - (cy + ch);
-    const tooltipTop = spaceBelow < 300
-        ? Math.max(STATUS_BAR_HEIGHT + 20, cy - 30 - 240) // More clearance above
-        : cy + ch + 20;
+	return (
+		<Animated.View
+			entering={FadeIn.duration(300)}
+			exiting={FadeOut.duration(250)}
+			style={[StyleSheet.absoluteFill, { zIndex: 9999, pointerEvents: 'box-none' }]}
+		>
+			{/* 4-panel spotlight */}
+			<View style={[styles.panel, { top: 0, left: 0, right: 0, height: Math.max(0, cy) }]} />
+			<View style={[styles.panel, { top: cy + ch, left: 0, right: 0, bottom: 0 }]} />
+			<View style={[styles.panel, { top: cy, left: 0, width: Math.max(0, cx), height: ch }]} />
+			<View style={[styles.panel, { top: cy, left: cx + cw, right: 0, height: ch }]} />
 
-    const isLastStep = currentStep === 'tour_complete';
-    const isFirstStep = currentStep === 'welcome';
+			{/* Tooltip card */}
+			{content && (
+				<Animated.View
+					entering={FadeIn.duration(250)}
+					exiting={FadeOut.duration(200)}
+					style={[styles.tooltipCard, { top: tooltipTop }]}
+					pointerEvents="box-none"
+				>
+					<Text style={styles.tooltipTitle}>{content.title}</Text>
+					<Text style={styles.tooltipBody}>{content.body}</Text>
 
-    return (
-        <Animated.View
-            entering={FadeIn.duration(300)}
-            exiting={FadeOut.duration(250)}
-            style={[StyleSheet.absoluteFill, { zIndex: 9999, pointerEvents: 'box-none' }]}
-        >
-            {/*
-             * 4-panel spotlight approach:
-             * The element is left UNCOVERED (transparent hole).
-             * Four dark panels surround it — top, bottom, left, right.
-             */}
-            {/* Top */}
-            <View style={[styles.panel, { top: 0, left: 0, right: 0, height: Math.max(0, cy) }]} />
-            {/* Bottom */}
-            <View style={[styles.panel, { top: cy + ch, left: 0, right: 0, bottom: 0 }]} />
-            {/* Left */}
-            <View style={[styles.panel, { top: cy, left: 0, width: Math.max(0, cx), height: ch }]} />
-            {/* Right */}
-            <View style={[styles.panel, { top: cy, left: cx + cw, right: 0, height: ch }]} />
+					{groupSteps.length > 1 && (
+						<Text style={styles.stepIndicator}>{stepIdx + 1} of {groupSteps.length}</Text>
+					)}
 
-            {/* Tooltip card */}
-            {content && (
-                <Animated.View
-                    entering={FadeIn.duration(250)}
-                    exiting={FadeOut.duration(200)}
-                    style={[styles.tooltipCard, { top: tooltipTop }]}
-                    pointerEvents="box-none"
-                >
-                    <Text style={styles.tooltipTitle}>{content.title}</Text>
-                    <Text style={styles.tooltipBody}>{content.body}</Text>
-
-                    <View style={styles.tooltipActions}>
-                        <TouchableOpacity onPress={handleSkip} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-                            <Text style={styles.skipText}>Skip Tour</Text>
-                        </TouchableOpacity>
-                        <View style={styles.rightActions}>
-                            {!isFirstStep && (
-                                <TouchableOpacity onPress={prevStep} style={styles.backBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-                                    <Text style={styles.backText}>← Back</Text>
-                                </TouchableOpacity>
-                            )}
-                            <TouchableOpacity onPress={handleFinish} style={styles.nextBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-                                <Text style={styles.nextText}>{isLastStep ? 'Finish 🎉' : 'Next →'}</Text>
-                            </TouchableOpacity>
-                        </View>
-                    </View>
-                </Animated.View>
-            )}
-        </Animated.View>
-    );
+					<View style={styles.tooltipActions}>
+						<TouchableOpacity onPress={skipTour} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+							<Text style={styles.skipText}>Skip</Text>
+						</TouchableOpacity>
+						<View style={styles.rightActions}>
+							{!isFirstStep && (
+								<TouchableOpacity onPress={prevStep} style={styles.backBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+									<Text style={styles.backText}>← Back</Text>
+								</TouchableOpacity>
+							)}
+							<TouchableOpacity onPress={handleFinish} style={styles.nextBtn} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+								<Text style={styles.nextText}>{isLastStep ? 'Got it! ✨' : 'Next →'}</Text>
+							</TouchableOpacity>
+						</View>
+					</View>
+				</Animated.View>
+			)}
+		</Animated.View>
+	);
 }
 
 const styles = StyleSheet.create({
@@ -170,7 +150,14 @@ const styles = StyleSheet.create({
 		fontSize: 16,
 		color: '#4b5563',
 		lineHeight: 24,
-		marginBottom: 24,
+		marginBottom: 16,
+	},
+	stepIndicator: {
+		fontSize: 12,
+		fontWeight: '600',
+		color: '#9ca3af',
+		textAlign: 'center',
+		marginBottom: 16,
 	},
 	tooltipActions: {
 		flexDirection: 'row',
@@ -199,7 +186,7 @@ const styles = StyleSheet.create({
 		fontSize: 15,
 	},
 	nextBtn: {
-		backgroundColor: '#f75507', // Giftyy Primary
+		backgroundColor: '#f75507',
 		paddingHorizontal: 28,
 		paddingVertical: 12,
 		borderRadius: 14,

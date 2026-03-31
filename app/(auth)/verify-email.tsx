@@ -37,7 +37,7 @@ export default function VerifyEmailScreen() {
 				type: 'signup',
 				email,
 				options: {
-					emailRedirectTo: 'https://giftyy.store/auth/confirm',
+					emailRedirectTo: 'https://giftyy.store/auth/confirm?source=mobile',
 				},
 			});
 

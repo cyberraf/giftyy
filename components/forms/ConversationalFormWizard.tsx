@@ -1,9 +1,6 @@
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import React, { useRef, useState } from 'react';
-import { Animated, Dimensions, Easing, Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const SLIDE_DISTANCE = SCREEN_WIDTH * 0.25; // Slide 25% of screen for a subtle, premium feel
+import { Modal, ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 type ConversationalFormWizardProps = {
     children: React.ReactNode;
@@ -13,6 +10,8 @@ type ConversationalFormWizardProps = {
     initialData?: any;
     hideProgress?: boolean;
     initialStep?: number;
+    /** When provided, the progress bar shows preference completion % instead of step count */
+    completionCalculator?: (formData: any) => { percentage: number; filled: number; total: number };
 };
 
 /**
@@ -27,79 +26,18 @@ export function ConversationalFormWizard({
     initialData = {},
     hideProgress = false,
     initialStep = 0,
+    completionCalculator,
 }: ConversationalFormWizardProps) {
     const [currentStep, setCurrentStep] = useState(initialStep);
     const [formData, setFormData] = useState(initialData);
     const [showSelector, setShowSelector] = useState(false);
     const historyRef = useRef<number[]>([initialStep]); // Navigation history stack
 
-    // Animation refs
-    const progressAnim = useRef(new Animated.Value(((0 + 1) / Math.max(1, React.Children.count(children))) * 100)).current;
-    const fadeAnim = useRef(new Animated.Value(1)).current;
-    const slideAnim = useRef(new Animated.Value(0)).current;
-    const directionRef = useRef<'forward' | 'backward'>('forward');
-    const isAnimatingRef = useRef(false);
-
     const steps = React.Children.toArray(children);
     const totalSteps = steps.length;
 
-    const animateToStep = (nextStep: number, direction: 'forward' | 'backward') => {
-        if (isAnimatingRef.current) return;
-        isAnimatingRef.current = true;
-        directionRef.current = direction;
-
-        const slideOut = direction === 'forward' ? -SLIDE_DISTANCE : SLIDE_DISTANCE;
-        const slideIn = direction === 'forward' ? SLIDE_DISTANCE : -SLIDE_DISTANCE;
-
-        // Phase 1: Slide + fade out current step
-        Animated.parallel([
-            Animated.timing(fadeAnim, {
-                toValue: 0,
-                duration: 180,
-                easing: Easing.out(Easing.cubic),
-                useNativeDriver: true,
-            }),
-            Animated.timing(slideAnim, {
-                toValue: slideOut,
-                duration: 180,
-                easing: Easing.out(Easing.cubic),
-                useNativeDriver: true,
-            }),
-        ]).start(() => {
-            // Swap step
-            setCurrentStep(nextStep);
-
-            // Position new step at entrance point
-            slideAnim.setValue(slideIn);
-
-            // Animate progress bar
-            const progress = ((nextStep + 1) / totalSteps) * 100;
-            Animated.timing(progressAnim, {
-                toValue: progress,
-                duration: 400,
-                easing: Easing.out(Easing.cubic),
-                useNativeDriver: false,
-            }).start();
-
-            // Phase 2: Slide + fade in new step with spring feel
-            Animated.parallel([
-                Animated.timing(fadeAnim, {
-                    toValue: 1,
-                    duration: 300,
-                    easing: Easing.out(Easing.cubic),
-                    useNativeDriver: true,
-                }),
-                Animated.spring(slideAnim, {
-                    toValue: 0,
-                    damping: 22,
-                    stiffness: 220,
-                    mass: 0.8,
-                    useNativeDriver: true,
-                }),
-            ]).start(() => {
-                isAnimatingRef.current = false;
-            });
-        });
+    const goToStep = (nextStep: number) => {
+        setCurrentStep(nextStep);
     };
 
     // Initial progress and step validation
@@ -124,8 +62,6 @@ export function ConversationalFormWizard({
             }
         }
 
-        const progress = ((validatedStep + 1) / totalSteps) * 100;
-        progressAnim.setValue(progress);
     }, [totalSteps]);
 
     const handleNext = (stepData?: any) => {
@@ -147,7 +83,7 @@ export function ConversationalFormWizard({
 
         if (nextStep < totalSteps) {
             historyRef.current.push(nextStep);
-            animateToStep(nextStep, 'forward');
+            goToStep(nextStep);
         } else {
             // Final step - complete the form
             onComplete(updatedData);
@@ -159,7 +95,7 @@ export function ConversationalFormWizard({
         if (historyRef.current.length > 1) {
             historyRef.current.pop(); // Remove current step
             const prevStep = historyRef.current[historyRef.current.length - 1];
-            animateToStep(prevStep, 'backward');
+            goToStep(prevStep);
         } else if (onCancel) {
             onCancel();
         }
@@ -170,9 +106,8 @@ export function ConversationalFormWizard({
     };
 
     const handleJumpToStep = (targetStep: number) => {
-        const direction = targetStep > currentStep ? 'forward' : 'backward';
         historyRef.current.push(targetStep);
-        animateToStep(targetStep, direction);
+        goToStep(targetStep);
         setShowSelector(false);
     };
 
@@ -245,44 +180,41 @@ export function ConversationalFormWizard({
             </Modal>
 
             {/* Progress Indicator */}
-            {!hideProgress && (
-                <TouchableOpacity
-                    style={styles.progressContainer}
-                    onPress={() => setShowSelector(true)}
-                    activeOpacity={0.7}
-                >
-                    <View style={styles.progressHeader}>
-                        <Text style={styles.progressText}>
-                            Step {currentStep + 1} of {totalSteps}
-                        </Text>
-                        <Text style={styles.jumpHint}>TAP TO JUMP →</Text>
-                    </View>
-                    <View style={styles.progressBar}>
-                        <Animated.View
-                            style={[
-                                styles.progressFill,
-                                {
-                                    width: progressAnim.interpolate({
-                                        inputRange: [0, 100],
-                                        outputRange: ['0%', '100%']
-                                    }),
-                                }
-                            ]}
-                        />
-                    </View>
-                </TouchableOpacity>
-            )}
+            {!hideProgress && (() => {
+                const completion = completionCalculator?.(formData);
+                const pct = completion
+                    ? Math.round(completion.percentage * 100)
+                    : Math.round(((currentStep + 1) / totalSteps) * 100);
 
-            {/* Step Container with Animated Transitions */}
-            <Animated.View
-                style={[
-                    styles.stepContainer,
-                    {
-                        opacity: fadeAnim,
-                        transform: [{ translateX: slideAnim }],
-                    },
-                ]}
-            >
+                return (
+                    <TouchableOpacity
+                        style={styles.progressContainer}
+                        onPress={() => setShowSelector(true)}
+                        activeOpacity={0.7}
+                    >
+                        <View style={styles.progressHeader}>
+                            <Text style={styles.progressText}>
+                                {completion
+                                    ? `${pct}% Complete`
+                                    : `Step ${currentStep + 1} of ${totalSteps}`
+                                }
+                            </Text>
+                            <Text style={styles.jumpHint}>TAP TO JUMP →</Text>
+                        </View>
+                        <View style={styles.progressBar}>
+                            <View
+                                style={[
+                                    styles.progressFill,
+                                    { width: `${pct}%` },
+                                ]}
+                            />
+                        </View>
+                    </TouchableOpacity>
+                );
+            })()}
+
+            {/* Step Container */}
+            <View style={styles.stepContainer}>
                 {steps[currentStep] ? React.cloneElement(steps[currentStep] as React.ReactElement<any>, {
                     formData,
                     updateFormData,
@@ -303,7 +235,7 @@ export function ConversationalFormWizard({
                         <Text>Step not found</Text>
                     </View>
                 )}
-            </Animated.View>
+            </View>
         </View>
     );
 }

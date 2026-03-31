@@ -1,6 +1,7 @@
 import { MemoryThumbnail } from '@/components/memory/MemoryThumbnail';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { TourAnchor } from '@/components/tour/TourAnchor';
+import { useTour } from '@/contexts/TourContext';
 import { BOTTOM_BAR_TOTAL_SPACE } from '@/constants/bottom-bar';
 import { BRAND_COLOR, BRAND_FONT } from '@/constants/theme';
 import { useAlert } from '@/contexts/AlertContext';
@@ -149,6 +150,14 @@ export default function MemoryTabScreen() {
     const [uploadProgress, setUploadProgress] = useState(0);
     const { alert: showAlert } = useAlert();
     const { t } = useTranslation();
+
+    // Per-screen tour
+    const { startTour, isGroupCompleted } = useTour();
+    useEffect(() => {
+        isGroupCompleted('memories').then(done => {
+            if (!done) setTimeout(() => startTour('memories'), 1000);
+        });
+    }, []);
 
     // Convert video messages to memory items
     const messageVideos = useMemo(() => {

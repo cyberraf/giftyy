@@ -3,6 +3,7 @@
  * Main modal component that integrates all steps
  */
 
+import { CategoryIntroStep } from '@/components/forms/CategoryIntroStep';
 import { ConversationalFormWizard } from '@/components/forms/ConversationalFormWizard';
 import {
     Step0_Search,
@@ -12,20 +13,25 @@ import {
     Step3_ClaimProfile,
     Step3_Contact,
     Step4_Demographics,
-    Step5_Interests,
+    Step5a_Interests,
+    Step5b_Interests,
 } from '@/components/recipients/ConversationalFormSteps';
 import {
     Step10_5_Sizes,
     Step10_GiftGuidance,
     Step11_LifeContext,
-    Step12_PersonalityAndConstraints,
+    Step12a_Personality,
+    Step12b_Sensitivities,
     Step13_Summary,
     Step6_Style,
-    Step7_Entertainment,
+    Step7a_Entertainment,
+    Step7b_Entertainment,
     Step8_Food,
     Step9_Lifestyle,
+    StepMilestone_60,
 } from '@/components/recipients/ConversationalFormSteps2';
 import { useAuth } from '@/contexts/AuthContext';
+import { calculatePreferenceCompletion, PREFERENCE_THRESHOLD } from '@/lib/utils/onboarding';
 import type { Recipient } from '@/contexts/RecipientsContext';
 import { useRecipients } from '@/contexts/RecipientsContext';
 import { supabase } from '@/lib/supabase';
@@ -364,16 +370,133 @@ export function ConversationalRecipientForm({
                             label="Claim Profile"
                             shouldShow={(data: any) => !!(isSelf && data.matchedPhantom)}
                         />,
+
+                        // --- Preference categories with Giftyy intro screens (isSelf only) ---
+
+                        isSelf && <CategoryIntroStep
+                            key="intro-basics"
+                            label="Intro: Basics"
+                            categoryKey="basics"
+                            categoryEmoji="✨"
+                            title="The Basics"
+                            message="Quick questions about you — age, gender, pronouns."
+                            shouldShow={() => !!isSelf}
+                        />,
                         <Step4_Demographics key="basics" label="Basics" isSelf={isSelf} />,
-                        <Step5_Interests key="interests" label="Interests" isSelf={isSelf} />,
+
+                        isSelf && <CategoryIntroStep
+                            key="intro-interests"
+                            label="Intro: Interests"
+                            categoryKey="interests"
+                            categoryEmoji="🎯"
+                            title="Your Interests"
+                            message="Sports, hobbies, tech, creative stuff — what excites you?"
+                            shouldShow={() => !!isSelf}
+                        />,
+                        <Step5a_Interests key="interests-a" label="Activities" isSelf={isSelf} />,
+                        <Step5b_Interests key="interests-b" label="Hobbies & Tech" isSelf={isSelf} />,
+
+                        isSelf && <CategoryIntroStep
+                            key="intro-style"
+                            label="Intro: Style"
+                            categoryKey="style"
+                            categoryEmoji="🎨"
+                            title="Style & Aesthetics"
+                            message="Fashion, colors, home décor — what's your vibe?"
+                            shouldShow={() => !!isSelf}
+                        />,
                         <Step6_Style key="style" label="Style" isSelf={isSelf} />,
-                        <Step7_Entertainment key="ent" label="Entertainment" isSelf={isSelf} />,
+
+                        isSelf && <CategoryIntroStep
+                            key="intro-entertainment"
+                            label="Intro: Entertainment"
+                            categoryKey="entertainment"
+                            categoryEmoji="🎬"
+                            title="Entertainment"
+                            message="Music, movies, shows, books — what are you into?"
+                            shouldShow={() => !!isSelf}
+                        />,
+                        <Step7a_Entertainment key="ent-a" label="Music & Shows" isSelf={isSelf} />,
+                        <Step7b_Entertainment key="ent-b" label="Books & Podcasts" isSelf={isSelf} />,
+
+                        isSelf && <CategoryIntroStep
+                            key="intro-food"
+                            label="Intro: Food & Drink"
+                            categoryKey="food"
+                            categoryEmoji="🍽️"
+                            title="Food & Drink"
+                            message="Dietary preferences, cuisines, and drink choices."
+                            shouldShow={() => !!isSelf}
+                        />,
                         <Step8_Food key="food" label="Food & Drink" isSelf={isSelf} />,
+
+                        isSelf && <CategoryIntroStep
+                            key="intro-lifestyle"
+                            label="Intro: Lifestyle"
+                            categoryKey="lifestyle"
+                            categoryEmoji="🌿"
+                            title="Lifestyle & Values"
+                            message="Your values, wellness, and daily routine."
+                            shouldShow={() => !!isSelf}
+                        />,
                         <Step9_Lifestyle key="lifestyle" label="Lifestyle" isSelf={isSelf} />,
+
+                        isSelf && <CategoryIntroStep
+                            key="intro-gifts"
+                            label="Intro: Gift Preferences"
+                            categoryKey="gifts"
+                            categoryEmoji="🎁"
+                            title="Gift Preferences"
+                            message="What gifts make you go 'wow'?"
+                            shouldShow={() => !!isSelf}
+                        />,
                         <Step10_GiftGuidance key="guidance" label="Gift Guidance" isSelf={isSelf} />,
+
+                        isSelf && <StepMilestone_60
+                            key="milestone60"
+                            label="Milestone"
+                            isSelf={isSelf}
+                            shouldShow={(data: any) => {
+                                if (data._milestoneShown) return false;
+                                const prefs = data.preferences || {};
+                                return calculatePreferenceCompletion(prefs).percentage >= PREFERENCE_THRESHOLD;
+                            }}
+                        />,
+
+                        isSelf && <CategoryIntroStep
+                            key="intro-sizes"
+                            label="Intro: Sizes"
+                            categoryKey="sizes"
+                            categoryEmoji="📏"
+                            title="Your Sizes"
+                            message="Optional but helpful for clothing and accessories."
+                            shouldShow={() => !!isSelf}
+                        />,
                         <Step10_5_Sizes key="sizes" label="Sizes" isSelf={isSelf} />,
+
+                        isSelf && <CategoryIntroStep
+                            key="intro-life"
+                            label="Intro: Life Chapter"
+                            categoryKey="life"
+                            categoryEmoji="🌱"
+                            title="Life Chapter"
+                            message="Milestones, transitions, and where you are right now."
+                            shouldShow={() => !!isSelf}
+                        />,
                         <Step11_LifeContext key="life" label="Life Context" isSelf={isSelf} />,
-                        <Step12_PersonalityAndConstraints key="personality" label="Personality" isSelf={isSelf} />,
+
+                        isSelf && <CategoryIntroStep
+                            key="intro-personality"
+                            label="Intro: Personality"
+                            categoryKey="personality"
+                            categoryEmoji="💫"
+                            title="Your Personality"
+                            message="How would your friends describe you?"
+                            shouldShow={() => !!isSelf}
+                        />,
+                        <Step12a_Personality key="personality-a" label="Personality" isSelf={isSelf} />,
+                        <Step12b_Sensitivities key="personality-b" label="Sensitivities" isSelf={isSelf} />,
+
                         <Step13_Summary key="summary" label="Summary" isSelf={isSelf} />,
                     ].filter(Boolean) as React.ReactElement<any>[];
 
@@ -388,6 +511,7 @@ export function ConversationalRecipientForm({
                                 const idx = formSteps.findIndex(child => child.props.label === initialStepLabel);
                                 return idx >= 0 ? idx : 0;
                             })()}
+                            completionCalculator={(data) => calculatePreferenceCompletion(data?.preferences)}
                         >
                             {formSteps}
                         </ConversationalFormWizard>

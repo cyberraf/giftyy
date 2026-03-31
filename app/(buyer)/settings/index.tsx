@@ -1,8 +1,9 @@
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { TourAnchor } from '../../../components/tour/TourAnchor';
+import { useTour } from '../../../contexts/TourContext';
 import { IconSymbol, IconSymbolName } from '../../../components/ui/icon-symbol';
 import { GIFTYY_THEME } from '../../../constants/giftyy-theme';
 import { BRAND_COLOR, BRAND_FONT } from '../../../constants/theme';
@@ -17,6 +18,14 @@ export default function SettingsScreen() {
     const { loading: settingsLoading } = useSettings();
     const [signOutVisible, setSignOutVisible] = useState(false);
     const { t } = useTranslation();
+
+    // Per-screen tour
+    const { startTour, isGroupCompleted } = useTour();
+    useEffect(() => {
+        isGroupCompleted('settings').then(done => {
+            if (!done) setTimeout(() => startTour('settings'), 1000);
+        });
+    }, []);
 
     const handleSignOut = () => setSignOutVisible(true);
     const handleConfirmSignOut = async () => {

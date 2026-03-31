@@ -10,10 +10,6 @@ type SingleSelectDropdownProps = {
     allowClear?: boolean;
 };
 
-/**
- * Single-select dropdown component for preference selection
- * Allows users to select one option from a curated list
- */
 export function SingleSelectDropdown({
     label,
     options,
@@ -24,7 +20,6 @@ export function SingleSelectDropdown({
 }: SingleSelectDropdownProps) {
     const [isOpen, setIsOpen] = useState(false);
 
-    // Normalize options to { value, label } format
     const normalizedOptions = options.map(opt =>
         typeof opt === 'string' ? { value: opt, label: opt } : opt
     );
@@ -47,11 +42,12 @@ export function SingleSelectDropdown({
             <TouchableOpacity
                 style={[styles.selector, selected && styles.selectorSelected]}
                 onPress={() => setIsOpen(true)}
+                activeOpacity={0.7}
             >
                 <Text style={[styles.selectorText, !selected && styles.selectorPlaceholder]}>
                     {selectedOption?.label || placeholder}
                 </Text>
-                <Text style={styles.arrow}>▼</Text>
+                <Text style={styles.arrow}>▾</Text>
             </TouchableOpacity>
 
             {selected && allowClear && (
@@ -60,7 +56,6 @@ export function SingleSelectDropdown({
                 </TouchableOpacity>
             )}
 
-            {/* Modal for options */}
             <Modal
                 visible={isOpen}
                 transparent
@@ -68,40 +63,36 @@ export function SingleSelectDropdown({
                 onRequestClose={() => setIsOpen(false)}
             >
                 <TouchableOpacity
-                    style={styles.modalOverlay}
+                    style={styles.overlay}
                     activeOpacity={1}
                     onPress={() => setIsOpen(false)}
                 >
-                    <View style={styles.modalContent}>
-                        <View style={styles.modalHeader}>
-                            <Text style={styles.modalTitle}>{label}</Text>
+                    <View style={styles.sheet}>
+                        <View style={styles.sheetHandle} />
+                        <View style={styles.sheetHeader}>
+                            <Text style={styles.sheetTitle}>{label}</Text>
                             <TouchableOpacity onPress={() => setIsOpen(false)}>
-                                <Text style={styles.modalClose}>×</Text>
+                                <Text style={styles.sheetClose}>✕</Text>
                             </TouchableOpacity>
                         </View>
 
-                        <ScrollView style={styles.optionsList}>
+                        <ScrollView style={styles.optionsList} showsVerticalScrollIndicator={false}>
                             {normalizedOptions.map(option => {
                                 const isSelected = option.value === selected;
                                 return (
                                     <TouchableOpacity
                                         key={option.value}
-                                        style={[
-                                            styles.option,
-                                            isSelected && styles.optionSelected,
-                                        ]}
+                                        style={[styles.option, isSelected && styles.optionSelected]}
                                         onPress={() => handleSelect(option.value)}
+                                        activeOpacity={0.6}
                                     >
-                                        <Text
-                                            style={[
-                                                styles.optionText,
-                                                isSelected && styles.optionTextSelected,
-                                            ]}
-                                        >
+                                        <Text style={[styles.optionText, isSelected && styles.optionTextSelected]}>
                                             {option.label}
                                         </Text>
                                         {isSelected && (
-                                            <Text style={styles.checkmark}>✓</Text>
+                                            <View style={styles.checkCircle}>
+                                                <Text style={styles.checkMark}>✓</Text>
+                                            </View>
                                         )}
                                     </TouchableOpacity>
                                 );
@@ -114,44 +105,48 @@ export function SingleSelectDropdown({
     );
 }
 
-const BRAND_COLOR = '#f75507';
+const BRAND = '#f75507';
 
 const styles = StyleSheet.create({
     container: {
-        marginBottom: 20,
+        marginBottom: 24,
     },
     label: {
-        fontSize: 16,
-        fontWeight: '600',
-        color: '#2F2318',
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#374151',
+        letterSpacing: 0.3,
+        textTransform: 'uppercase',
         marginBottom: 8,
     },
     selector: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        borderWidth: 1,
-        borderColor: 'rgba(47,35,24,0.2)',
-        borderRadius: 8,
+        borderWidth: 1.5,
+        borderColor: '#E5E7EB',
+        borderRadius: 14,
         paddingHorizontal: 16,
-        paddingVertical: 12,
+        paddingVertical: 14,
         backgroundColor: '#FFFFFF',
     },
     selectorSelected: {
-        borderColor: BRAND_COLOR,
-        backgroundColor: 'rgba(224,123,57,0.05)',
+        borderColor: 'rgba(247, 85, 7, 0.35)',
+        backgroundColor: 'rgba(247, 85, 7, 0.04)',
     },
     selectorText: {
         fontSize: 15,
-        color: '#2F2318',
+        color: '#1F2937',
         flex: 1,
+        fontWeight: '500',
     },
     selectorPlaceholder: {
-        color: 'rgba(47,35,24,0.4)',
+        color: '#9CA3AF',
+        fontWeight: '400',
     },
     arrow: {
-        fontSize: 12,
-        color: 'rgba(47,35,24,0.5)',
+        fontSize: 16,
+        color: '#9CA3AF',
         marginLeft: 8,
     },
     clearButton: {
@@ -159,75 +154,86 @@ const styles = StyleSheet.create({
         alignSelf: 'flex-start',
     },
     clearButtonText: {
-        fontSize: 14,
-        color: BRAND_COLOR,
-        fontWeight: '500',
+        fontSize: 13,
+        color: BRAND,
+        fontWeight: '600',
     },
-    modalOverlay: {
+    overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0,0,0,0.5)',
-        justifyContent: 'center',
-        alignItems: 'center',
-        padding: 20,
+        backgroundColor: 'rgba(0,0,0,0.4)',
+        justifyContent: 'flex-end',
     },
-    modalContent: {
+    sheet: {
         backgroundColor: '#FFFFFF',
-        borderRadius: 16,
-        width: '100%',
-        maxWidth: 400,
-        maxHeight: '70%',
-        shadowColor: '#000',
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 8,
-        elevation: 8,
+        borderTopLeftRadius: 24,
+        borderTopRightRadius: 24,
+        maxHeight: '65%',
+        paddingBottom: 34,
     },
-    modalHeader: {
+    sheetHandle: {
+        width: 36,
+        height: 4,
+        borderRadius: 2,
+        backgroundColor: '#D1D5DB',
+        alignSelf: 'center',
+        marginTop: 10,
+        marginBottom: 8,
+    },
+    sheetHeader: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        padding: 20,
+        paddingHorizontal: 20,
+        paddingVertical: 12,
         borderBottomWidth: 1,
-        borderBottomColor: 'rgba(47,35,24,0.1)',
+        borderBottomColor: '#F3F4F6',
     },
-    modalTitle: {
+    sheetTitle: {
         fontSize: 18,
         fontWeight: '700',
-        color: '#2F2318',
+        color: '#1F2937',
     },
-    modalClose: {
-        fontSize: 32,
-        color: 'rgba(47,35,24,0.5)',
-        fontWeight: '300',
-        lineHeight: 32,
+    sheetClose: {
+        fontSize: 18,
+        color: '#9CA3AF',
+        padding: 4,
     },
     optionsList: {
-        maxHeight: 400,
+        paddingHorizontal: 8,
+        paddingTop: 8,
     },
     option: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 20,
-        paddingVertical: 16,
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(47,35,24,0.05)',
+        paddingHorizontal: 16,
+        paddingVertical: 15,
+        borderRadius: 12,
+        marginBottom: 2,
     },
     optionSelected: {
-        backgroundColor: 'rgba(224,123,57,0.1)',
+        backgroundColor: 'rgba(247, 85, 7, 0.06)',
     },
     optionText: {
         fontSize: 16,
-        color: '#2F2318',
+        color: '#374151',
         flex: 1,
     },
     optionTextSelected: {
-        color: BRAND_COLOR,
+        color: BRAND,
         fontWeight: '600',
     },
-    checkmark: {
-        fontSize: 20,
-        color: BRAND_COLOR,
+    checkCircle: {
+        width: 24,
+        height: 24,
+        borderRadius: 12,
+        backgroundColor: BRAND,
+        alignItems: 'center',
+        justifyContent: 'center',
+    },
+    checkMark: {
+        fontSize: 13,
+        color: '#FFFFFF',
         fontWeight: '700',
     },
 });

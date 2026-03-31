@@ -4,6 +4,7 @@ import { FindFriendsModal } from '@/components/recipients/FindFriendsModal';
 import { RelationshipPickerModal } from '@/components/recipients/RelationshipPickerModal';
 import { ShareInviteModal } from '@/components/recipients/ShareInviteModal';
 import { TourAnchor } from '@/components/tour/TourAnchor';
+import { useTour } from '@/contexts/TourContext';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,6 +14,7 @@ import { useHome } from '@/lib/hooks/useHome';
 import { supabase } from '@/lib/supabase';
 import { formatOccasionDate } from '@/lib/utils/date-formatter';
 import { DEFAULT_HOLIDAYS } from '@/lib/utils/occasion-seeding';
+import { calculatePreferenceCompletion } from '@/lib/utils/onboarding';
 import { dbRowToPreferences, RecipientPreferences } from '@/types/recipient-preferences';
 import { responsiveFontSize, scale, verticalScale } from '@/utils/responsive';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -308,6 +310,14 @@ export default function RecipientsScreen() {
 	const { recipients, loading, refreshRecipients, approveConnection, rejectConnection, addRecipient, deleteRecipient, syncContacts } = useRecipients();
 
 	const { upcomingOccasions, myProfileOccasions, refreshOccasions, myPreferences, myProfileId } = useHome();
+
+	// Per-screen tour
+	const { startTour, isGroupCompleted } = useTour();
+	useEffect(() => {
+		isGroupCompleted('recipients').then(done => {
+			if (!done) setTimeout(() => startTour('recipients'), 1000);
+		});
+	}, []);
 
 	const { tab, findFriends } = useLocalSearchParams<{ 
 		tab?: 'circle' | 'occasions' | 'preferences' | 'me',
@@ -880,6 +890,26 @@ export default function RecipientsScreen() {
 								)}
 							</View>
 
+							{/* Preference Completion Indicator */}
+							{myPrefs && (() => {
+								const { percentage } = calculatePreferenceCompletion(myPrefs);
+								const pct = Math.round(percentage * 100);
+								const color = pct >= 90 ? '#16A34A' : pct >= 60 ? '#F97316' : '#DC2626';
+								return (
+									<View style={styles.completionContainer}>
+										<View style={styles.completionHeader}>
+											<Text style={[styles.completionPct, { color }]}>{pct}% Complete</Text>
+											<Text style={styles.completionHint}>
+												{pct >= 90 ? 'Great job!' : pct >= 60 ? 'Almost there!' : 'Keep going!'}
+											</Text>
+										</View>
+										<View style={styles.completionBar}>
+											<View style={[styles.completionFill, { width: `${pct}%`, backgroundColor: color }]} />
+										</View>
+									</View>
+								);
+							})()}
+
 							{myPrefs ? (
 								<View style={styles.premiumCard}>
 									<PreferencePreview preferences={myPrefs} />
@@ -1367,6 +1397,34 @@ const styles = StyleSheet.create({
 		fontWeight: '800',
 		color: '#059669',
 		letterSpacing: 0.5,
+	},
+	completionContainer: {
+		marginBottom: 16,
+	},
+	completionHeader: {
+		flexDirection: 'row',
+		justifyContent: 'space-between',
+		alignItems: 'center',
+		marginBottom: 6,
+	},
+	completionPct: {
+		fontSize: 14,
+		fontWeight: '700',
+	},
+	completionHint: {
+		fontSize: 12,
+		color: GIFTYY_THEME.colors.gray400,
+		fontWeight: '500',
+	},
+	completionBar: {
+		height: 6,
+		backgroundColor: GIFTYY_THEME.colors.gray100,
+		borderRadius: 3,
+		overflow: 'hidden',
+	},
+	completionFill: {
+		height: '100%',
+		borderRadius: 3,
 	},
 	premiumCard: {
 		backgroundColor: '#FFF',

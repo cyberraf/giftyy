@@ -41,8 +41,11 @@ import {
 } from '@/constants/preference-options';
 import { useRecipients } from '@/contexts/RecipientsContext';
 import React, { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { Image, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { ShareInviteModal } from './ShareInviteModal';
+import { calculatePreferenceCompletion, PREFERENCE_THRESHOLD } from '@/lib/utils/onboarding';
+
+const GIFTYY_AVATAR = require('@/assets/images/giftyy.png');
 
 type StepProps = {
     formData?: any;
@@ -96,9 +99,10 @@ export function Step6_Style({ formData, updateFormData, isSelf, ...props }: Step
 
     return (
         <ConversationalStep
-            question={isSelf ? "What's your vibe?" : `What's ${formData?.firstName || 'their'} vibe?`}
-            emoji="🎨"
-            description={isSelf ? "The colors, styles, and aesthetics that speak to who you are" : "The colors, styles, and aesthetics that speak to who they are"}
+            question={isSelf ? "I love this one! What's your personal style?" : `What's ${formData?.firstName || 'their'} vibe?`}
+            avatarSource={isSelf ? GIFTYY_AVATAR : undefined}
+            emoji={isSelf ? undefined : "🎨"}
+            description={isSelf ? "Fashion, colors, home vibes — it all helps me find the perfect gifts." : "The colors, styles, and aesthetics that speak to who they are"}
             required={false}
             {...props}
             onNext={handleNext}
@@ -146,13 +150,78 @@ export function Step6_Style({ formData, updateFormData, isSelf, ...props }: Step
 }
 
 // ============================================
-// STEP 7: Entertainment & Media
+// STEP 7a: Entertainment — Music, Movies & TV
 // ============================================
-export function Step7_Entertainment({ formData, updateFormData, isSelf, ...props }: StepProps) {
+export function Step7a_Entertainment({ formData, updateFormData, isSelf, ...props }: StepProps) {
     const [music, setMusic] = useState(formData?.preferences?.favoriteMusicGenres || []);
-    const [books, setBooks] = useState(formData?.preferences?.favoriteBooksGenres || []);
     const [movies, setMovies] = useState(formData?.preferences?.favoriteMoviesGenres || []);
     const [tvShows, setTvShows] = useState(formData?.preferences?.favoriteTvShows || []);
+
+    const handleNext = () => {
+        const updates = {
+            preferences: {
+                ...formData?.preferences,
+                favoriteMusicGenres: music,
+                favoriteMoviesGenres: movies,
+                favoriteTvShows: tvShows,
+            },
+        };
+        updateFormData?.(updates);
+        props.onNext?.(updates);
+    };
+
+    const handleSaveAndExit = () => {
+        const updates = {
+            preferences: {
+                ...formData?.preferences,
+                favoriteMusicGenres: music,
+                favoriteMoviesGenres: movies,
+                favoriteTvShows: tvShows,
+            },
+        };
+        props.onSaveAndExit?.(updates);
+    };
+
+    return (
+        <ConversationalStep
+            question={isSelf ? "Music, movies, and shows?" : `What does ${formData?.firstName || 'they'} watch and listen to?`}
+            avatarSource={isSelf ? GIFTYY_AVATAR : undefined}
+            emoji={isSelf ? undefined : "🎵"}
+            description={isSelf ? "What are you into right now?" : "Entertainment preferences for better gifts"}
+            required={false}
+            {...props}
+            onNext={handleNext}
+            onSaveAndExit={handleSaveAndExit}
+        >
+            <MultiSelectChips
+                label="Music Genres"
+                options={MUSIC_GENRES_OPTIONS}
+                selected={music}
+                onChange={setMusic}
+            />
+
+            <MultiSelectChips
+                label="Movie Genres"
+                options={MOVIE_GENRES_OPTIONS}
+                selected={movies}
+                onChange={setMovies}
+            />
+
+            <MultiSelectChips
+                label="TV Shows"
+                options={TV_SHOWS_OPTIONS}
+                selected={tvShows}
+                onChange={setTvShows}
+            />
+        </ConversationalStep>
+    );
+}
+
+// ============================================
+// STEP 7b: Entertainment — Books, Podcasts & Artists
+// ============================================
+export function Step7b_Entertainment({ formData, updateFormData, isSelf, ...props }: StepProps) {
+    const [books, setBooks] = useState(formData?.preferences?.favoriteBooksGenres || []);
     const [podcasts, setPodcasts] = useState(formData?.preferences?.podcastInterests || []);
     const [artists, setArtists] = useState(formData?.preferences?.favoriteArtists || '');
 
@@ -160,10 +229,7 @@ export function Step7_Entertainment({ formData, updateFormData, isSelf, ...props
         const updates = {
             preferences: {
                 ...formData?.preferences,
-                favoriteMusicGenres: music,
                 favoriteBooksGenres: books,
-                favoriteMoviesGenres: movies,
-                favoriteTvShows: tvShows,
                 podcastInterests: podcasts,
                 favoriteArtists: artists,
             },
@@ -176,10 +242,7 @@ export function Step7_Entertainment({ formData, updateFormData, isSelf, ...props
         const updates = {
             preferences: {
                 ...formData?.preferences,
-                favoriteMusicGenres: music,
                 favoriteBooksGenres: books,
-                favoriteMoviesGenres: movies,
-                favoriteTvShows: tvShows,
                 podcastInterests: podcasts,
                 favoriteArtists: artists,
             },
@@ -189,36 +252,27 @@ export function Step7_Entertainment({ formData, updateFormData, isSelf, ...props
 
     return (
         <ConversationalStep
-            question={isSelf ? "What do you love to watch, read & listen to?" : `What does ${formData?.firstName || 'they'} love to watch, read & listen to?`}
-            emoji="🎵"
-            description="Entertainment preferences help us find the perfect gifts"
+            question={isSelf ? "Books, podcasts, and artists?" : `${formData?.firstName || 'Their'} reading and listening?`}
+            avatarSource={isSelf ? GIFTYY_AVATAR : undefined}
+            emoji={isSelf ? undefined : "🎵"}
+            description={isSelf ? "Favorite reads, listens, and creators" : "Books, podcasts, and creators they love"}
             required={false}
             {...props}
             onNext={handleNext}
             onSaveAndExit={handleSaveAndExit}
         >
             <MultiSelectChips
-                label="Music Genres"
-                options={MUSIC_GENRES_OPTIONS}
-                selected={music}
-                onChange={setMusic}
-                placeholder="Select music genres..."
-            />
-
-            <MultiSelectChips
                 label="Book Genres"
                 options={BOOK_GENRES_OPTIONS}
                 selected={books}
                 onChange={setBooks}
-                placeholder="Select book genres..."
             />
 
             <MultiSelectChips
-                label="Movie Genres"
-                options={MOVIE_GENRES_OPTIONS}
-                selected={movies}
-                onChange={setMovies}
-                placeholder="Select movie genres..."
+                label="Podcast Interests"
+                options={PODCAST_INTERESTS_OPTIONS}
+                selected={podcasts}
+                onChange={setPodcasts}
             />
 
             <View style={styles.notesContainer}>
@@ -227,29 +281,13 @@ export function Step7_Entertainment({ formData, updateFormData, isSelf, ...props
                     style={styles.notesInput}
                     value={artists}
                     onChangeText={setArtists}
-                    placeholder="Enter favorite singers, bands, or creators..."
+                    placeholder="Singers, bands, creators..."
                     placeholderTextColor="rgba(47,35,24,0.4)"
                     multiline
                     numberOfLines={2}
                     textAlignVertical="top"
                 />
             </View>
-
-            <MultiSelectChips
-                label="TV Shows"
-                options={TV_SHOWS_OPTIONS}
-                selected={tvShows}
-                onChange={setTvShows}
-                placeholder="Select TV show genres..."
-            />
-
-            <MultiSelectChips
-                label="Podcast Interests"
-                options={PODCAST_INTERESTS_OPTIONS}
-                selected={podcasts}
-                onChange={setPodcasts}
-                placeholder="Select podcast interests..."
-            />
         </ConversationalStep>
     );
 }
@@ -295,8 +333,9 @@ export function Step8_Food({ formData, updateFormData, isSelf, ...props }: StepP
 
     return (
         <ConversationalStep
-            question={isSelf ? "What's your relationship with food & wellness?" : `What's ${formData?.firstName || 'their'} relationship with food & wellness?`}
-            emoji="🍃"
+            question={isSelf ? "OK, important one — what are your food and drink vibes?" : `What's ${formData?.firstName || 'their'} relationship with food & wellness?`}
+            avatarSource={isSelf ? GIFTYY_AVATAR : undefined}
+            emoji={isSelf ? undefined : "🍃"}
             description="Any preferences or things to keep in mind?"
             required={false}
             {...props}
@@ -384,9 +423,10 @@ export function Step9_Lifestyle({ formData, updateFormData, isSelf, ...props }: 
 
     return (
         <ConversationalStep
-            question={isSelf ? "What do you stand for?" : `What does ${formData?.firstName || 'they'} stand for?`}
-            emoji="🌱"
-            description={isSelf ? "Values and lifestyle choices that shape your world" : "Values and lifestyle choices that shape their world"}
+            question={isSelf ? "How would you describe your lifestyle?" : `What does ${formData?.firstName || 'they'} stand for?`}
+            avatarSource={isSelf ? GIFTYY_AVATAR : undefined}
+            emoji={isSelf ? undefined : "🌱"}
+            description={isSelf ? "Your values and lifestyle help me suggest gifts that truly resonate." : "Values and lifestyle choices that shape their world"}
             required={false}
             {...props}
             onNext={handleNext}
@@ -472,9 +512,10 @@ export function Step10_GiftGuidance({ formData, updateFormData, isSelf, ...props
 
     return (
         <ConversationalStep
-            question={isSelf ? "What makes you feel truly appreciated?" : `What makes ${formData?.firstName || 'them'} feel truly appreciated?`}
-            emoji="💖"
-            description={isSelf ? "The gestures and moments that mean the most to you" : "The gestures and moments that mean the most to them"}
+            question={isSelf ? "What kind of gifts make you go 'wow'?" : `What makes ${formData?.firstName || 'them'} feel truly appreciated?`}
+            avatarSource={isSelf ? GIFTYY_AVATAR : undefined}
+            emoji={isSelf ? undefined : "💖"}
+            description={isSelf ? "This is the good stuff — tell me what you actually want!" : "The gestures and moments that mean the most to them"}
             required={false}
             {...props}
             onNext={handleNext}
@@ -576,9 +617,10 @@ export function Step10_5_Sizes({ formData, updateFormData, isSelf, ...props }: S
 
     return (
         <ConversationalStep
-            question={isSelf ? "What are your sizes?" : `What are ${formData?.firstName || 'their'} sizes?`}
-            emoji="📏"
-            description="Perfect for clothing, shoes, and accessory gifts"
+            question={isSelf ? "Quick one — what are your sizes?" : `What are ${formData?.firstName || 'their'} sizes?`}
+            avatarSource={isSelf ? GIFTYY_AVATAR : undefined}
+            emoji={isSelf ? undefined : "📏"}
+            description={isSelf ? "Totally optional, but super helpful for clothing and accessory gifts!" : "Perfect for clothing, shoes, and accessory gifts"}
             required={false}
             {...props}
             onNext={handleNext}
@@ -697,9 +739,10 @@ export function Step11_LifeContext({ formData, updateFormData, isSelf, ...props 
 
     return (
         <ConversationalStep
-            question={isSelf ? "What's your current chapter?" : `What's ${formData?.firstName || 'their'} current chapter?`}
-            emoji="📖"
-            description="Life context helps us find the most relevant and timely gifts"
+            question={isSelf ? "What's your current chapter in life?" : `What's ${formData?.firstName || 'their'} current chapter?`}
+            avatarSource={isSelf ? GIFTYY_AVATAR : undefined}
+            emoji={isSelf ? undefined : "📖"}
+            description={isSelf ? "Life stage, recent events — this helps me pick gifts that fit where you are right now." : "Life context helps us find the most relevant and timely gifts"}
             required={false}
             {...props}
             onNext={handleNext}
@@ -749,18 +792,13 @@ export function Step11_LifeContext({ formData, updateFormData, isSelf, ...props 
 }
 
 // ============================================
-// STEP 12: Personality & Constraints
+// STEP 12a: Personality
 // ============================================
-export function Step12_PersonalityAndConstraints({ formData, updateFormData, isSelf, ...props }: StepProps) {
+export function Step12a_Personality({ formData, updateFormData, isSelf, ...props }: StepProps) {
     const [personality, setPersonality] = useState(formData?.preferences?.personalityTraits || []);
     const [socialPrefs, setSocialPrefs] = useState(formData?.preferences?.socialPreferences);
     const [riskTolerance, setRiskTolerance] = useState(formData?.preferences?.riskTolerance);
     const [learningStyle, setLearningStyle] = useState(formData?.preferences?.learningStyle || []);
-    const [scentSensitivities, setScentSensitivities] = useState(formData?.preferences?.scentSensitivities || []);
-    const [materialSensitivities, setMaterialSensitivities] = useState(formData?.preferences?.materialSensitivities || []);
-    const [physicalLimitations, setPhysicalLimitations] = useState(formData?.preferences?.physicalLimitations || '');
-    const [spaceConstraints, setSpaceConstraints] = useState(formData?.preferences?.spaceConstraints || '');
-    const [additionalNotes, setAdditionalNotes] = useState(formData?.preferences?.additionalNotes || '');
 
     const handleNext = () => {
         const updates = {
@@ -770,11 +808,6 @@ export function Step12_PersonalityAndConstraints({ formData, updateFormData, isS
                 socialPreferences: socialPrefs,
                 riskTolerance,
                 learningStyle,
-                scentSensitivities,
-                materialSensitivities,
-                physicalLimitations: physicalLimitations.trim() || undefined,
-                spaceConstraints: spaceConstraints.trim() || undefined,
-                additionalNotes: additionalNotes.trim() || undefined,
             },
         };
         updateFormData?.(updates);
@@ -789,11 +822,6 @@ export function Step12_PersonalityAndConstraints({ formData, updateFormData, isS
                 socialPreferences: socialPrefs,
                 riskTolerance,
                 learningStyle,
-                scentSensitivities,
-                materialSensitivities,
-                physicalLimitations: physicalLimitations.trim() || undefined,
-                spaceConstraints: spaceConstraints.trim() || undefined,
-                additionalNotes: additionalNotes.trim() || undefined,
             },
         };
         props.onSaveAndExit?.(updates);
@@ -801,9 +829,10 @@ export function Step12_PersonalityAndConstraints({ formData, updateFormData, isS
 
     return (
         <ConversationalStep
-            question={isSelf ? "Any final details about you?" : `Any final details about ${formData?.firstName || 'them'}?`}
-            emoji="🔍"
-            description="Help us get the little things right"
+            question={isSelf ? "How would your friends describe you?" : `How would you describe ${formData?.firstName || 'them'}?`}
+            avatarSource={isSelf ? GIFTYY_AVATAR : undefined}
+            emoji={isSelf ? undefined : "🔍"}
+            description={isSelf ? "Personality and social style" : "Their personality and social preferences"}
             required={false}
             {...props}
             onNext={handleNext}
@@ -814,7 +843,6 @@ export function Step12_PersonalityAndConstraints({ formData, updateFormData, isS
                 options={PERSONALITY_TRAITS_OPTIONS}
                 selected={personality}
                 onChange={setPersonality}
-                placeholder="Select traits..."
             />
 
             <SingleSelectDropdown
@@ -838,15 +866,66 @@ export function Step12_PersonalityAndConstraints({ formData, updateFormData, isS
                 options={LEARNING_STYLE_OPTIONS}
                 selected={learningStyle}
                 onChange={setLearningStyle}
-                placeholder="How do they learn best?"
             />
+        </ConversationalStep>
+    );
+}
 
+// ============================================
+// STEP 12b: Sensitivities & Notes
+// ============================================
+export function Step12b_Sensitivities({ formData, updateFormData, isSelf, ...props }: StepProps) {
+    const [scentSensitivities, setScentSensitivities] = useState(formData?.preferences?.scentSensitivities || []);
+    const [materialSensitivities, setMaterialSensitivities] = useState(formData?.preferences?.materialSensitivities || []);
+    const [physicalLimitations, setPhysicalLimitations] = useState(formData?.preferences?.physicalLimitations || '');
+    const [spaceConstraints, setSpaceConstraints] = useState(formData?.preferences?.spaceConstraints || '');
+    const [additionalNotes, setAdditionalNotes] = useState(formData?.preferences?.additionalNotes || '');
+
+    const handleNext = () => {
+        const updates = {
+            preferences: {
+                ...formData?.preferences,
+                scentSensitivities,
+                materialSensitivities,
+                physicalLimitations: physicalLimitations.trim() || undefined,
+                spaceConstraints: spaceConstraints.trim() || undefined,
+                additionalNotes: additionalNotes.trim() || undefined,
+            },
+        };
+        updateFormData?.(updates);
+        props.onNext?.(updates);
+    };
+
+    const handleSaveAndExit = () => {
+        const updates = {
+            preferences: {
+                ...formData?.preferences,
+                scentSensitivities,
+                materialSensitivities,
+                physicalLimitations: physicalLimitations.trim() || undefined,
+                spaceConstraints: spaceConstraints.trim() || undefined,
+                additionalNotes: additionalNotes.trim() || undefined,
+            },
+        };
+        props.onSaveAndExit?.(updates);
+    };
+
+    return (
+        <ConversationalStep
+            question={isSelf ? "Any sensitivities or things to avoid?" : `Anything to be careful with for ${formData?.firstName || 'them'}?`}
+            avatarSource={isSelf ? GIFTYY_AVATAR : undefined}
+            emoji={isSelf ? undefined : "🔍"}
+            description={isSelf ? "Helps us avoid gifts that don't work for you" : "Sensitivities and special notes"}
+            required={false}
+            {...props}
+            onNext={handleNext}
+            onSaveAndExit={handleSaveAndExit}
+        >
             <MultiSelectChips
                 label="Scent Sensitivities"
                 options={SCENT_SENSITIVITIES_OPTIONS}
                 selected={scentSensitivities}
                 onChange={setScentSensitivities}
-                placeholder="Any scent sensitivities?"
             />
 
             <MultiSelectChips
@@ -854,7 +933,6 @@ export function Step12_PersonalityAndConstraints({ formData, updateFormData, isS
                 options={MATERIAL_SENSITIVITIES_OPTIONS}
                 selected={materialSensitivities}
                 onChange={setMaterialSensitivities}
-                placeholder="Any material sensitivities?"
             />
 
             <View style={styles.notesContainer}>
@@ -863,21 +941,7 @@ export function Step12_PersonalityAndConstraints({ formData, updateFormData, isS
                     style={styles.notesInput}
                     value={physicalLimitations}
                     onChangeText={setPhysicalLimitations}
-                    placeholder="Any mobility issues, dietary restrictions not covered elsewhere, etc..."
-                    placeholderTextColor="rgba(47,35,24,0.4)"
-                    multiline
-                    numberOfLines={2}
-                    textAlignVertical="top"
-                />
-            </View>
-
-            <View style={styles.notesContainer}>
-                <Text style={styles.notesLabel}>Space Constraints</Text>
-                <TextInput
-                    style={styles.notesInput}
-                    value={spaceConstraints}
-                    onChangeText={setSpaceConstraints}
-                    placeholder="Small apartment, lots of clutter, downsizing..."
+                    placeholder="Any mobility or accessibility needs..."
                     placeholderTextColor="rgba(47,35,24,0.4)"
                     multiline
                     numberOfLines={2}
@@ -891,10 +955,10 @@ export function Step12_PersonalityAndConstraints({ formData, updateFormData, isS
                     style={styles.notesInput}
                     value={additionalNotes}
                     onChangeText={setAdditionalNotes}
-                    placeholder={isSelf ? "Anything else about yourself that would help find great gifts?" : `Anything else about ${formData?.firstName || 'them'} we should know?`}
+                    placeholder={isSelf ? "Anything else that would help find great gifts?" : `Anything else about ${formData?.firstName || 'them'}?`}
                     placeholderTextColor="rgba(47,35,24,0.4)"
                     multiline
-                    numberOfLines={4}
+                    numberOfLines={3}
                     textAlignVertical="top"
                 />
             </View>
@@ -944,8 +1008,9 @@ export function Step13_Summary({ formData, updateFormData, isSelf, ...props }: S
 
     return (
         <ConversationalStep
-            question={isSelf ? "Beautiful! Here's your story" : `Beautiful! Here's the story of ${formData?.firstName}`}
-            emoji="✨"
+            question={isSelf ? "Amazing! Here's everything I've learned about you" : `Beautiful! Here's the story of ${formData?.firstName}`}
+            avatarSource={isSelf ? GIFTYY_AVATAR : undefined}
+            emoji={isSelf ? undefined : "✨"}
             description={isSelf ? "You can update your profile anytime" : `You can always add more to ${formData?.firstName || 'their'} profile anytime`}
             required={false}
             {...props}
@@ -1205,5 +1270,152 @@ const styles = StyleSheet.create({
         color: 'rgba(47,35,24,0.6)',
         marginBottom: 6,
         marginLeft: 4,
+    },
+});
+
+// ============================================
+// MILESTONE: 60% Preference Celebration
+// ============================================
+export function StepMilestone_60({ formData, updateFormData, isSelf, ...props }: StepProps) {
+    const completion = calculatePreferenceCompletion(formData?.preferences || {});
+    const pct = Math.round(completion.percentage * 100);
+
+    const handleContinue = () => {
+        updateFormData?.({ _milestoneShown: true });
+        props.onNext?.({ _milestoneShown: true });
+    };
+
+    const handleFinishNow = () => {
+        updateFormData?.({ _milestoneShown: true });
+        props.onSaveAndExit?.({ _milestoneShown: true });
+    };
+
+    return (
+        <View style={milestoneStyles.container}>
+            <View style={milestoneStyles.content}>
+                <Image
+                    source={GIFTYY_AVATAR}
+                    style={milestoneStyles.avatar}
+                    resizeMode="contain"
+                />
+
+                <Text style={milestoneStyles.celebration}>You're amazing!</Text>
+                <Text style={milestoneStyles.percentage}>{pct}% complete</Text>
+
+                <View style={milestoneStyles.messageBubble}>
+                    <Text style={milestoneStyles.messageText}>
+                        I now have enough info to help your friends find the perfect gifts for you!
+                    </Text>
+                </View>
+
+                <View style={milestoneStyles.encourageBubble}>
+                    <Text style={milestoneStyles.encourageText}>
+                        But the more I know, the better the suggestions get. Keep going? It only takes a couple more minutes!
+                    </Text>
+                </View>
+
+                <Pressable style={milestoneStyles.continueButton} onPress={handleContinue}>
+                    <Text style={milestoneStyles.continueText}>Keep Going</Text>
+                </Pressable>
+
+                <Pressable style={milestoneStyles.finishButton} onPress={handleFinishNow}>
+                    <Text style={milestoneStyles.finishText}>Finish for Now</Text>
+                </Pressable>
+            </View>
+        </View>
+    );
+}
+
+const milestoneStyles = StyleSheet.create({
+    container: {
+        flex: 1,
+        backgroundColor: '#fff5f0',
+        justifyContent: 'center',
+        alignItems: 'center',
+        padding: 24,
+    },
+    content: {
+        alignItems: 'center',
+        maxWidth: 340,
+    },
+    avatar: {
+        width: 120,
+        height: 120,
+        marginBottom: 20,
+    },
+    celebration: {
+        fontSize: 32,
+        fontWeight: '900',
+        color: '#1f2937',
+        marginBottom: 4,
+    },
+    percentage: {
+        fontSize: 18,
+        fontWeight: '700',
+        color: '#f75507',
+        marginBottom: 20,
+    },
+    messageBubble: {
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        padding: 20,
+        marginBottom: 12,
+        borderWidth: 1,
+        borderColor: 'rgba(0,0,0,0.04)',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.03,
+        shadowRadius: 12,
+        elevation: 2,
+    },
+    messageText: {
+        fontSize: 16,
+        fontWeight: '600',
+        color: '#1f2937',
+        textAlign: 'center',
+        lineHeight: 24,
+    },
+    encourageBubble: {
+        backgroundColor: '#fff7ed',
+        borderRadius: 16,
+        padding: 16,
+        marginBottom: 28,
+        borderWidth: 1,
+        borderColor: '#fed7aa',
+    },
+    encourageText: {
+        fontSize: 14,
+        fontWeight: '500',
+        color: '#92400e',
+        textAlign: 'center',
+        lineHeight: 20,
+    },
+    continueButton: {
+        backgroundColor: '#f75507',
+        borderRadius: 14,
+        paddingVertical: 16,
+        paddingHorizontal: 40,
+        alignItems: 'center',
+        marginBottom: 12,
+        width: '100%',
+        shadowColor: '#f75507',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 4,
+    },
+    continueText: {
+        fontSize: 16,
+        fontWeight: '700',
+        color: '#fff',
+    },
+    finishButton: {
+        paddingVertical: 12,
+        paddingHorizontal: 24,
+    },
+    finishText: {
+        fontSize: 15,
+        fontWeight: '600',
+        color: '#9ca3af',
     },
 });

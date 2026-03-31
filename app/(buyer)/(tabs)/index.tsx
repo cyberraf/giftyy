@@ -1,4 +1,3 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import HomeAIInterface from '@/components/home/HomeAIInterface';
 import { OccasionList } from '@/components/home/OccasionList';
 import { OnboardingSection, type OnboardingStep } from '@/components/home/OnboardingSection';
@@ -108,17 +107,16 @@ export default function BuyerHomeIndexScreen() {
 	// Check for occasions specifically for others or meaningful profile occasions
 	const hasOccasions = (myProfileOccasions ?? []).length > 0;
 
-	const { startTour } = useTour();
+	const { startTour, isGroupCompleted } = useTour();
 
 	useEffect(() => {
 		let timeoutId: NodeJS.Timeout;
 		const checkTour = async () => {
 			try {
-				const completed = await AsyncStorage.getItem('giftyy_interactive_tour_completed_v1');
+				const completed = await isGroupCompleted('home');
 				if (!completed && user) {
-					// Add a small delay for the app to settle
 					timeoutId = setTimeout(() => {
-						startTour();
+						startTour('home');
 					}, 2000);
 				}
 			} catch (e) {
@@ -130,7 +128,7 @@ export default function BuyerHomeIndexScreen() {
 		return () => {
 			if (timeoutId) clearTimeout(timeoutId);
 		};
-	}, [user, startTour]);
+	}, [user, startTour, isGroupCompleted]);
 
 	// Robust preference check: Ensure at least some key fields are populated
 	const hasPreferences = useMemo(() => {
