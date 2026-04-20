@@ -1,0 +1,729 @@
+{
+  "auth": {
+    "error": "Authentication error"
+  },
+  "common": {
+    "error": "Error"
+  },
+  "settings": {
+    "title": "Settings",
+    "notification_preferences": "Notification preferences",
+    "reminder_schedule": "Reminder schedule",
+    "reminder_subtitle": "When should we remind you about upcoming occasions?",
+    "preferred_language": "Preferred language",
+    "language_subtitle": "Which language would you like to use?",
+    "privacy_settings": "Privacy settings",
+    "privacy_policy": "Privacy policy",
+    "privacy_policy_subtitle": "Read our privacy policy",
+    "sign_out": "Sign out",
+    "sign_out_confirm": "Sign out?",
+    "sign_out_subtitle": "We’ll keep your preferences saved. You can sign back in anytime.",
+    "cancel": "Cancel",
+    "push_notifications": "Push notifications",
+    "push_notifications_subtitle": "Receive push notifications on your device",
+    "occasion_reminders": "Occasion reminders",
+    "occasion_reminders_subtitle": "Reminders about upcoming events and deadlines",
+    "order_updates": "Order updates",
+    "order_updates_subtitle": "Get notified about your order status",
+    "email_notifications": "Email notifications",
+    "email_notifications_subtitle": "Receive important updates via email",
+    "day_of": "Day of",
+    "day_before": "{{count}} day before",
+    "days_before": "{{count}} days before",
+    "week_before": "{{count}} week before",
+    "weeks_before": "{{count}} weeks before",
+    "month_before": "{{count}} month before",
+    "day_of_event": "Day of",
+    "days_before_count": "{{count}} days before",
+    "week_before_count": "{{count}} week before",
+    "weeks_before_count": "{{count}} weeks before",
+    "month_before_count": "{{count}} month before",
+    "error": "An error occurred in settings",
+    "go_back": "Go back"
+  },
+  "languages": {
+    "en": "English",
+    "es": "Spanish",
+    "fr": "French",
+    "de": "German",
+    "soon": "Soon"
+  },
+  "navigation": {
+    "home": "Home",
+    "shop": "Shop",
+    "cart": "Cart",
+    "memories": "Memories",
+    "profile": "Profile"
+  },
+  "home": {
+    "greeting": "Hi, {{name}}! 👋",
+    "fallback_name": "there",
+    "subtitle": "How can I help you find the perfect gift?",
+    "ai_title": "Giftyy AI",
+    "ai_placeholder": "Ask me anything... 'Gift for mom under $30'",
+    "quick_prompts": {
+      "birthday": "Birthday gift ideas",
+      "romantic": "Romantic gifts",
+      "surprise": "Surprise me",
+      "popular": "Popular gifts"
+    },
+    "stats": {
+      "upcoming_birthday": "Upcoming Birthday",
+      "upcoming_birthdays": "Upcoming Birthdays"
+    },
+    "recipients": {
+      "title": "Your Recipients",
+      "see_all": "See All",
+      "loading": "Loading recipients...",
+      "empty_title": "Add Your First Recipient",
+      "empty_subtitle": "Start by adding people you'd like to send gifts to",
+      "add": "Add"
+    },
+    "ai_greeting": "Hi {{name}}, I'm Giftyy! Who are we celebrating today? Describe them to me, or tag them with @ if they're already in your circle! ✨",
+    "ai_thinking": "Giftyy is thinking...",
+    "ai_finding_gifts": "Finding the perfect gifts for {{name}}",
+    "ai_limit_reached": "You have reached the limit of 3 AI chat sessions. ✨ Please delete an older session from your history to start a new one!",
+    "ai_refinement_fallback": "I'm sorry, I'm having a little trouble finding perfect matches right now. Let's try refining the interests or budget! ✨",
+    "ai_error_fallback": "I'm sorry, I'm having trouble connecting to Giftyy right now. Please try again later.",
+    "shop_cta": {
+      "title": "Browse Our Shop",
+      "subtitle": "Discover thousands of unique gifts"
+    }
+  },
+  "occasions": {
+    "coming_up": "Coming up",
+    "today": "Today! 🎉",
+    "tomorrow": "Tomorrow",
+    "in_days": "in {{count}}d",
+    "in_weeks": "in {{count}}w",
+    "in_months": "in {{count}}mo",
+    "loading": "Loading…",
+    "empty_title": "No upcoming occasions yet",
+    "empty_subtitle": "Add birthdays or special dates so you never miss a moment.",
+    "add_button": "Add an occasion",
+    "home_empty_title": "Your Circle is quiet",
+    "home_empty_subtitle": "Find friends to see their upcoming birthdays and celebrations!",
+    "find_friends_button": "Find Friends"
+  },
+  "shop": {
+    "search_placeholder": "Search for gifts...",
+    "category_labels": {
+      "birthday": "Birthday",
+      "valentine": "Valentine",
+      "mother": "Mother",
+      "father": "Father",
+      "christmas": "Christmas",
+      "couples": "Couples",
+      "kids": "Kids",
+      "luxury": "Luxury",
+      "handmade": "Handmade",
+      "deals": "Deals"
+    },
+    "sections": {
+      "deals_title": "Deals for You",
+      "deals_subtitle": "Limited time offers",
+      "vendors_title": "Featured Vendors",
+      "vendors_subtitle": "Shop from trusted sellers",
+      "bundles_title": "Giftyy Bundles",
+      "bundles_subtitle": "Curated gift sets",
+      "all_products": "All Products"
+    },
+    "pagination": {
+      "previous": "Previous",
+      "next": "Next",
+      "status": "Page {{page}} • {{visible}} of {{total}} items visible"
+    },
+    "empty": {
+      "title": "No products found",
+      "subtitle": "Try selecting a different category",
+      "clear_filter": "Clear filter"
+    },
+    "cart_dialog": {
+      "go_to_cart": "Go to cart",
+      "browse_gifts": "Browse gifts"
+    },
+    "unit": {
+      "product": "product",
+      "personality": "Personality"
+    }
+  },
+  "notifications": {
+    "title": "Notifications",
+    "mark_all_read": "Mark all read",
+    "tabs": {
+      "all": "All",
+      "unread": "Unread"
+    },
+    "loading": "Loading notifications...",
+    "loading_more": "Loading more...",
+    "empty": {
+      "title": "All caught up!",
+      "no_unread": "You don't have any unread notifications",
+      "no_notifications": "You don't have any notifications yet"
+    },
+    "time": {
+      "just_now": "Just now",
+      "minutes_ago": "{{count}}m ago",
+      "hours_ago": "{{count}}h ago",
+      "days_ago": "{{count}}d ago"
+    },
+    "app": {
+      "items": "{{count}} item",
+      "items_plural": "{{count}} items",
+      "store_name": "Giftyy Store",
+      "vendor_fallback": "Vendor {{id}}"
+    },
+    "actions": {
+      "view": "View",
+      "read_more": "Read more",
+      "show_less": "Show less",
+      "completed": "Completed",
+      "accept_invitation": "Accept Invitation",
+      "review_occasions": "Review Occasions"
+    }
+  },
+  "app": {
+    "items": "item",
+    "items_plural": "items",
+    "vendor_fallback": "Vendor {{id}}",
+    "error": "Something went wrong"
+  },
+  "search": {
+    "title": "Search",
+    "placeholder": "Search for gifts...",
+    "results_count": "{{count}} result",
+    "results_count_plural": "{{count}} results",
+    "filtered": "(filtered)",
+    "filter_button": "Filters",
+    "sort_button": "Sort",
+    "sort_modal_title": "Sort By",
+    "applied_filters": "{{count}} {{filterText}} active",
+    "filter": "filter",
+    "filter_plural": "filters",
+    "reset": "Reset",
+    "categories": "Categories",
+    "price_range": "Price Range",
+    "apply": "Apply",
+    "no_results": "No results found",
+    "no_results_subtitle": "We couldn't find anything matching \"{{query}}\". Try exploring these categories!",
+    "no_query_subtitle": "Try exploring these popular categories!",
+    "explore_categories": "Explore Categories",
+    "no_categories": "No categories available",
+    "trending_searches": "Trending Searches",
+    "sort_options": {
+      "recommended": "Recommended",
+      "popular": "Most Popular",
+      "price_low": "Price: Low to High",
+      "price_high": "Price: High to Low",
+      "newest": "Newest",
+      "rating": "Best Reviewed"
+    },
+    "category_suggestions": {
+      "birthday": "Birthday",
+      "valentine": "Valentine",
+      "mother": "Mother",
+      "father": "Father",
+      "christmas": "Christmas",
+      "couples": "Couples",
+      "kids": "Kids",
+      "luxury": "Luxury",
+      "handmade": "Handmade"
+    },
+    "chips": {
+      "category": "Category",
+      "price": "Price"
+    }
+  },
+  "checkout": {
+    "common": {
+      "back": "Back",
+      "next": "Next",
+      "continue": "Continue",
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "estimated": "Estimated",
+      "total": "Total",
+      "free": "Free",
+      "loading": "Loading...",
+      "verifying": "Verifying...",
+      "processing": "Processing...",
+      "step_counter": "Step {{current}} of {{total}}"
+    },
+    "recipient": {
+      "step_label": "Recipient details",
+      "select_saved": "Select from saved recipients",
+      "no_saved": "No saved recipients found. Please add them in your Giftyy Circle.",
+      "clear_selection": "Clear selection",
+      "address_hidden": "Address hidden for privacy",
+      "estimated_totals": "Estimated totals",
+      "items_subtotal": "Items subtotal",
+      "card_price": "Card price",
+      "shipping_breakdown": "Shipping breakdown",
+      "shipping_calculating": "Calculating...",
+      "shipping_not_supported": "Not supported",
+      "tax_breakdown": "Tax breakdown ({{percent}}%)",
+      "tax_items": "Tax on items",
+      "tax_card": "Tax on card",
+      "total_tax": "Total tax",
+      "total_shipping": "Total shipping",
+      "order_total": "Order total",
+      "disclaimer": "Tax and shipping are estimated. Final amounts calculated at payment.",
+      "btn_verifying": "Verifying address...",
+      "btn_unavailable": "Shipping Unavailable",
+      "btn_select": "Select a recipient",
+      "btn_next": "Continue",
+      "alerts": {
+        "missing_info": "Missing info",
+        "select_recipient": "Please select a recipient",
+        "shipping_error": "Shipping error",
+        "shipping_error_message": "One or more vendors do not ship to this location. Please select a different recipient or remove those items from your cart.",
+        "vendor_not_ship": "This vendor does not ship to {{location}}"
+      }
+    },
+    "video": {
+      "title": "Add a Title",
+      "subtitle": "Give your video message a meaningful title",
+      "placeholder": "Enter video title...",
+      "error_missing_title": "Please enter a video title",
+      "error_nav_failed": "Navigation failed. Please try again.",
+      "character_count": "{{count}}/100"
+    },
+    "design": {
+      "step_label": "Choose a card style",
+      "learn_more": "Learn more about Giftyy Cards",
+      "features": {
+        "qr_video": "QR video message",
+        "personal_greeting": "Personal video greeting",
+        "physical_card": "Physical card included",
+        "shared_memories": "Shared memories and surprises"
+      },
+      "card_front_text": "Something special is waiting for you.",
+      "card_back_scan": "Scan to unlock your message",
+      "card_back_desc": "A personal video and surprise were made just for you.",
+      "proceed": "Proceed",
+      "alerts": {
+        "choose_card": "Choose a card",
+        "select_style": "Please select a card style to continue"
+      },
+      "modal": {
+        "title": "What is a Giftyy Card?",
+        "description": "A Giftyy Card is a physical QR code card that comes with your gift order. When your recipient receives the gift, they can scan the QR code on the card to unlock your recorded video message and view their special surprise.",
+        "whats_included": "What's included:",
+        "reaction_text": "You will be able view the recipient's reaction to your gift and special message if they choose to share it.",
+        "got_it": "Got it"
+      }
+    },
+    "payment": {
+      "step_label": "Payment",
+      "secure_badge": "SSL secured • PCI compliant",
+      "name_on_card": "Name on card",
+      "name_placeholder": "Taylor Jenkins",
+      "card_details": "Card Details",
+      "fine_print": "By tapping pay you authorize Giftyy to charge this card for the total shown. You'll receive an email confirmation immediately.",
+      "pay_btn": "Pay {{amount}}",
+      "alerts": {
+        "incomplete_card": "Incomplete Card",
+        "complete_details": "Please complete your card details to proceed.",
+        "payment_error": "Payment Error",
+        "min_amount": "The minimum amount for this transaction is $0.50.",
+        "init_failed": "Payment Initialization Failed",
+        "init_failed_msg": "Could not initialize secure payment session. Please try again.",
+        "payment_failed": "Payment Failed",
+        "payment_failed_msg": "Your card was declined or another error occurred.",
+        "order_failed": "We could not place your order. Please try again."
+      }
+    },
+    "confirmation": {
+      "header_title": "Order Confirmed",
+      "step_label": "Confirmation",
+      "hero_title": "Gift on its way!",
+      "hero_subtitle": "We’ve queued up the surprise for {{name}}. A confirmation email is flying to your inbox with tracking updates.",
+      "delivery_details": "Delivery details",
+      "order_number": "Order",
+      "recipient": "Recipient",
+      "card_style": "Card style",
+      "video_message": "Video message",
+      "shared_memory": "Shared memory",
+      "estimated_arrival": "Estimated arrival",
+      "attached": "Attached successfully",
+      "not_added": "Not added",
+      "photo_attached": "Photo attached",
+      "video_attached": "Video attached",
+      "est_days": "2 – 5 business days",
+      "watch_message": "Watch recorded message",
+      "view_photo": "View shared photo",
+      "watch_memory": "Watch shared memory",
+      "view_details": "View order details",
+      "status": "Status",
+      "tracking_number": "Tracking Number",
+      "order_total": "Order total",
+      "shipping": "Shipping",
+      "tax": "Tax",
+      "items": "Items",
+      "qty": "Qty: {{count}}",
+      "actions": {
+        "send_another": "Send another gift",
+        "view_orders": "View my orders",
+        "return_home": "Return to home"
+      },
+      "statuses": {
+        "processing": "Processing • Label created",
+        "confirmed": "Confirmed • Preparing shipment",
+        "shipped": "Shipped • In transit",
+        "out_for_delivery": "Out for delivery • Arriving soon",
+        "delivered": "Delivered • {{date}}",
+        "cancelled": "Cancelled"
+      }
+    }
+  },
+  "recipient": {
+    "insights": {
+      "giftyy_insight": "Giftyy's Insight",
+      "thought": {
+        "mother": "Moms deserve the world, don't they? I've found some things that speak to her heart and celebrate everything she does for you.",
+        "father": "Dads can be tricky to shop for, but I think we've found some real winners here. Ready to make his day special?",
+        "partner": "Celebrating your better half is so special. I've picked out a few things that celebrate your unique bond and the love you share.",
+        "friend": "Friendship is the greatest gift! I've curated some fun and thoughtful ideas to show {{name}} exactly how much their friendship means to you.",
+        "sibling": "Sibling bonds are forever! Whether you're teasing or cheering them on, these gifts are perfect for celebrating {{name}}.",
+        "child": "Watching them grow is the best part! I've found some treasures that {{name}} will absolutely love for this special occasion.",
+        "colleague": "Professional yet personal—it's a fine line! I've selected some tasteful gifts that show appreciation for {{name}}'s hard work.",
+        "default": "It's almost time to celebrate {{name}}! I've curated some thoughtful gifts that match their unique personality. Ready to make them smile?"
+      }
+    },
+    "stats": {
+      "occasions": "Occasions",
+      "gifts_sent": "Gifts Sent",
+      "next_up": "Next Up"
+    },
+    "actions": {
+      "different": "Different",
+      "shop": "Shop",
+      "see_all": "See All"
+    },
+    "ui": {
+      "gift_ready": "🎁 Gift Ready",
+      "invite_pending": "Invite Pending",
+      "upcoming_occasions": "Upcoming Occasions",
+      "upcoming_occasions_empty": "No upcoming occasions",
+      "see_all": "See All",
+      "handpicked_for": "Handpicked for {{name}}",
+      "today": "Today!",
+      "tomorrow": "Tomorrow"
+    },
+    "errors": {
+      "remove_title": "Remove recipient",
+      "remove_confirm": "Are you sure you want to remove this recipient?",
+      "remove_btn": "Remove",
+      "not_found": "Recipient not found",
+      "failed_delete": "Failed to delete recipient",
+      "failed_update": "Failed to update profile",
+      "go_back": "Go Back",
+      "error": "Error"
+    }
+  },
+  "recipients": {
+    "tabs": {
+      "circle": "Circle",
+      "occasions": "Occasions",
+      "preferences": "Preferences"
+    },
+    "sections": {
+      "pending": "Incoming Requests",
+      "circle": "Your Circle",
+      "circle_subtitle": "Friends and family you've connected with",
+      "family": "Family",
+      "friends": "Friends",
+      "colleagues": "Colleagues",
+      "others": "Others",
+      "preferences": "Gifting Preferences",
+      "preferences_subtext": "How you like to be celebrated",
+      "shipping_address": "Shipping Address",
+      "shipping_address_subtext": "Where we should send your gifts",
+      "circle_celebrations": "Upcoming Celebrations",
+      "my_occasions": "My Occasions ({{count}})",
+      "my_occasions_subtext": "Events you're celebrating this year",
+      "suggested_holidays": "Suggested Holidays"
+    },
+    "actions": {
+      "syncing": "Syncing...",
+      "find_friends": "Find Friends",
+      "add_recipient": "Add Recipient",
+      "add_occasion": "Add Occasion",
+      "update": "Update",
+      "set_up": "Set Up",
+      "claim_profile": "Claim Profile",
+      "take_quiz": "Take the Quiz",
+      "add_address": "Add Address"
+    },
+    "status": {
+      "waiting": "Waiting",
+      "pending_request": "Pending Request",
+      "waiting_label": "Waiting",
+      "request_label": "Request",
+      "waiting_subtitle": "Waiting for them to join",
+      "request_subtitle": "Wants to connect with you",
+      "accept": "Accept",
+      "cancel_invite": "Cancel Invite",
+      "private_badge": "PRIVATE",
+      "found_badge": "FOUND",
+      "public_badge": "PUBLIC"
+    },
+    "empty": {
+      "no_recipients": "No recipients yet",
+      "no_recipients_subtitle": "Connect with friends to see them here",
+      "no_preferences": "You haven't set your preferences yet",
+      "no_address": "No address saved",
+      "no_occasions_circle": "No upcoming occasions in your circle",
+      "no_occasions_personal": "You haven't added any personal occasions yet",
+      "no_preferences_detailed": "Complete the quiz to see your preferences here!",
+      "phantom_found_title": "Profile Found!",
+      "phantom_found_text": "We found a community profile for this person. Connect with them to see their full gifting preferences!"
+    },
+    "alerts": {
+      "profile_setup_required": "Profile Setup Required",
+      "profile_setup_message": "Please set up your gifting profile first",
+      "cancel": "Cancel",
+      "setup_now": "Set Up Now",
+      "delete_occasion_title": "Delete Occasion",
+      "delete_occasion_message": "Are you sure you want to delete '{{label}}'?",
+      "delete": "Delete",
+      "error_deleting": "Failed to delete item",
+      "error_adding_holiday": "Failed to add holiday",
+      "error_approving": "Failed to approve: {{message}}",
+      "remove_recipient_title": "Remove Recipient",
+      "remove_recipient_message": "Are you sure you want to remove this person?",
+      "remove_confirm": "Remove",
+      "error_rejecting": "Failed to reject request"
+    },
+    "time": {
+      "today": "Today",
+      "tomorrow": "Tomorrow",
+      "in_days": "in {{count}}d",
+      "in_weeks": "in {{count}}w",
+      "in_months": "in {{count}}mo"
+    },
+    "relationship_modal": {
+      "title": "How do you know {{name}}?",
+      "subtitle": "This helps us give better gift ideas"
+    },
+    "preferences_labels": {
+      "age_range": "Age Range",
+      "gender_identity": "Gender Identity",
+      "cultural_background": "Cultural Background",
+      "interests": "Interests",
+      "hobbies": "Hobbies",
+      "collecting": "Collecting",
+      "tech": "Tech",
+      "outdoor": "Outdoor",
+      "indoor": "Indoor",
+      "music": "Music",
+      "artists": "Artists",
+      "books": "Books",
+      "movies": "Movies",
+      "tv_shows": "TV Shows",
+      "podcasts": "Podcasts",
+      "style": "Style",
+      "colors": "Colors",
+      "home_decor": "Home Decor",
+      "design": "Design",
+      "food": "Dietary",
+      "allergies": "Allergies",
+      "cuisines": "Cuisines",
+      "beverages": "Beverages",
+      "wellness": "Wellness",
+      "lifestyle": "Lifestyle",
+      "values": "Values",
+      "causes": "Causes",
+      "gift_types": "Gift Types",
+      "dislikes": "Dislikes",
+      "sizes": "Sizes",
+      "life_stage": "Life Stage",
+      "pets": "Pets",
+      "personality": "Personality"
+    }
+  },
+  "cart": {
+    "title": "Your Cart",
+    "subtitle": "Make someone’s day unforgettable",
+    "summary": {
+      "items": "Items ({{count}})",
+      "estimated_tax": "Estimated tax",
+      "total": "Total",
+      "subtotal_label": "SUBTOTAL"
+    },
+    "info": {
+      "items_count": "{{count}} item(s) in your cart",
+      "clear_cart": "Clear cart"
+    },
+    "checkout": {
+      "button": "Checkout ({{count}})",
+      "secure_hint": "Secure payment • Easy returns"
+    },
+    "empty": {
+      "title": "Your cart is empty… for now 😊",
+      "subtitle": "Add something thoughtful and make someone’s day.",
+      "start_gifting": "Start gifting"
+    },
+    "remove_dialog": {
+      "title": "Remove item",
+      "message": "Are you sure you want to remove this item from your cart?",
+      "cancel": "Cancel",
+      "remove": "Remove"
+    }
+  },
+  "profile": {
+    "fallback_name": "User",
+    "menu": {
+      "orders": "My Orders",
+      "recipients": "My Recipients",
+      "wishlist": "Wishlist",
+      "settings": "Reminders & Settings"
+    }
+  },
+  "onboarding_ui": {
+    "title": "Complete Your Setup",
+    "percentage": "{{count}}% complete"
+  },
+  "onboarding": {
+    "steps": {
+      "add_name": "Add your name",
+      "add_phone": "Add phone number",
+      "add_birthday": "Add your birthday",
+      "add_recipient": "Add a recipient",
+      "set_occasion": "Set an occasion",
+      "fill_preferences": "Fill your preferences",
+      "first_order": "Place your first order",
+      "first_video": "Record a video message",
+      "first_memory": "Upload a shared memory",
+      "first_reaction": "Send your first reaction"
+    }
+  },
+  "memories": {
+    "title": "Memories",
+    "tabs": {
+      "overview": "Overview",
+      "messages": "Messages",
+      "reactions": "Reactions",
+      "shared_memories": "Shared memories",
+      "vaults": "Vaults"
+    },
+    "descriptions": {
+      "overview": "Relive heartfelt reactions, manage your greetings, and curate vaults.",
+      "messages": "Catch up on replies, share reactions, or download a clip for later.",
+      "reactions": "Watch reactions to your gifts and revisit the reactions you recorded.",
+      "vaults": "Organize memories in themed vaults to keep big moments easy to revisit.",
+      "shared_memories": "View and manage your uploaded shared memories, including videos and photos."
+    },
+    "stats": {
+      "total_clips": "Total clips",
+      "vaults": "Vaults",
+      "received": "Received",
+      "new_badge": "{{count}} new"
+    },
+    "remember_this": {
+      "title": "Remember this?",
+      "labels": {
+        "last_year": "Last year",
+        "two_years_ago": "Two years ago",
+        "years_ago": "{{count}} years ago",
+        "older": "Older"
+      }
+    },
+    "alerts": {
+      "vaults_unlocked": {
+        "title": "Vaults unlocked",
+        "message": "You just unlocked Vaults. Organize and replay all your memories in one place.",
+        "later": "Maybe later",
+        "view": "View vaults"
+      },
+      "upload": {
+        "permission_required": "Permission required",
+        "permission_message": "Please allow media library access to upload a memory.",
+        "no_media": "No media selected",
+        "no_media_message": "Please try selecting a photo or video again.",
+        "title_required": "Title required",
+        "title_message": "Please enter a title for your memory.",
+        "success": "Success",
+        "success_message": "Your memory has been uploaded!",
+        "failed": "Upload failed",
+        "gallery_failed": "Could not open gallery"
+      }
+    },
+    "modals": {
+      "media_type": {
+        "title": "Select Media Type",
+        "subtitle": "Choose what you'd like to upload",
+        "video_title": "Video",
+        "video_subtitle": "Upload a video memory",
+        "photo_title": "Photo",
+        "photo_subtitle": "Upload a photo memory",
+        "cancel": "Cancel"
+      },
+      "title_input": {
+        "title": "Memory Title",
+        "subtitle": "Give your memory a title",
+        "placeholder": "Enter memory title...",
+        "cancel": "Cancel",
+        "upload": "Upload"
+      }
+    },
+    "progress": {
+      "title": "Uploading Memory...",
+      "percent": "{{count}}%"
+    },
+    "panels": {
+      "reactions": {
+        "title": "Reactions",
+        "loading": "Loading reactions…",
+        "no_reactions": "No reactions yet.",
+        "all_reactions": "All your reaction videos in one place.",
+        "empty_title": "No reactions yet",
+        "empty_subtitle": "When someone reacts to a gift you sent — or when you record a reaction — it will appear here.",
+        "to_your_gifts": "Reactions to your gifts",
+        "to_your_gifts_template": "Reactions to your gifts ({{count}})",
+        "your_reactions": "Your reactions"
+      },
+      "overview": {
+        "featured_messages": "Featured messages",
+        "no_featured_title": "No featured messages yet",
+        "no_featured_subtitle": "Your most recent video messages will appear here.",
+        "loading_vaults": "Loading vaults…",
+        "loading_vaults_subtitle": "Hang tight while we fetch your personalized vaults.",
+        "no_vaults_title": "No vaults yet",
+        "no_vaults_subtitle": "Your videos will appear here once our AI curates themed vaults.",
+        "vaults": "Vaults",
+        "remember_this": "Remember this?",
+        "no_older_title": "No older memories yet",
+        "no_older_subtitle": "Memories from more than 3 months ago will appear here."
+      },
+      "messages": {
+        "loading": "Loading messages…",
+        "no_messages_title": "No messages yet",
+        "no_messages_subtitle": "Your video messages will appear here once you send or receive them.",
+        "loading_more": "Loading more messages…",
+        "caught_up": "You're all caught up."
+      },
+      "vaults": {
+        "loading": "Loading vaults…",
+        "no_vaults_title": "No vaults yet",
+        "no_vaults_subtitle": "Add memories first, then we’ll automatically group them into vaults so you can relive moments faster.",
+        "add_button": "Add shared memory",
+        "messages_button": "Go to Messages",
+        "filter_all": "All",
+        "no_matches_title": "No matches",
+        "no_matches_subtitle": "Try another filter.",
+        "caught_up": "You're all caught up"
+      },
+      "shared_memories": {
+        "no_memories_title": "No shared memories yet",
+        "no_memories_subtitle": "Upload photos and videos to share with your loved ones.",
+        "add_button": "Upload a memory",
+        "delete_alert_title": "Delete Shared Memory",
+        "delete_alert_message": "Are you sure you want to delete this shared memory? This action cannot be undone.",
+        "delete_confirm": "Delete",
+        "delete_cancel": "Cancel",
+        "delete_error": "Failed to delete shared memory. Please try again."
+      }
+    }
+  }
+}
