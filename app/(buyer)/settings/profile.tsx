@@ -66,7 +66,7 @@ const formatDateFromDatabase = (dbDate: string | null): string => {
 export default function ProfilePreferencesScreen() {
     const { top, bottom } = useSafeAreaInsets();
     const router = useRouter();
-    const { profile: authProfile, user, updateProfile: updateAuthProfile, loading: authLoading, deleteAccount } = useAuth();
+    const { profile: authProfile, user, updateProfile: updateAuthProfile, loading: authLoading, deleteAccount, checkPhoneExists } = useAuth();
     const { settings, updateSettings } = useSettings();
     const { alert } = useAlert();
     const [profile, setProfile] = useState<ProfileData>(INITIAL_PROFILE);
@@ -218,6 +218,19 @@ export default function ProfilePreferencesScreen() {
         try {
             const phoneDigits = profile.phone.replace(/\D/g, '');
             const fullPhone = phoneDigits ? `${selectedCountry.dial_code.replace('+', '')}${phoneDigits}` : null;
+
+            // Check if phone is already taken by another user
+            if (fullPhone) {
+                const { exists } = await checkPhoneExists(fullPhone);
+                if (exists) {
+                    const currentPhone = authProfile?.phone?.replace(/\D/g, '');
+                    if (currentPhone !== fullPhone) {
+                        alert('Phone Taken', 'This phone number is already registered to another account.');
+                        setSaving(false);
+                        return;
+                    }
+                }
+            }
 
             // Use withTimeout to prevent infinite hangs on bad network
             const { error } = await withTimeout(updateAuthProfile({

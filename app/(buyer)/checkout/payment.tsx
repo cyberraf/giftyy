@@ -16,7 +16,7 @@ import { safeGoBack } from '@/lib/utils/navigation';
 import { useRouter } from 'expo-router';
 import * as FileSystem from 'expo-file-system/legacy';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, Pressable, RefreshControl, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
@@ -37,6 +37,11 @@ export default function PaymentScreen() {
     const { alert } = useAlert();
     const { confirmPayment } = useSafeStripe();
     const [loading, setLoading] = useState(false);
+    // Tracks which checkout step is currently running so we can show a progress overlay.
+    // null = idle; stages run in order (payment → video → order → finalizing).
+    type CheckoutStage = 'processing_payment' | 'uploading_video' | 'creating_order' | 'finalizing';
+    const [stage, setStage] = useState<CheckoutStage | null>(null);
+    const hasVideo = !!(localVideoUri && videoTitle);
     const [refreshing, setRefreshing] = useState(false);
     const [shippingBreakdown, setShippingBreakdown] = useState<{ total: number; breakdown: Array<{ vendorId: string; vendorName: string; subtotal: number; shipping: number; itemCount: number }> }>({ total: 0, breakdown: [] });
     const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
@@ -251,6 +256,7 @@ export default function PaymentScreen() {
 
         setPayment({ name, cardNumber: '', expiry: '', cvv: '' });
         setLoading(true);
+        setStage('processing_payment');
 
         try {
             // Extract last 4 digits of card number from Stripe listener
@@ -300,6 +306,7 @@ export default function PaymentScreen() {
             // Upload video if localVideoUri exists (video was recorded but not yet uploaded)
             let videoMessageId: string | undefined;
             if (localVideoUri && videoTitle) {
+                setStage('uploading_video');
                 try {
                     // Get file size
                     let fileSizeBytes: number | undefined;
@@ -347,6 +354,7 @@ export default function PaymentScreen() {
             const vendorIds = Array.from(new Set(items.map(item => item.vendorId).filter(Boolean) as string[]));
             const primaryVendorId = vendorIds.length === 1 ? vendorIds[0] : undefined;
 
+            setStage('creating_order');
             // Create the order
             const { order, error } = await createOrder(
                 items,
@@ -371,6 +379,7 @@ export default function PaymentScreen() {
                 return;
             }
 
+            setStage('finalizing');
             // Clear cart and reset checkout context after successful order creation
             clearCart();
             resetCheckout();
@@ -385,6 +394,7 @@ export default function PaymentScreen() {
             alert(t('checkout.payment.alerts.payment_failed'), t('checkout.payment.alerts.payment_failed_msg'));
         } finally {
             setLoading(false);
+            setStage(null);
         }
     };
 
@@ -480,9 +490,129 @@ export default function PaymentScreen() {
                     </View>
                 </View>
             </View>
+            <CheckoutProgressOverlay stage={stage} hasVideo={hasVideo} />
         </View>
     );
 }
+
+// Visual checklist shown while onPay is running. The active step has a spinner,
+// completed steps have a checkmark, pending steps are dimmed. Steps that don't
+// apply (e.g. video upload when there's no video) are hidden.
+function CheckoutProgressOverlay({ stage, hasVideo }: { stage: null | 'processing_payment' | 'uploading_video' | 'creating_order' | 'finalizing'; hasVideo: boolean }) {
+    const visible = stage !== null;
+    const order: Array<'processing_payment' | 'uploading_video' | 'creating_order' | 'finalizing'> = hasVideo
+        ? ['processing_payment', 'uploading_video', 'creating_order', 'finalizing']
+        : ['processing_payment', 'creating_order', 'finalizing'];
+    const currentIdx = stage ? order.indexOf(stage) : -1;
+    const labels: Record<'processing_payment' | 'uploading_video' | 'creating_order' | 'finalizing', string> = {
+        processing_payment: 'Processing payment',
+        uploading_video: 'Uploading video message',
+        creating_order: 'Creating your order',
+        finalizing: 'Finalizing',
+    };
+    return (
+        <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+            <View style={progressStyles.backdrop}>
+                <View style={progressStyles.card}>
+                    <Text style={progressStyles.title}>Placing your order</Text>
+                    <Text style={progressStyles.subtitle}>Please don't close the app.</Text>
+                    <View style={progressStyles.steps}>
+                        {order.map((step, idx) => {
+                            const isDone = idx < currentIdx;
+                            const isActive = idx === currentIdx;
+                            return (
+                                <View key={step} style={progressStyles.stepRow}>
+                                    <View style={[progressStyles.indicator, isDone && progressStyles.indicatorDone]}>
+                                        {isActive ? (
+                                            <ActivityIndicator size="small" color={GIFTYY_THEME.colors.primary} />
+                                        ) : isDone ? (
+                                            <Text style={progressStyles.check}>✓</Text>
+                                        ) : null}
+                                    </View>
+                                    <Text style={[
+                                        progressStyles.stepLabel,
+                                        isActive && progressStyles.stepLabelActive,
+                                        !isActive && !isDone && progressStyles.stepLabelPending,
+                                    ]}>
+                                        {labels[step]}
+                                    </Text>
+                                </View>
+                            );
+                        })}
+                    </View>
+                </View>
+            </View>
+        </Modal>
+    );
+}
+
+const progressStyles = StyleSheet.create({
+    backdrop: {
+        flex: 1,
+        backgroundColor: 'rgba(15,23,42,0.55)',
+        alignItems: 'center',
+        justifyContent: 'center',
+        paddingHorizontal: 24,
+    },
+    card: {
+        width: '100%',
+        maxWidth: 360,
+        backgroundColor: '#fff',
+        borderRadius: 20,
+        paddingHorizontal: 24,
+        paddingVertical: 24,
+    },
+    title: {
+        fontSize: 18,
+        fontWeight: '800',
+        color: '#0f172a',
+    },
+    subtitle: {
+        marginTop: 4,
+        fontSize: 13,
+        color: '#64748b',
+    },
+    steps: {
+        marginTop: 20,
+        gap: 14,
+    },
+    stepRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+    },
+    indicator: {
+        width: 28,
+        height: 28,
+        borderRadius: 14,
+        borderWidth: 1.5,
+        borderColor: '#e2e8f0',
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginRight: 12,
+    },
+    indicatorDone: {
+        borderColor: GIFTYY_THEME.colors.primary,
+        backgroundColor: GIFTYY_THEME.colors.primary,
+    },
+    check: {
+        color: '#fff',
+        fontWeight: '900',
+        fontSize: 14,
+    },
+    stepLabel: {
+        fontSize: 14,
+        fontWeight: '700',
+        color: '#0f172a',
+        flexShrink: 1,
+    },
+    stepLabelActive: {
+        color: GIFTYY_THEME.colors.primary,
+    },
+    stepLabelPending: {
+        color: '#94a3b8',
+        fontWeight: '600',
+    },
+});
 
 type InputProps = {
     label: string;

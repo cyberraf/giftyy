@@ -19,14 +19,13 @@ export function TourAnchor({ step, children, style }: TourAnchorProps) {
     const measure = useCallback(() => {
         if (!viewRef.current) return;
         viewRef.current.measureInWindow((x, y, width, height) => {
-            console.log(`[TOUR] measureInWindow step="${step}" x=${x} y=${y} w=${width} h=${height}`);
             if (width > 0 && height > 0) {
                 registerElement(step, { x, y, width, height });
             }
         });
     }, [step, registerElement]);
 
-    // Re-measure whenever this becomes the active step
+    // Measure when this becomes the active step
     useEffect(() => {
         if (isActive && currentStep === step) {
             // Give the screen a moment to fully settle after navigation
@@ -43,12 +42,6 @@ export function TourAnchor({ step, children, style }: TourAnchorProps) {
     return (
         <View
             ref={viewRef}
-            onLayout={() => {
-                // Measure on layout too, in case this is the active step when layout fires
-                if (isActive && currentStep === step) {
-                    measure();
-                }
-            }}
             style={style}
             collapsable={false}
         >

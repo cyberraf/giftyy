@@ -394,36 +394,8 @@ export function OrdersProvider({ children }: { children: React.ReactNode }) {
 				// Refresh the list
 				await refreshOrders();
 
-				// Send email notification to recipient if requested
-				if (notifyRecipient && recipient.email) {
-					try {
-						// Calculate estimated arrival (3-5 business days from now)
-						const estimatedDays = '3-5 business days';
-						console.log('[Order] Invoking notify-recipient for:', recipient.email, 'with code:', orderCode);
-
-						// Use unified notification function (Email + In-app + Push)
-						await supabase.functions.invoke('notify-recipient', {
-							body: {
-								recipientEmail: recipient.email,
-								recipientFirstName: recipient.firstName,
-								recipientLastName: recipient.lastName || null,
-								orderCode,
-								street: recipient.street,
-								apartment: recipient.apartment || undefined,
-								city: recipient.city,
-								state: recipient.state || undefined,
-								zip: recipient.zip,
-								country: recipient.country || undefined,
-								estimatedArrival: estimatedDays,
-								sendEmail: true,
-								sendInApp: true,
-								sendPush: true
-							},
-						});
-					} catch (notifyError: any) {
-						console.error('[Order] Unexpected error sending recipient notification:', notifyError?.message || notifyError);
-					}
-				}
+				// Recipient notifications (email + in-app + push) are triggered server-side
+				// by the tr_notify_recipient_on_new_order Postgres trigger on orders INSERT.
 
 				// Send confirmation email to buyer
 				if (user.email) {

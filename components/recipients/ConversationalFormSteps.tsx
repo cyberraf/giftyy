@@ -23,7 +23,7 @@ import { formatPhoneField } from '@/lib/utils/phone';
 import React, { useMemo, useState } from 'react';
 import { ActivityIndicator, FlatList, Image, Linking, Modal, Platform, ScrollView, Share, StyleSheet, Text, TextInput, TouchableOpacity, View } from 'react-native';
 
-import { COUNTRY_LIST, getStateOptionsForCountry } from '@/constants/location-options';
+import { COUNTRY_LIST, getStateOptionsForCountry, countryHasStates } from '@/constants/location-options';
 import { SelectListModal } from './RecipientFormModal';
 
 type StepProps = {
@@ -779,6 +779,7 @@ export function Step3_Address({ formData, updateFormData, onNext, isSelf, ...pro
 
     const stateOptions = useMemo(() => getStateOptionsForCountry(country), [country]);
     const hasStateList = stateOptions.length > 0;
+    const showStateField = countryHasStates(country);
 
     const handleNext = () => {
         const updates = {
@@ -884,27 +885,29 @@ export function Step3_Address({ formData, updateFormData, onNext, isSelf, ...pro
                     </View>
                 </View>
 
-                <View style={styles.inputGroup}>
-                    <Text style={styles.inputLabel}>STATE / PROVINCE</Text>
-                    {hasStateList ? (
-                        <TouchableOpacity
-                            onPress={() => setStateModalOpen(true)}
-                            style={[styles.textInput, { justifyContent: 'center' }]}
-                        >
-                            <Text style={{ color: state ? '#2F2318' : 'rgba(47,35,24,0.4)' }}>
-                                {state || 'Select state / province'}
-                            </Text>
-                        </TouchableOpacity>
-                    ) : (
-                        <TextInput
-                            value={state || ''}
-                            onChangeText={setState}
-                            style={styles.textInput}
-                            placeholder="Enter state / province"
-                            placeholderTextColor="rgba(47,35,24,0.4)"
-                        />
-                    )}
-                </View>
+                {showStateField && (
+                    <View style={styles.inputGroup}>
+                        <Text style={styles.inputLabel}>STATE / PROVINCE</Text>
+                        {hasStateList ? (
+                            <TouchableOpacity
+                                onPress={() => setStateModalOpen(true)}
+                                style={[styles.textInput, { justifyContent: 'center' }]}
+                            >
+                                <Text style={{ color: state ? '#2F2318' : 'rgba(47,35,24,0.4)' }}>
+                                    {state || 'Select state / province'}
+                                </Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <TextInput
+                                value={state || ''}
+                                onChangeText={setState}
+                                style={styles.textInput}
+                                placeholder="Enter state / province"
+                                placeholderTextColor="rgba(47,35,24,0.4)"
+                            />
+                        )}
+                    </View>
+                )}
             </View>
 
             <SelectListModal

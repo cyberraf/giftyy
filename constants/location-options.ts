@@ -337,3 +337,24 @@ export const getStateOptionsForCountry = (country: string) => {
 };
 
 export const requiresStateField = (country: string) => getStateOptionsForCountry(country).length > 0;
+
+// Countries that have no meaningful state/province subdivision — hide the field entirely
+const NO_STATE_COUNTRIES = new Set([
+    'ANDORRA', 'ANTIGUA AND BARBUDA', 'BAHRAIN', 'BARBADOS', 'BRUNEI',
+    'CABO VERDE', 'COMOROS', 'CYPRUS', 'DJIBOUTI', 'DOMINICA',
+    'GRENADA', 'ICELAND', 'KIRIBATI', 'KUWAIT', 'LEBANON',
+    'LIECHTENSTEIN', 'LUXEMBOURG', 'MALDIVES', 'MALTA', 'MARSHALL ISLANDS',
+    'MAURITIUS', 'MICRONESIA', 'MONACO', 'MONTENEGRO', 'NAURU',
+    'PALAU', 'QATAR', 'SAINT KITTS AND NEVIS', 'SAINT LUCIA',
+    'SAINT VINCENT AND THE GRENADINES', 'SAMOA', 'SAN MARINO',
+    'SAO TOME AND PRINCIPE', 'SEYCHELLES', 'SINGAPORE', 'SLOVENIA',
+    'SOLOMON ISLANDS', 'TIMOR-LESTE', 'TONGA', 'TRINIDAD AND TOBAGO',
+    'TUVALU', 'VATICAN CITY',
+]);
+
+/** Returns true if the country has states/provinces that should be collected */
+export const countryHasStates = (country: string): boolean => {
+    const normalized = normalizeCountry(country);
+    if (NO_STATE_COUNTRIES.has(normalized)) return false;
+    return true;
+};

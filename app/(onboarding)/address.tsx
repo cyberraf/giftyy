@@ -1,6 +1,6 @@
 import { SelectListModal } from '@/components/recipients/RecipientFormModal';
 import { GIFTYY_THEME } from '@/constants/giftyy-theme';
-import { COUNTRY_LIST, getStateOptionsForCountry } from '@/constants/location-options';
+import { COUNTRY_LIST, getStateOptionsForCountry, countryHasStates } from '@/constants/location-options';
 import { useOnboarding } from '@/contexts/OnboardingContext';
 import { supabase } from '@/lib/supabase';
 import MaterialIcons from '@expo/vector-icons/MaterialIcons';
@@ -41,6 +41,7 @@ export default function OnboardingAddressScreen() {
 
 	const stateOptions = useMemo(() => getStateOptionsForCountry(country), [country]);
 	const hasStateList = stateOptions.length > 0;
+	const showStateField = countryHasStates(country);
 
 	useEffect(() => {
 		(async () => {
@@ -75,7 +76,7 @@ export default function OnboardingAddressScreen() {
 		})();
 	}, [recipientProfileId]);
 
-	const isValid = address.trim() && city.trim() && state.trim() && zip.trim();
+	const isValid = address.trim() && city.trim() && zip.trim() && (!showStateField || state.trim());
 
 	const handleSave = async () => {
 		if (!rpId || !isValid) return;
@@ -204,6 +205,7 @@ export default function OnboardingAddressScreen() {
 							</View>
 						</View>
 
+						{showStateField && (
 						<View style={styles.inputGroup}>
 							<Text style={styles.label}>STATE / PROVINCE</Text>
 							{hasStateList ? (
@@ -225,6 +227,7 @@ export default function OnboardingAddressScreen() {
 								/>
 							)}
 						</View>
+					)}
 
 						{error ? <Text style={styles.errorText}>{error}</Text> : null}
 					</View>

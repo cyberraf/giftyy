@@ -356,6 +356,7 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'flex-start',
+        pointerEvents: 'box-none',
     },
     logoPlaceholder: {
         width: scale(44),
@@ -443,6 +444,7 @@ const styles = StyleSheet.create({
         width: scale(100), // Mirror left section for perfect centering
         alignItems: 'flex-end',
         justifyContent: 'center',
+        pointerEvents: 'box-none',
     },
     backButton: {
         width: scale(40),

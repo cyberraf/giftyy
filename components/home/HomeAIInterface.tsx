@@ -226,7 +226,7 @@ export default function HomeAIInterface({
     const pathname = usePathname();
     const { user, profile } = useAuth();
     const { t } = useTranslation();
-    const firstName = profile?.first_name || user?.email?.split('@')[0] || 'friend';
+    const firstName = profile?.first_name || 'friend';
     const { addRecipient } = useRecipients();
     const { products: allProducts } = useProducts();
     const { homeAiState, setHomeAiState, clearHomeAiState } = useAppStore();

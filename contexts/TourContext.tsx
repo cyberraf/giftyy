@@ -58,10 +58,16 @@ export function TourProvider({ children }: { children: React.ReactNode }) {
 	const [elements, setElements] = useState<TourElementMap>({} as TourElementMap);
 
 	const registerElement = useCallback((step: TourStep, layout: { x: number; y: number; width: number; height: number }) => {
-		setElements(prev => ({
-			...prev,
-			[step]: { ...layout, ready: true }
-		}));
+		setElements(prev => {
+			const existing = prev[step];
+			// Skip update if coordinates haven't changed — prevents infinite re-render loop
+			if (existing && existing.ready &&
+				existing.x === layout.x && existing.y === layout.y &&
+				existing.width === layout.width && existing.height === layout.height) {
+				return prev;
+			}
+			return { ...prev, [step]: { ...layout, ready: true } };
+		});
 	}, []);
 
 	const unregisterElement = useCallback((step: TourStep) => {

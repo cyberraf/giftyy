@@ -83,7 +83,7 @@
           "image": "./assets/images/giftyy.png",
           "imageWidth": 120,
           "resizeMode": "contain",
-          "backgroundColor": "#ffffff",
+          "backgroundColor": "#fff5f0",
           "dark": {
             "backgroundColor": "#000000"
           }

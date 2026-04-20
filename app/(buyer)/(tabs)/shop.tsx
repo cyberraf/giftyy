@@ -34,7 +34,6 @@ import { ProductGridShimmer } from '@/components/marketplace/ShimmerLoader';
 import { VendorCard } from '@/components/marketplace/VendorCard';
 import { FilterModal } from '@/components/search/FilterModal';
 import { IconSymbol } from '@/components/ui/icon-symbol';
-import { TourAnchor } from '@/components/tour/TourAnchor';
 import { useTour } from '@/contexts/TourContext';
 
 // Contexts & Utils
@@ -74,13 +73,28 @@ export default function MarketplaceHomeScreen() {
 	const { setVisible } = useBottomBarVisibility();
 	const { t } = useTranslation();
 
-	// Per-screen tour
+	// Per-screen tour (matches home page pattern)
 	const { startTour, isGroupCompleted } = useTour();
 	useEffect(() => {
-		isGroupCompleted('shop').then(done => {
-			if (!done) setTimeout(() => startTour('shop'), 1000);
-		});
-	}, []);
+		let timeoutId: NodeJS.Timeout;
+		const checkTour = async () => {
+			try {
+				const completed = await isGroupCompleted('shop');
+				if (!completed) {
+					timeoutId = setTimeout(() => {
+						startTour('shop');
+					}, 2000);
+				}
+			} catch (e) {
+				console.warn('Failed to check tour state', e);
+			}
+		};
+		checkTour();
+
+		return () => {
+			if (timeoutId) clearTimeout(timeoutId);
+		};
+	}, [startTour, isGroupCompleted]);
 
 	// Contexts
 	const { products, collections, loading, hasMore, refreshProducts, loadMoreProducts, refreshCollections } = useProducts();
@@ -416,8 +430,7 @@ export default function MarketplaceHomeScreen() {
 					{/* Deals Section */}
 					{saleProducts.length > 0 && (
 						<>
-							<TourAnchor step="shop_intro">
-								<AnimatedSectionHeader
+							<AnimatedSectionHeader
 									title={t('shop.sections.deals_title')}
 									subtitle={t('shop.sections.deals_subtitle')}
 									icon="tag.fill"
@@ -451,7 +464,6 @@ export default function MarketplaceHomeScreen() {
 										</View>
 									)}
 								/>
-							</TourAnchor>
 						</>
 					)}
 
@@ -609,6 +621,7 @@ export default function MarketplaceHomeScreen() {
 		<View style={styles.container}>
 			<FlatList
 				ref={scrollRef}
+				style={{ flex: 1 }}
 				data={allProductsPageItems}
 				renderItem={renderItem}
 				keyExtractor={(item) => item.id}
@@ -632,7 +645,7 @@ export default function MarketplaceHomeScreen() {
 				showsVerticalScrollIndicator={false}
 				maxToRenderPerBatch={12}
 				windowSize={7}
-				removeClippedSubviews={true}
+				removeClippedSubviews={false}
 				initialNumToRender={9}
 				refreshControl={
 					<RefreshControl

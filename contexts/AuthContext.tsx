@@ -35,6 +35,7 @@ type AuthContextType = {
 	signIn: (email: string, password: string) => Promise<{ error: AuthError | null }>;
 	signInWithGoogle: () => Promise<{ error: AuthError | null }>;
 	checkEmailExists: (email: string) => Promise<{ exists: boolean; error: AuthError | null }>;
+	checkPhoneExists: (phone: string) => Promise<{ exists: boolean; error: AuthError | null }>;
 	signUp: (email: string, password: string, firstName: string, lastName: string, phone: string) => Promise<{ error: AuthError | null }>;
 	resetPasswordForEmail: (email: string) => Promise<{ error: AuthError | null }>;
 	resetPassword: (newPassword: string) => Promise<{ error: AuthError | null }>;
@@ -113,17 +114,47 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		return { firstName, lastName };
 	}, []);
 
+	// Build a minimal Profile from auth user metadata. Used as a fallback when the
+	// profiles DB query fails/times out so the UI still has a real name to render
+	// (greeting, avatar initials, etc.) instead of falling back to "friend".
+	const buildStubProfile = useCallback((u: User): Profile => {
+		const { firstName, lastName } = extractNamesFromUser(u);
+		const phone = (u.user_metadata as any)?.phone ?? null;
+		const nowIso = new Date().toISOString();
+		return {
+			id: u.id,
+			first_name: firstName,
+			last_name: lastName,
+			email: u.email ?? null,
+			phone,
+			date_of_birth: null,
+			bio: null,
+			profile_image_url: (u.user_metadata as any)?.avatar_url ?? null,
+			role: 'buyer',
+			onboarding_completed_at: null,
+			created_at: nowIso,
+			updated_at: nowIso,
+		};
+	}, [extractNamesFromUser]);
+
 	const fetchProfileForUser = useCallback(async (u: User) => {
+		// Wrap a supabase promise in a timeout so a stalled network can't hang the whole auth flow.
+		const withTimeout = <T,>(p: PromiseLike<T>, ms = 8000): Promise<T> =>
+			Promise.race([
+				Promise.resolve(p),
+				new Promise<T>((_, reject) => setTimeout(() => reject(new Error('Profile fetch timed out')), ms)),
+			]);
+
 		try {
 			const { firstName, lastName } = extractNamesFromUser(u);
 			const phone = (u.user_metadata as any)?.phone ?? null;
 
 			// 1) Primary: profile id matches auth uid
-			const { data: byId, error: byIdError } = await supabase
+			const { data: byId, error: byIdError } = await withTimeout(supabase
 				.from('profiles')
 				.select('*')
 				.eq('id', u.id)
-				.maybeSingle();
+				.maybeSingle());
 
 			if (byId) {
 				const p = byId as Profile;
@@ -203,28 +234,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 			setProfile(created as Profile);
 		} catch (error: any) {
 			console.error('Error fetching profile:', error);
-			if (isNetworkError(error)) {
+			if (isNetworkError(error) || /timed out/i.test(String(error?.message))) {
 				// Retry once after a brief delay — transient network blips happen on Android
-				// when returning from Chrome Custom Tabs (Google OAuth).
-				console.log('[AuthContext] Profile fetch network error — retrying once after 1s...');
+				// when returning from Chrome Custom Tabs (Google OAuth) or waking from sleep.
+				console.log('[AuthContext] Profile fetch error — retrying once after 1s...');
 				await new Promise(resolve => setTimeout(resolve, 1000));
 				try {
-					const { data: retryData } = await supabase
+					const { data: retryData } = await withTimeout(supabase
 						.from('profiles')
 						.select('*')
 						.eq('id', u.id)
-						.maybeSingle();
+						.maybeSingle());
 					if (retryData) {
 						setProfile(retryData as Profile);
 						return;
 					}
 				} catch (_retryErr) {
-					// Fall through
+					// Fall through to metadata fallback
 				}
-				// Network failure — NetworkContext will detect offline state via NetInfo
 			}
+			// Last-resort fallback: keep the user logged in with a stub built from auth metadata
+			// so the UI has real values (greeting, initials, avatar). Only applies if we don't
+			// already have a cached profile — we never want to downgrade a good profile to a stub.
+			// A background retry on the next network reconnect (see network effect) will replace it.
+			setProfile(prev => prev ?? buildStubProfile(u));
 		}
-	}, [extractNamesFromUser]);
+	}, [extractNamesFromUser, buildStubProfile]);
 
 	/**
 	 * Apply a session to local state + fetch profile.
@@ -346,13 +381,25 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 								return;
 							}
 						} catch {
-							// Fall through to sign out
+							// Fall through
 						}
-						console.log('[AuthContext] Retry failed — clearing session');
-						await supabase.auth.signOut();
-						await applySession(null, cancelled);
+						// Do NOT eagerly signOut here. onAuthStateChange will fire SIGNED_OUT
+						// if the refresh token is truly invalid; treating every refresh error
+						// as a logout kicks users out on network blips right after resume.
+						console.log('[AuthContext] Retry failed — keeping existing session and scheduling retry');
+						setLoading(false);
+						scheduleAuthRetry();
 						return;
 					}
+				}
+
+				// Never clobber an existing logged-in session with a transient null from getSession.
+				// If Supabase really thinks we're signed out, it'll fire SIGNED_OUT via
+				// onAuthStateChange; that's the only trusted signal to clear state.
+				if (!currentSession && user) {
+					if (__DEV__) console.log('[AuthContext] getSession returned null but user exists — keeping existing session');
+					setLoading(false);
+					return;
 				}
 
 				await applySession(currentSession ?? null, cancelled);
@@ -385,12 +432,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 							return;
 						}
 					} catch (_retryErr) {
-						// Fall through to sign out
+						// Fall through
 					}
-					console.log('[AuthContext] Retry failed — clearing session');
-					await supabase.auth.signOut();
-				} else {
-					console.error('Unexpected error getting session:', err);
+					// Trust SIGNED_OUT from onAuthStateChange rather than logging out on any refresh error.
+					console.log('[AuthContext] Retry failed — keeping existing session and scheduling retry');
+					setLoading(false);
+					scheduleAuthRetry();
+					return;
+				}
+				console.error('Unexpected error getting session:', err);
+				// If we already have a user, don't clobber their session on an unexpected transient error.
+				if (user) {
+					setLoading(false);
+					return;
 				}
 				await applySession(null, cancelled);
 			} finally {
@@ -843,6 +897,39 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		}
 	}, []);
 
+	const checkPhoneExists = useCallback(async (phone: string) => {
+		try {
+			const { data: exists, error } = await supabase.rpc('check_phone_exists', {
+				phone_to_check: phone,
+			});
+
+			if (error) {
+				console.error('Error checking phone existence:', error);
+				return {
+					exists: false,
+					error: {
+						name: 'PhoneCheckError',
+						message: error.message,
+						status: error.code ? parseInt(error.code) : 500,
+						code: error.code || '500',
+						__isAuthError: true
+					} as unknown as AuthError
+				};
+			}
+
+			return { exists: !!exists, error: null };
+		} catch (err: any) {
+			console.error('Unexpected error checking phone:', err);
+			return {
+				exists: false,
+				error: {
+					name: 'PhoneCheckError',
+					message: 'Could not verify phone number at this time.',
+				} as AuthError,
+			};
+		}
+	}, []);
+
 	const signUp = useCallback(async (email: string, password: string, firstName: string, lastName: string, phone: string) => {
 		try {
 			// Check if Supabase is properly configured
@@ -1248,16 +1335,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 		}
 	}, [user, fetchProfileForUser]);
 
-	// Auto-resync auth when connectivity is restored
+	// Auto-resync auth when connectivity is restored. Also refreshes the profile
+	// so any stub placed during offline/flaky-network time is upgraded to the real one.
 	const prevConnectedRef = useRef(networkConnected);
 	useEffect(() => {
 		if (networkConnected && !prevConnectedRef.current) {
 			console.log('[AuthContext] Network restored — resyncing auth');
 			retryCountRef.current = 0;
 			syncSessionFromSupabase();
+			if (user) fetchProfileForUser(user).catch(() => {});
 		}
 		prevConnectedRef.current = networkConnected;
-	}, [networkConnected, syncSessionFromSupabase]);
+	}, [networkConnected, syncSessionFromSupabase, user, fetchProfileForUser]);
 
 	// Expose a deterministic "rehydrate now" helper for deep-link flows.
 	const syncAuth = useCallback(async () => {
@@ -1341,6 +1430,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 				signIn,
 				signInWithGoogle,
 				checkEmailExists,
+				checkPhoneExists,
 				signUp,
 				resetPasswordForEmail,
 				resetPassword,

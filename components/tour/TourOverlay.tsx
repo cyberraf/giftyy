@@ -78,11 +78,11 @@ export function TourOverlay() {
 			exiting={FadeOut.duration(250)}
 			style={[StyleSheet.absoluteFill, { zIndex: 9999, pointerEvents: 'box-none' }]}
 		>
-			{/* 4-panel spotlight */}
-			<View style={[styles.panel, { top: 0, left: 0, right: 0, height: Math.max(0, cy) }]} />
-			<View style={[styles.panel, { top: cy + ch, left: 0, right: 0, bottom: 0 }]} />
-			<View style={[styles.panel, { top: cy, left: 0, width: Math.max(0, cx), height: ch }]} />
-			<View style={[styles.panel, { top: cy, left: cx + cw, right: 0, height: ch }]} />
+			{/* 4-panel spotlight — pointerEvents="none" so touches pass through to content */}
+			<View pointerEvents="none" style={[styles.panel, { top: 0, left: 0, right: 0, height: Math.max(0, cy) }]} />
+			<View pointerEvents="none" style={[styles.panel, { top: cy + ch, left: 0, right: 0, bottom: 0 }]} />
+			<View pointerEvents="none" style={[styles.panel, { top: cy, left: 0, width: Math.max(0, cx), height: ch }]} />
+			<View pointerEvents="none" style={[styles.panel, { top: cy, left: cx + cw, right: 0, height: ch }]} />
 
 			{/* Tooltip card */}
 			{content && (

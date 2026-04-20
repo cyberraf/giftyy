@@ -35,7 +35,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 const T = GIFTYY_THEME;
 
 export default function SignupScreen() {
-	const { signUp, checkEmailExists } = useAuth();
+	const { signUp, checkEmailExists, checkPhoneExists } = useAuth();
 	const { alert } = useAlert();
 	const router = useRouter();
 	const insets = useSafeAreaInsets();
@@ -143,6 +143,24 @@ export default function SignupScreen() {
 			const normalizedPhone = normalizePhoneInput(
 				phone.startsWith(country.code) ? phone : `${country.code}${phone}`
 			);
+
+			// Check if phone already exists
+			const { exists: phoneExists, error: phoneCheckError } = await checkPhoneExists(normalizedPhone);
+			if (phoneCheckError) {
+				alert('Error', 'Could not verify your phone number at this time.');
+				return;
+			}
+			if (phoneExists) {
+				alert(
+					'Phone Already Registered',
+					'An account with this phone number already exists.\nPlease use a different number or sign in.',
+					[
+						{ text: 'Cancel', style: 'cancel' },
+						{ text: 'Sign In', style: 'primary', onPress: () => router.replace('/(auth)/login') },
+					]
+				);
+				return;
+			}
 
 			const throttle = checkThrottle('signup');
 			if (!throttle.allowed) {

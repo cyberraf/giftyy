@@ -62,7 +62,7 @@ export default function VerifyEmailScreen() {
 				keyboardShouldPersistTaps="handled"
 			>
 				<View style={styles.header}>
-					<Image source={require('@/assets/images/giftyy.png')} style={styles.logo} resizeMode="contain" />
+					<Image source={require('@/assets/images/giftyy-thumb-up.png')} style={styles.logo} resizeMode="contain" />
 					<Text style={styles.title}>Verify your email</Text>
 					<Text style={styles.subtitle}>
 						We’ve sent a verification link to{email ? '\n' : ' your email address.'}

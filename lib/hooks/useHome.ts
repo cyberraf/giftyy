@@ -103,55 +103,61 @@ export function useHome(): UseHomeResult {
 			return;
 		}
 		setProfileLoading(true);
-		const { data: { user } } = await supabase.auth.getUser();
-		if (!user) {
-			setProfileLoading(false);
-			return;
-		}
+		try {
+			const { data: { user } } = await supabase.auth.getUser();
+			if (!user) return;
 
-		// 1. Get profile ID
-		const { data: rp, error: rpError } = await supabase
-			.from('recipient_profiles')
-			.select('id')
-			.eq('user_id', user.id)
-			.maybeSingle();
-
-		if (!rpError && rp) {
-			setMyProfileId(rp.id);
-
-			// 2. Get occasions for self
-			const { data: occs } = await supabase
-				.from('occasions')
-				.select('*')
-				.eq('recipient_profile_id', rp.id)
-				.order('date', { ascending: true });
-
-			let myProfileOccasionsRef = myProfileOccasions;
-			if (occs) {
-				const localized = occs.map(o => ({
-					...o,
-					label: o.label || o.title || 'Occasion'
-				}));
-				setMyProfileOccasions(localized);
-				myProfileOccasionsRef = localized;
-			}
-
-			// 3. Get preferences for self
-			const { data: prefs } = await supabase
-				.from('recipient_preferences')
-				.select('*')
-				.eq('recipient_profile_id', rp.id)
+			// 1. Get profile ID
+			const { data: rp, error: rpError } = await supabase
+				.from('recipient_profiles')
+				.select('id')
+				.eq('user_id', user.id)
 				.maybeSingle();
 
-			if (prefs) {
-				const localizedPrefs = dbRowToPreferences(prefs);
-				setMyPreferences(localizedPrefs);
-				setHomeDataCache({ myPreferences: localizedPrefs, myProfileId: rp.id, myProfileOccasions: myProfileOccasionsRef, lastFetched: Date.now() });
-			} else {
-				setHomeDataCache({ myProfileId: rp.id, myProfileOccasions: myProfileOccasionsRef, lastFetched: Date.now() });
+			if (!rpError && rp) {
+				setMyProfileId(rp.id);
+
+				// 2. Get occasions for self
+				const { data: occs } = await supabase
+					.from('occasions')
+					.select('*')
+					.eq('recipient_profile_id', rp.id)
+					.order('date', { ascending: true });
+
+				let myProfileOccasionsRef = myProfileOccasions;
+				if (occs) {
+					const localized = occs.map(o => ({
+						...o,
+						label: o.label || o.title || 'Occasion'
+					}));
+					setMyProfileOccasions(localized);
+					myProfileOccasionsRef = localized;
+				}
+
+				// 3. Get preferences for self
+				const { data: prefs } = await supabase
+					.from('recipient_preferences')
+					.select('*')
+					.eq('recipient_profile_id', rp.id)
+					.maybeSingle();
+
+				// Note: do NOT set lastFetched here. fetchCircleOccasions stamps it
+				// once everything has been fetched — otherwise fetchCircleOccasions
+				// sees a "fresh" cache and skips its own fetch, leaving circleOccasions empty.
+				if (prefs) {
+					const localizedPrefs = dbRowToPreferences(prefs);
+					setMyPreferences(localizedPrefs);
+					setHomeDataCache({ myPreferences: localizedPrefs, myProfileId: rp.id, myProfileOccasions: myProfileOccasionsRef });
+				} else {
+					setHomeDataCache({ myProfileId: rp.id, myProfileOccasions: myProfileOccasionsRef });
+				}
 			}
+		} catch (err) {
+			console.warn('[useHome] fetchMyData error:', err);
+		} finally {
+			// Must always run so the initialLoading skeleton can clear even on error/network blip.
+			setProfileLoading(false);
 		}
-		setProfileLoading(false);
 	}, []);
 
 	useEffect(() => {
@@ -188,58 +194,68 @@ export function useHome(): UseHomeResult {
 		// to avoid caching incomplete results
 		if (recipientsLoading || profileLoading) return;
 
+		// Skip fetch if cache is still fresh (5 min TTL)
+		if (homeDataCache && homeDataCache.lastFetched > 0 && (Date.now() - homeDataCache.lastFetched < 1000 * 60 * 5)) {
+			setCircleOccasionsLoading(false);
+			return;
+		}
+
 		const fetchCircleOccasions = async () => {
 			setCircleOccasionsLoading(true);
-			const { data: { user: currentUser } } = await supabase.auth.getUser();
-			if (!currentUser) {
-				setCircleOccasionsLoading(false);
-				return;
-			}
+			try {
+				const { data: { user: currentUser } } = await supabase.auth.getUser();
+				if (!currentUser) return;
 
-			// Build list of all recipient_profile_ids from connections
-			const connProfileIds = visibleRecipients
-				.map(r => r.actualProfileId)
-				.filter((id): id is string => !!id && id !== myProfileId);
+				// Build list of all recipient_profile_ids from connections
+				const connProfileIds = visibleRecipients
+					.map(r => r.actualProfileId)
+					.filter((id): id is string => !!id && id !== myProfileId);
 
-			let allOccs: any[] = [];
+				let allOccs: any[] = [];
 
-			// 1. Occasions created BY the user (covers all phantom recipients)
-			const { data: myCreatedOccs } = await supabase
-				.from('occasions')
-				.select('*')
-				.eq('user_id', currentUser.id);
-
-			if (myCreatedOccs) {
-				// Exclude the user's own self-occasions
-				const filtered = myProfileId
-					? myCreatedOccs.filter(o => o.recipient_profile_id !== myProfileId)
-					: myCreatedOccs;
-				allOccs = [...filtered];
-			}
-
-			// 2. Fetch shared occasions from approved circle members (different creator)
-			if (connProfileIds.length > 0) {
-				const { data: sharedOccs } = await supabase
+				// 1. Occasions created BY the user (covers all phantom recipients)
+				const { data: myCreatedOccs } = await supabase
 					.from('occasions')
 					.select('*')
-					.in('recipient_profile_id', connProfileIds)
-					.neq('user_id', currentUser.id);
+					.eq('user_id', currentUser.id);
 
-				if (sharedOccs) allOccs = [...allOccs, ...sharedOccs];
+				if (myCreatedOccs) {
+					// Exclude the user's own self-occasions
+					const filtered = myProfileId
+						? myCreatedOccs.filter(o => o.recipient_profile_id !== myProfileId)
+						: myCreatedOccs;
+					allOccs = [...filtered];
+				}
+
+				// 2. Fetch shared occasions from approved circle members (different creator)
+				if (connProfileIds.length > 0) {
+					const { data: sharedOccs } = await supabase
+						.from('occasions')
+						.select('*')
+						.in('recipient_profile_id', connProfileIds)
+						.neq('user_id', currentUser.id);
+
+					if (sharedOccs) allOccs = [...allOccs, ...sharedOccs];
+				}
+
+				// 3. Fetch user's ignored occasions
+				const { data: ignoredData } = await supabase
+					.from('ignored_occasions')
+					.select('occasion_id')
+					.eq('user_id', currentUser.id);
+
+				const ignoredIds = ignoredData?.map((item: any) => item.occasion_id) || [];
+				setIgnoredOccasionIds(ignoredIds);
+
+				setCircleOccasions(allOccs);
+				setHomeDataCache({ circleOccasions: allOccs, ignoredOccasionIds: ignoredIds, lastFetched: Date.now() });
+			} catch (err) {
+				console.warn('[useHome] fetchCircleOccasions error:', err);
+				// Still stamp lastFetched so we don't retry in a tight loop on persistent errors.
+				setHomeDataCache({ lastFetched: Date.now() });
+			} finally {
+				setCircleOccasionsLoading(false);
 			}
-
-			// 3. Fetch user's ignored occasions
-			const { data: ignoredData } = await supabase
-				.from('ignored_occasions')
-				.select('occasion_id')
-				.eq('user_id', currentUser.id);
-			
-			const ignoredIds = ignoredData?.map((item: any) => item.occasion_id) || [];
-			setIgnoredOccasionIds(ignoredIds);
-
-			setCircleOccasions(allOccs);
-			setHomeDataCache({ circleOccasions: allOccs, ignoredOccasionIds: ignoredIds, lastFetched: Date.now() });
-			setCircleOccasionsLoading(false);
 		};
 
 

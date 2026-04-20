@@ -93,7 +93,7 @@ export default function OnboardingOccasionScreen() {
 
 			<View style={styles.content}>
 				<Image
-					source={require('@/assets/images/giftyy.png')}
+					source={require('@/assets/images/giftyy-birthday.png')}
 					style={styles.avatar}
 					resizeMode="contain"
 				/>

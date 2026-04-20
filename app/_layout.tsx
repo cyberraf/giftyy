@@ -45,13 +45,14 @@ const AppTheme = {
 import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Image, KeyboardAvoidingView, Platform, Text, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { KeyboardAvoidingView, Platform, View } from 'react-native';
 
 import { AlertProvider } from '@/contexts/AlertContext';
 import { AuthProvider, useAuth } from '@/contexts/AuthContext';
 import { CartProvider } from '@/contexts/CartContext';
 import { CategoriesProvider } from '@/contexts/CategoriesContext';
+import { AnnouncementsProvider } from '@/contexts/AnnouncementsContext';
 import { NotificationsProvider } from '@/contexts/NotificationsContext';
 import { OrdersProvider } from '@/contexts/OrdersContext';
 import { ProductsProvider } from '@/contexts/ProductsContext';
@@ -85,17 +86,6 @@ import { useSettings } from '@/hooks/useSettings';
 import { SettingsProvider } from '@/contexts/SettingsContext';
 
 function RootLayout() {
-  const [appReady, setAppReady] = useState(false);
-  const [showLoader, setShowLoader] = useState(true);
-
-  // Animation refs
-  const overlayOpacity = useRef(new Animated.Value(1)).current;
-  const logoScale = useRef(new Animated.Value(0)).current;
-  const logoOpacity = useRef(new Animated.Value(0)).current;
-  const textOpacity = useRef(new Animated.Value(0)).current;
-  const textTranslateY = useRef(new Animated.Value(20)).current;
-  const breathingAnim = useRef(new Animated.Value(1)).current;
-
   // Initialize global alert system to intercept Alert.alert calls
   useEffect(() => {
     initializeGlobalAlert();
@@ -104,8 +94,6 @@ function RootLayout() {
     const cleanupResponseHandler = setupNotificationResponseHandler();
     const cleanupSyncManager = initSyncManager();
     startAnalytics();
-    // Hide native splash screen once the custom animation overlay is mounted
-    SplashScreen.hideAsync().catch(() => { });
     return () => {
       cleanupResponseHandler();
       cleanupSyncManager();
@@ -113,75 +101,13 @@ function RootLayout() {
     };
   }, []);
 
-  // Splash Screen Animation Sequence
+  // Hide native splash screen after a short delay to let the app settle
   useEffect(() => {
-    // Logo and Text Entrance (Parallel)
-    Animated.sequence([
-      Animated.parallel([
-        Animated.spring(logoScale, {
-          toValue: 1,
-          friction: 7,
-          tension: 40,
-          useNativeDriver: true,
-        }),
-        Animated.timing(logoOpacity, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }),
-        Animated.timing(textOpacity, {
-          toValue: 1,
-          duration: 600,
-          useNativeDriver: true,
-        }),
-        Animated.spring(textTranslateY, {
-          toValue: 0,
-          friction: 8,
-          tension: 30,
-          useNativeDriver: true,
-        }),
-      ]),
-    ]).start(() => {
-      // 3. Start breathing animation once entrance is done
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(breathingAnim, {
-            toValue: 1.05,
-            duration: 2000,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-          Animated.timing(breathingAnim, {
-            toValue: 1,
-            duration: 2000,
-            easing: Easing.inOut(Easing.ease),
-            useNativeDriver: true,
-          }),
-        ])
-      ).start();
-    });
-
-    // Simulate readiness (auth, etc.)
     const timer = setTimeout(() => {
-      setAppReady(true);
-    }, 3000);
-
+      SplashScreen.hideAsync().catch(() => { });
+    }, 2000);
     return () => clearTimeout(timer);
   }, []);
-
-  // Exit Animation
-  useEffect(() => {
-    if (!appReady) return;
-
-    Animated.timing(overlayOpacity, {
-      toValue: 0,
-      duration: 800,
-      easing: Easing.out(Easing.exp),
-      useNativeDriver: true,
-    }).start(() => {
-      setShowLoader(false);
-    });
-  }, [appReady]);
 
   return (
     <I18nextProvider i18n={i18nInstance}>
@@ -205,22 +131,24 @@ function RootLayout() {
                                   <CategoriesProvider>
                                     <ProductsProvider>
                                       <NotificationsProvider>
-                                        <KeyboardAvoidingView
-                                          style={{ flex: 1 }}
-                                          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-                                        >
-                                          <AuthGuard>
-                                            <Stack>
-                                              <Stack.Screen name="index" options={{ headerShown: false }} />
-                                              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-                                              <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
-                                              <Stack.Screen name="(buyer)" options={{ headerShown: false }} />
-                                              <Stack.Screen name="(vendor)" options={{ headerShown: false }} />
-                                              <Stack.Screen name="offline" options={{ headerShown: false }} />
-                                              <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
-                                            </Stack>
-                                          </AuthGuard>
-                                        </KeyboardAvoidingView>
+                                        <AnnouncementsProvider>
+                                          <KeyboardAvoidingView
+                                            style={{ flex: 1 }}
+                                            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+                                          >
+                                            <AuthGuard>
+                                              <Stack>
+                                                <Stack.Screen name="index" options={{ headerShown: false }} />
+                                                <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+                                                <Stack.Screen name="(onboarding)" options={{ headerShown: false }} />
+                                                <Stack.Screen name="(buyer)" options={{ headerShown: false }} />
+                                                <Stack.Screen name="(vendor)" options={{ headerShown: false }} />
+                                                <Stack.Screen name="offline" options={{ headerShown: false }} />
+                                                <Stack.Screen name="modal" options={{ presentation: 'modal', title: 'Modal' }} />
+                                              </Stack>
+                                            </AuthGuard>
+                                          </KeyboardAvoidingView>
+                                        </AnnouncementsProvider>
                                       </NotificationsProvider>
                                     </ProductsProvider>
                                   </CategoriesProvider>
@@ -241,88 +169,6 @@ function RootLayout() {
         </SafeStripeProvider>
 
         <StatusBar style="auto" />
-
-        {showLoader && (
-          <Animated.View
-            pointerEvents="none"
-            style={{
-              position: 'absolute',
-              top: 0,
-              bottom: 0,
-              left: 0,
-              right: 0,
-              backgroundColor: '#fff5f0',
-              alignItems: 'center',
-              justifyContent: 'center',
-              opacity: overlayOpacity,
-              zIndex: 9999,
-            }}>
-            <View style={{ alignItems: 'center' }}>
-              <Animated.View
-                style={{
-                  opacity: logoOpacity,
-                  transform: [
-                    { scale: logoScale },
-                    { scale: breathingAnim }
-                  ]
-                }}
-              >
-                <Image
-                  source={require('@/assets/images/giftyy.png')}
-                  style={{ width: 180, height: 180 }}
-                  resizeMode="contain"
-                />
-              </Animated.View>
-
-              <Animated.View
-                style={{
-                  marginTop: 20,
-                  opacity: textOpacity,
-                  transform: [{ translateY: textTranslateY }]
-                }}
-              >
-                <Text
-                  style={{
-                    fontSize: 42,
-                    fontWeight: '900',
-                    color: '#f75507',
-                    letterSpacing: -0.5,
-                    textAlign: 'center',
-                  }}>
-                  Giftyy
-                </Text>
-                <Text
-                  style={{
-                    fontSize: 14,
-                    fontWeight: '500',
-                    color: '#9ca3af',
-                    marginTop: 4,
-                    textAlign: 'center',
-                    letterSpacing: 2,
-                    textTransform: 'uppercase',
-                  }}>
-                  Giving Redefined
-                </Text>
-              </Animated.View>
-            </View>
-
-            <Animated.View
-              style={{
-                position: 'absolute',
-                bottom: 60,
-                opacity: textOpacity
-              }}
-            >
-              <View style={{
-                width: 4,
-                height: 4,
-                borderRadius: 2,
-                backgroundColor: '#f75507',
-                opacity: 0.3
-              }} />
-            </Animated.View>
-          </Animated.View>
-        )}
       </ThemeProvider>
     </I18nextProvider>
   );

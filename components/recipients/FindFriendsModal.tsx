@@ -44,21 +44,24 @@ export function FindFriendsModal({ visible, onClose, onConnect, onInvite }: Find
     const [syncError, setSyncError] = useState<string | null>(null);
 
     useEffect(() => {
-        if (visible) {
-            setPermissionDenied(false);
-            setSyncError(null);
-            syncContacts(true).catch((err: any) => {
-                if (err?.message?.includes('Permission') || err?.status === 'denied') {
-                    setPermissionDenied(true);
-                    setCanAskAgain(err?.canAskAgain ?? false);
-                } else if (err?.message?.includes('not available')) {
-                    setSyncError('Contacts are not available in this build. Please update your app.');
-                } else {
-                    setSyncError('Could not load contacts. Pull down to retry.');
-                }
-            });
-        }
-    }, [visible, syncContacts]);
+        if (!visible) return;
+        setPermissionDenied(false);
+        setSyncError(null);
+        // Always kick off a sync on open. When syncedContacts is already populated,
+        // the spinner is skipped (see condition below) and the refresh happens in the
+        // background so matches/connection statuses update without blocking the UI.
+        // force=true ensures we bypass the in-flight guard for an explicit re-check.
+        syncContacts(true).catch((err: any) => {
+            if (err?.message?.includes('Permission') || err?.status === 'denied') {
+                setPermissionDenied(true);
+                setCanAskAgain(err?.canAskAgain ?? false);
+            } else if (err?.message?.includes('not available')) {
+                setSyncError('Contacts are not available in this build. Please update your app.');
+            } else if (syncedContacts.length === 0) {
+                setSyncError('Could not load contacts. Pull down to retry.');
+            }
+        });
+    }, [visible, syncContacts, syncedContacts.length]);
 
     const filteredContacts = useMemo(() => {
         let contacts = syncedContacts;

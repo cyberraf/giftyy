@@ -87,7 +87,12 @@ function mapToRecipient(conn: any, currentUserId?: string): Recipient {
         relationship: isOutgoing ? conn.sender_relationship : conn.receiver_relationship || 'Friend',
         email: isOutgoing ? (profile.email || '') : (senderProfile.email || ''),
         phone: isOutgoing ? (profile.phone || '') : (senderProfile.phone || ''),
-        birthDate: profile.birth_date || '',
+        // recipient_profiles has no birth_date column — pull from the joined profiles.date_of_birth.
+        // For outgoing: recipient_profile.profiles.date_of_birth (recipient's profile).
+        // For incoming: sender_profile.date_of_birth (sender's profile).
+        birthDate: isOutgoing
+            ? (profile?.profiles?.date_of_birth || '')
+            : (senderProfile?.date_of_birth || ''),
         address: isOutgoing ? (profile.address || '') : (senderProfile.recipient_profiles?.[0]?.address || ''),
         apartment: isOutgoing ? (profile.apartment || '') : (senderProfile.recipient_profiles?.[0]?.apartment || ''),
         city: isOutgoing ? (profile.city || '') : (senderProfile.recipient_profiles?.[0]?.city || ''),
@@ -138,7 +143,7 @@ export function RecipientsProvider({ children }: { children: React.ReactNode }) 
                     *,
                     recipient_profile:recipient_profile_id (
                         *,
-                        profiles:user_id ( profile_image_url )
+                        profiles:user_id ( profile_image_url, date_of_birth )
                     ),
                     sender_profile:profiles!sender_id (
                         first_name,
@@ -146,7 +151,8 @@ export function RecipientsProvider({ children }: { children: React.ReactNode }) 
                         profile_image_url,
                         email,
                         phone,
-                        recipient_profiles!user_id ( 
+                        date_of_birth,
+                        recipient_profiles!user_id (
                             id,
                             address,
                             city,
@@ -187,7 +193,9 @@ export function RecipientsProvider({ children }: { children: React.ReactNode }) 
             let hasChanges = false;
             const updated = prev.map(c => {
                 if (!c.userId) return c;
-                const recipient = recipients.find(r => r.profileId === c.userId);
+                // c.userId is actually the matched recipient_profiles.id — compare against actualProfileId,
+                // which is the other party's recipient_profiles.id for both outgoing and incoming connections.
+                const recipient = recipients.find(r => r.actualProfileId === c.userId);
                 if (recipient) {
                     const status = recipient.status;
                     const isIncoming = !recipient.isOutgoing && recipient.status === 'pending';
@@ -328,12 +336,22 @@ export function RecipientsProvider({ children }: { children: React.ReactNode }) 
             // Normalize for matching
             const normalizedPhones = phoneNumbers.map(p => normalizeForMatching(p));
 
-            // optimization: Query profiles matching the phones of device contacts
-            // We include both raw digits and '+' prefixed versions to be safe
-            const searchTerms = [
-                ...normalizedPhones,
-                ...normalizedPhones.map(p => `+${p}`)
-            ];
+            // Generate all plausible stored formats for each device phone so we can match
+            // against recipient_profiles.phone regardless of how it was saved. Device contacts
+            // often omit the country code (e.g. "4133283137") while invites may store the full
+            // international form (e.g. "+14133283137"). We try raw, +raw, and for 10-digit
+            // numbers also the "1" (US) country-code variants.
+            const variantsFor = (digits: string): string[] => {
+                const out: string[] = [digits, `+${digits}`];
+                if (digits.length === 10) {
+                    out.push(`1${digits}`, `+1${digits}`);
+                } else if (digits.length === 11 && digits.startsWith('1')) {
+                    const local = digits.slice(1);
+                    out.push(local, `+${local}`);
+                }
+                return out;
+            };
+            const searchTerms = Array.from(new Set(normalizedPhones.flatMap(variantsFor)));
             
             let matchedProfiles: any[] = [];
             
@@ -374,11 +392,24 @@ export function RecipientsProvider({ children }: { children: React.ReactNode }) 
                 }
             }
 
-            // 4. Fetch existing connections for this user
-            const { data: existingConnections } = await supabase
+            // 4. Fetch existing connections for this user — both outgoing AND incoming
+            // Incoming: connection.recipient_profile_id = user's own recipient_profile.id
+            const { data: myRpForConns } = await supabase
+                .from('recipient_profiles')
+                .select('id')
+                .eq('user_id', user.id)
+                .maybeSingle();
+            const myRpId = myRpForConns?.id;
+
+            let connQuery = supabase
                 .from('connections')
-                .select('id, sender_id, recipient_profile_id, status')
-                .or(`sender_id.eq.${user.id}`);
+                .select('id, sender_id, recipient_profile_id, status');
+            if (myRpId) {
+                connQuery = connQuery.or(`sender_id.eq.${user.id},recipient_profile_id.eq.${myRpId}`);
+            } else {
+                connQuery = connQuery.eq('sender_id', user.id);
+            }
+            const { data: existingConnections } = await connQuery;
 
             // Build lookup maps — match by both phone AND email
             const profilesByPhone = new Map<string, any>();
@@ -389,7 +420,7 @@ export function RecipientsProvider({ children }: { children: React.ReactNode }) 
                     const normalized = normalizeForMatching(p.phone);
                     profilesByPhone.set(normalized, p);
                     profilesByPhone.set(`+${normalized}`, p);
-                    
+
                     // Also store last 10 digits for more lenient matching (extremely important for international vs local)
                     if (normalized.length >= 10) {
                         profilesByPhone.set(normalized.slice(-10), p);
@@ -400,10 +431,15 @@ export function RecipientsProvider({ children }: { children: React.ReactNode }) 
                 }
             });
 
+            // Build two indexes: by recipient_profile_id (outgoing) and by sender user_id (incoming).
+            // A contact's recipient_profile row has both `id` and `user_id` — we check both sides.
             const connectionsByProfileId = new Map<string, any>();
+            const connectionsBySenderId = new Map<string, any>();
             (existingConnections || []).forEach(c => {
-                if (c.recipient_profile_id) {
+                if (c.sender_id === user.id && c.recipient_profile_id) {
                     connectionsByProfileId.set(c.recipient_profile_id, c);
+                } else if (c.recipient_profile_id === myRpId && c.sender_id) {
+                    connectionsBySenderId.set(c.sender_id, c);
                 }
             });
 
@@ -436,7 +472,11 @@ export function RecipientsProvider({ children }: { children: React.ReactNode }) 
                     profile = null;
                 }
 
-                const connection = profile ? connectionsByProfileId.get(profile.id) : null;
+                // Look up connection on either side: outgoing (by contact's rp.id) or incoming (by contact's user_id)
+                const connection = profile
+                    ? (connectionsByProfileId.get(profile.id)
+                        || (profile.user_id ? connectionsBySenderId.get(profile.user_id) : null))
+                    : null;
 
                 return {
                     id: contact.id,

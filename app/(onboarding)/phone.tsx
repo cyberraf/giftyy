@@ -21,7 +21,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 export default function OnboardingPhoneScreen() {
 	const { top, bottom } = useSafeAreaInsets();
 	const router = useRouter();
-	const { profile: authProfile, updateProfile: updateAuthProfile, user } = useAuth();
+	const { profile: authProfile, updateProfile: updateAuthProfile, user, checkPhoneExists } = useAuth();
 
 	const [phone, setPhone] = useState('');
 	const [selectedCountry, setSelectedCountry] = useState<Country>(COMMON_COUNTRIES[0]);
@@ -56,6 +56,18 @@ export default function OnboardingPhoneScreen() {
 		setError('');
 		try {
 			const fullPhone = `${selectedCountry.dial_code.replace('+', '')}${digits}`;
+
+			// Check if phone is already taken by another user
+			const { exists } = await checkPhoneExists(fullPhone);
+			if (exists) {
+				const currentPhone = authProfile?.phone?.replace(/\D/g, '');
+				if (currentPhone !== fullPhone) {
+					setError('This phone number is already registered to another account.');
+					setSaving(false);
+					return;
+				}
+			}
+
 			const { error: saveError } = await updateAuthProfile({ phone: fullPhone });
 			if (saveError) {
 				setError(saveError.message);
