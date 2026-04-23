@@ -231,6 +231,14 @@ export function RecipientsProvider({ children }: { children: React.ReactNode }) 
                     relationship: details.relationship,
                     nickname: details.nickname,
                     profileId: details.profileId,
+                    // Forward address fields — the edge function already accepts these and
+                    // persists them on recipient_profiles (needed for shipping phantom gifts).
+                    address: details.address,
+                    apartment: details.apartment,
+                    city: details.city,
+                    state: details.state,
+                    country: details.country,
+                    zip: details.zip,
                 }
             });
 

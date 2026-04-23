@@ -74,13 +74,12 @@ export default function ConfirmationScreen() {
         }
     }, [orderId, refreshOrders]);
 
-    // Prevent back navigation - Intercept physical back button
+    // Prevent back navigation — intercept the Android physical back button and
+    // redirect to Shop instead of letting the user pop back into the checkout flow.
     useEffect(() => {
         const backAction = () => {
-            // Instead of going back, we redirect to home or just do nothing
-            // Redirecting to home is cleaner as it resets the flow
-            handleGoHome();
-            return true; // Return true to indicate we handled the event
+            handleGoToShop();
+            return true; // handled — don't pop the stack
         };
 
         const backHandler = BackHandler.addEventListener(
@@ -178,9 +177,14 @@ export default function ConfirmationScreen() {
         router.replace('/(buyer)/(tabs)');
     };
 
+    const handleGoToShop = () => {
+        reset();
+        router.replace('/(buyer)/(tabs)/shop');
+    };
+
     const handleSendAnother = () => {
         reset();
-        router.replace('/(buyer)/(tabs)');
+        router.replace('/(buyer)/(tabs)/shop');
     };
 
     const handleViewOrders = () => {

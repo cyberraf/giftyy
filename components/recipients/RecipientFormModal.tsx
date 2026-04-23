@@ -950,7 +950,9 @@ export function RecipientFormModal({
 	mode: RecipientFormMode;
 	editingRecipient?: Recipient | null;
 	onClose: () => void;
-	onSaved?: () => void | Promise<void>;
+	// Called after a successful save. For 'add' mode, receives the new recipient_profiles.id
+	// so callers (e.g. checkout) can auto-select the just-created recipient after refresh.
+	onSaved?: (newProfileId?: string) => void | Promise<void>;
 }) {
 	const emptyForm: RecipientFormState = useMemo(
 		() => ({
@@ -1137,6 +1139,7 @@ export function RecipientFormModal({
 		setIsSaving(true);
 		try {
 			let error: Error | null = null;
+			let newProfileId: string | undefined;
 			try {
 				if (mode === 'edit') {
 					if (!editingRecipient?.id) {
@@ -1156,6 +1159,7 @@ export function RecipientFormModal({
 						'Saving took too long'
 					);
 					error = result.error;
+					newProfileId = result.id;
 				}
 			} catch (e: any) {
 				const message =
@@ -1175,7 +1179,7 @@ export function RecipientFormModal({
 			// Close immediately for responsiveness; any refresh can run after.
 			onClose();
 			try {
-				void onSaved?.();
+				void onSaved?.(newProfileId);
 			} catch {
 				// ignore
 			}

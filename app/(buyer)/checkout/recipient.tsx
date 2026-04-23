@@ -1,4 +1,4 @@
-import { RecipientFormModal } from '@/components/recipients/RecipientFormModal';
+import { CheckoutRecipientModal } from '@/components/recipients/CheckoutRecipientModal';
 import StepBar from '@/components/StepBar';
 import { IconSymbol } from '@/components/ui/icon-symbol';
 import PremiumNotice from '@/components/ui/PremiumNotice';
@@ -40,6 +40,9 @@ export default function RecipientScreen() {
     }>({ total: 0, hasShippingError: false, breakdown: [] });
     const [isCalculatingShipping, setIsCalculatingShipping] = useState(false);
     const [addRecipientVisible, setAddRecipientVisible] = useState(false);
+    // Stores the recipient_profiles.id returned from addRecipient so we can auto-select
+    // the newly added recipient once refreshRecipients populates the list.
+    const [pendingNewProfileId, setPendingNewProfileId] = useState<string | null>(null);
 
     const selectedRecipient = useMemo(() => {
         return recipients.find(r => r.id === selectedRecipientId);
@@ -59,6 +62,25 @@ export default function RecipientScreen() {
     const openAddRecipient = useCallback(() => {
         setAddRecipientVisible(true);
     }, []);
+
+    // After RecipientFormModal saves a new recipient, the modal calls onSaved with the
+    // new profile id. We queue it here, then the effect below watches the recipients list
+    // (updated by refreshRecipients) and auto-selects the matching card once it appears.
+    const handleRecipientSaved = useCallback(async (newProfileId?: string) => {
+        await refreshRecipients();
+        if (newProfileId) setPendingNewProfileId(newProfileId);
+    }, [refreshRecipients]);
+
+    useEffect(() => {
+        if (!pendingNewProfileId) return;
+        const match = recipients.find(
+            r => r.actualProfileId === pendingNewProfileId || r.profileId === pendingNewProfileId
+        );
+        if (match) {
+            setSelectedRecipientId(match.id);
+            setPendingNewProfileId(null);
+        }
+    }, [recipients, pendingNewProfileId]);
 
     const onRefresh = useCallback(async () => {
         setRefreshing(true);
@@ -352,52 +374,66 @@ export default function RecipientScreen() {
                 >
                     <View style={{ padding: 16, gap: 12 }}>
                         {/* Saved Recipients Section */}
-                        {recipients.length > 0 ? (
-                            <View style={styles.savedRecipientsSection}>
-                                <View style={styles.savedRecipientsHeader}>
-                                    <Text style={styles.sectionTitle}>{t('checkout.recipient.select_saved')}</Text>
-                                </View>
-                                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recipientsScroll}>
-                                    {recipients.map((rec) => {
-                                        const isSelected = selectedRecipientId === rec.id;
-                                        return (
-                                            <Pressable
-                                                key={rec.id}
-                                                style={[styles.recipientCard, isSelected && styles.recipientCardSelected]}
-                                                onPress={() => handleSelectRecipient(rec)}
-                                            >
-                                                <View style={styles.recipientCardHeader}>
-                                                    <View style={[styles.recipientCheckbox, isSelected && styles.recipientCheckboxSelected]}>
-                                                        {isSelected && <IconSymbol name="checkmark" size={14} color="#FFFFFF" />}
-                                                    </View>
-                                                    <View style={{ flex: 1 }}>
-                                                        <Text style={styles.recipientName} numberOfLines={1}>
-                                                            {rec.firstName} {rec.lastName || ''}
-                                                        </Text>
-                                                        <Text style={styles.recipientRelationship} numberOfLines={1}>
-                                                            {rec.relationship}
-                                                        </Text>
-                                                    </View>
-                                                </View>
-                                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, backgroundColor: '#F3F4F6', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-start' }}>
-                                                    <IconSymbol name="lock.fill" size={12} color="#6B7280" />
-                                                    <Text style={{ fontSize: 12, color: '#4B5563', fontWeight: '600' }}>{t('checkout.recipient.address_hidden')}</Text>
-                                                </View>
-                                            </Pressable>
-                                        );
-                                    })}
-                                </ScrollView>
-                                 {selectedRecipientId && (
-                                    <Pressable onPress={handleClearSelection} style={styles.clearSelectionButton}>
-                                        <Text style={styles.clearSelectionText}>{t('checkout.recipient.clear_selection')}</Text>
-                                    </Pressable>
-                                )}
-                             </View>
-                        ) : (
-                            <View style={styles.summaryCard}>
-                                <Text style={styles.muted}>{t('checkout.recipient.no_saved')}</Text>
+                        <View style={styles.savedRecipientsSection}>
+                            <View style={styles.savedRecipientsHeader}>
+                                <Text style={styles.sectionTitle}>
+                                    {recipients.length > 0
+                                        ? t('checkout.recipient.select_saved')
+                                        : t('checkout.recipient.choose_recipient')}
+                                </Text>
                             </View>
-                        )}
+                            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.recipientsScroll}>
+                                {/* "+ Add new recipient" card — always first in the list so brand-new
+                                    senders with an empty Circle can start a gift without dead-ending. */}
+                                <Pressable
+                                    style={styles.addRecipientCard}
+                                    onPress={openAddRecipient}
+                                    accessibilityRole="button"
+                                    accessibilityLabel={t('checkout.recipient.add_new')}
+                                >
+                                    <View style={styles.addRecipientIconCircle}>
+                                        <IconSymbol name="plus" size={22} color={GIFTYY_THEME.colors.primary} />
+                                    </View>
+                                    <Text style={styles.addRecipientTitle}>{t('checkout.recipient.add_new')}</Text>
+                                    <Text style={styles.addRecipientSubtitle} numberOfLines={2}>
+                                        {t('checkout.recipient.add_new_hint')}
+                                    </Text>
+                                </Pressable>
+                                {recipients.map((rec) => {
+                                    const isSelected = selectedRecipientId === rec.id;
+                                    return (
+                                        <Pressable
+                                            key={rec.id}
+                                            style={[styles.recipientCard, isSelected && styles.recipientCardSelected]}
+                                            onPress={() => handleSelectRecipient(rec)}
+                                        >
+                                            <View style={styles.recipientCardHeader}>
+                                                <View style={[styles.recipientCheckbox, isSelected && styles.recipientCheckboxSelected]}>
+                                                    {isSelected && <IconSymbol name="checkmark" size={14} color="#FFFFFF" />}
+                                                </View>
+                                                <View style={{ flex: 1 }}>
+                                                    <Text style={styles.recipientName} numberOfLines={1}>
+                                                        {rec.firstName} {rec.lastName || ''}
+                                                    </Text>
+                                                    <Text style={styles.recipientRelationship} numberOfLines={1}>
+                                                        {rec.relationship}
+                                                    </Text>
+                                                </View>
+                                            </View>
+                                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 4, backgroundColor: '#F3F4F6', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8, alignSelf: 'flex-start' }}>
+                                                <IconSymbol name="lock.fill" size={12} color="#6B7280" />
+                                                <Text style={{ fontSize: 12, color: '#4B5563', fontWeight: '600' }}>{t('checkout.recipient.address_hidden')}</Text>
+                                            </View>
+                                        </Pressable>
+                                    );
+                                })}
+                            </ScrollView>
+                             {selectedRecipientId && (
+                                <Pressable onPress={handleClearSelection} style={styles.clearSelectionButton}>
+                                    <Text style={styles.clearSelectionText}>{t('checkout.recipient.clear_selection')}</Text>
+                                </Pressable>
+                            )}
+                         </View>
 
                          {/* Removed manual address and notify configuration fields */}
 
@@ -518,12 +554,10 @@ export default function RecipientScreen() {
 
             </View>
 
-            <RecipientFormModal
+            <CheckoutRecipientModal
                 visible={addRecipientVisible}
-                mode="add"
-                editingRecipient={null}
                 onClose={() => setAddRecipientVisible(false)}
-                onSaved={refreshRecipients}
+                onSaved={handleRecipientSaved}
             />
         </View>
     );
@@ -562,6 +596,38 @@ const styles = StyleSheet.create({
         borderRadius: 12,
         padding: 14,
         gap: 8,
+    },
+    addRecipientCard: {
+        width: 200,
+        backgroundColor: '#FFF7F3',
+        borderWidth: 2,
+        borderColor: '#FFE8DC',
+        borderStyle: 'dashed',
+        borderRadius: 12,
+        padding: 14,
+        gap: 8,
+        alignItems: 'flex-start',
+        justifyContent: 'center',
+    },
+    addRecipientIconCircle: {
+        width: 36,
+        height: 36,
+        borderRadius: 18,
+        backgroundColor: '#FFFFFF',
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderWidth: 1,
+        borderColor: '#FFE8DC',
+    },
+    addRecipientTitle: {
+        fontSize: 15,
+        fontWeight: '800',
+        color: GIFTYY_THEME.colors.primary,
+    },
+    addRecipientSubtitle: {
+        fontSize: 12,
+        color: '#6b7280',
+        lineHeight: 16,
     },
     recipientCardSelected: {
         borderColor: GIFTYY_THEME.colors.primary,

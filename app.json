@@ -61,6 +61,11 @@
               "scheme": "https",
               "host": "giftyy.store",
               "pathPrefix": "/invite"
+            },
+            {
+              "scheme": "https",
+              "host": "giftyy.store",
+              "pathPrefix": "/g"
             }
           ],
           "category": [

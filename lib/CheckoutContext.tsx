@@ -87,11 +87,14 @@ export function CheckoutProvider({ children }: { children: React.ReactNode }) {
     useEffect(() => {
         const fetchGiftyyCardPrice = async () => {
             try {
+                // maybeSingle() so a missing row doesn't surface as an error — the admin
+                // may not have configured giftyy_card_price yet, in which case we just keep
+                // the hardcoded fallback and let the mobile UI render the default price.
                 const { data, error } = await supabase
                     .from('global_vendor_settings')
                     .select('value')
                     .eq('key', 'giftyy_card_price')
-                    .single();
+                    .maybeSingle();
 
                 if (error) {
                     console.warn('Could not fetch Giftyy card price from database, using default:', error);
@@ -99,7 +102,9 @@ export function CheckoutProvider({ children }: { children: React.ReactNode }) {
                 }
 
                 if (data?.value !== undefined && data?.value !== null) {
-                    const price = parseFloat(data.value);
+                    const price = typeof data.value === 'number'
+                        ? data.value
+                        : parseFloat(String(data.value));
                     if (!isNaN(price) && price >= 0) {
                         setDefaultGiftyyCardPrice(price);
                     }
@@ -122,7 +127,9 @@ export function CheckoutProvider({ children }: { children: React.ReactNode }) {
 
     const reset = () => {
         setRecipient(initialRecipient);
-        setCardPrice(5.0);
+        // Use the admin-configured default, not a hardcoded value, so the next checkout
+        // after a reset still respects whatever the dashboard has set.
+        setCardPrice(defaultGiftyyCardPrice);
         setNotifyRecipient(true);
         setCardType('Giftyy Card');
         setVideoUri(undefined);
